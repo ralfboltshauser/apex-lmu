@@ -35,10 +35,10 @@ const scenarios = {
   attack: { label: 'Track position', stops: 3, total: '2:03:26', margin: 1.3, risk: 'Medium', first: 16, second: 32, save: 0, color: 'warning' },
 } as const
 
-function NumberInput({ label, value, unit, onChange, min = 0, step = 1 }: { label: string; value: number; unit: string; onChange: (value: number) => void; min?: number; step?: number }) {
+function NumberInput({ label, value, unit, onChange, min = 0, step = 1, help }: { label: string; value: number; unit: string; onChange: (value: number) => void; min?: number; step?: number; help?: string }) {
   return (
     <label className="number-input">
-      <span>{label}</span>
+      <span>{label}{help && <TooltipHint>{help}</TooltipHint>}</span>
       <div><input type="number" min={min} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /><em>{unit}</em></div>
     </label>
   )
@@ -132,11 +132,11 @@ export function StrategyView() {
             <CardHeader eyebrow="Consumption" title="Manual pace model" action={<Badge tone="neutral">6-point synthetic spread</Badge>} />
             <div className="field-group field-group--two">
               <NumberInput label="Fuel / lap" value={fuelPerLap} unit="L" onChange={setFuelPerLap} step={0.01} />
-              <NumberInput label="Virtual energy / lap" value={energyPerLap} unit="%" onChange={setEnergyPerLap} step={0.01} />
+              <NumberInput label="Virtual energy / lap" value={energyPerLap} unit="%" onChange={setEnergyPerLap} step={0.01} help="LMU's regulated virtual-energy allocation consumed per lap." />
               <NumberInput label="Tank capacity" value={tankCapacity} unit="L" onChange={setTankCapacity} />
               <NumberInput label="Pit loss" value={pitLoss} unit="sec" onChange={setPitLoss} step={0.1} />
             </div>
-            <div className="model-quality"><div><span>Model confidence</span><strong>{modelConfidence}%</strong></div><Progress value={modelConfidence} tone="positive" /><small>Calculated locally from consumption variance, pace stability and race-boundary risk.</small></div>
+            <div className="model-quality"><div><span>Model confidence <TooltipHint>Input stability and finish-boundary evidence—not the probability that this strategy wins.</TooltipHint></span><strong>{modelConfidence}%</strong></div><Progress value={modelConfidence} tone="positive" /><small>Calculated locally from consumption variance, pace stability and race-boundary risk.</small></div>
           </Card>
           <Card>
             <CardHeader eyebrow="Conditions" title="Weather model" />

@@ -1,5 +1,6 @@
 import {
   Check,
+  BookOpen,
   ChevronRight,
   Database,
   FileCode2,
@@ -45,7 +46,10 @@ export function SettingsView() {
   const [diagnosing, setDiagnosing] = useState(false)
   const [report, setReport] = useState<ApexDiagnosticReport | null>(null)
   const [showLogs, setShowLogs] = useState(false)
-  const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about'>('connection')
+  const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about' | 'diagnostics'>(() => {
+    const stored = window.localStorage.getItem('apex:settings-section')
+    return stored === 'data' || stored === 'about' || stored === 'diagnostics' ? stored : 'connection'
+  })
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
   const [updateState, setUpdateState] = useState<ApexUpdateState | null>(null)
 
@@ -72,6 +76,15 @@ export function SettingsView() {
       }
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
+  }, [])
+
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const section = (event as CustomEvent<string>).detail
+      if (section === 'connection' || section === 'data' || section === 'about' || section === 'diagnostics') goTo(section)
+    }
+    window.addEventListener('apex:settings-section', navigate)
+    return () => window.removeEventListener('apex:settings-section', navigate)
   }, [])
 
   useEffect(() => {
@@ -112,9 +125,11 @@ export function SettingsView() {
     if (result?.ok) setShowLogs(true)
   }
 
-  const goTo = (section: 'connection' | 'data' | 'about') => {
+  const goTo = (section: 'connection' | 'data' | 'about' | 'diagnostics') => {
     setActiveSection(section)
-    document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
+    window.localStorage.setItem('apex:settings-section', section)
+    window.scrollTo({ top: 0 })
+    document.querySelector('.workspace__content')?.scrollTo({ top: 0 })
   }
 
   const ready = Boolean(environment?.platform === 'win32' && environment.bridgeAvailable && diagnostics?.installation)
@@ -130,9 +145,9 @@ export function SettingsView() {
   return (
     <div className="view view--settings">
       <div className="page-heading page-heading--compact">
-        <div><div className="eyebrow">Settings</div><h1>A transparent, local system.</h1><p>Connection health, storage, privacy and performance in one place.</p></div>
-        <Button variant="secondary" icon={<RefreshCw size={15} />} onClick={() => void runDiagnostics()} disabled={diagnosing}>
-          {diagnosing ? 'Checking…' : 'Run diagnostics'}
+        <div><div className="eyebrow">Settings</div><h1>A transparent, local system.</h1><p>Connection, storage, privacy and troubleshooting—one focused section at a time.</p></div>
+        <Button variant="secondary" icon={<HeartPulse size={15} />} onClick={() => goTo('diagnostics')}>
+          Troubleshoot
         </Button>
       </div>
 
@@ -141,10 +156,11 @@ export function SettingsView() {
           <button type="button" className={activeSection === 'connection' ? 'is-active' : ''} onClick={() => goTo('connection')}><Gauge size={16} /> Connection <ChevronRight size={14} /></button>
           <button type="button" className={activeSection === 'data' ? 'is-active' : ''} onClick={() => goTo('data')}><Database size={16} /> Data & storage <ChevronRight size={14} /></button>
           <button type="button" className={activeSection === 'about' ? 'is-active' : ''} onClick={() => goTo('about')}><Info size={16} /> About <ChevronRight size={14} /></button>
-          <button type="button" onClick={() => document.getElementById('settings-diagnostics')?.scrollIntoView({ block: 'start' })}><HeartPulse size={16} /> Diagnostics <ChevronRight size={14} /></button>
+          <button type="button" className={activeSection === 'diagnostics' ? 'is-active' : ''} onClick={() => goTo('diagnostics')}><HeartPulse size={16} /> Diagnostics <ChevronRight size={14} /></button>
         </nav>
 
         <div className="settings-content">
+          {activeSection === 'about' && <>
           <Card className="update-card">
             <CardHeader eyebrow="Application updates" title={`Apex ${updateState?.currentVersion || environment?.version || ''}`} action={<Badge tone={updateState?.status === 'available' || updateState?.status === 'downloaded' ? 'accent' : updateState?.status === 'error' ? 'warning' : 'neutral'}>{updateState?.status?.replaceAll('-', ' ') || 'Loading'}</Badge>} />
             <div className="update-card__body"><div><strong>{updateState?.message || 'Reading update status…'}</strong><span>Windows installer updates come directly from the public GitHub release. Apex asks before downloading and again before restarting.</span></div><div className="update-card__actions">
@@ -157,7 +173,9 @@ export function SettingsView() {
             {updateState?.releaseNotes && <details className="update-notes"><summary>What changed in {updateState.availableVersion}</summary><pre>{updateState.releaseNotes}</pre></details>}
             {updateState?.error && <details className="update-notes update-notes--error"><summary>Update error details</summary><pre>{updateState.error.code ? `${updateState.error.code}: ` : ''}{updateState.error.message}\n{updateState.error.stack}</pre><p>The portable ZIP cannot replace itself. Download the latest installer from Releases; it installs per-user without administrator rights and keeps Apex data.</p></details>}
           </Card>
+          </>}
 
+          {activeSection === 'connection' && <>
           <Card className="health-card" id="settings-connection">
             <div className={`health-card__icon ${ready ? 'is-ready' : ''}`}>{ready ? <HeartPulse size={22} /> : <Info size={22} />}</div>
             <div>
@@ -182,7 +200,9 @@ export function SettingsView() {
             </div>
             {discovery && <details className="discovery-details"><summary>Show automatic discovery log ({discovery.attempts.length} candidate paths)</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
+          </>}
 
+          {activeSection === 'diagnostics' &&
           <Card id="settings-diagnostics" className="diagnostics-card">
             <CardHeader eyebrow="Troubleshooting" title="Evidence, fixes and full error logs" action={<Badge tone={report?.checks.some((check) => check.status === 'fail') ? 'warning' : 'positive'}>{report ? `${report.checks.filter((check) => check.status === 'pass').length}/${report.checks.length} passed` : 'Not checked'}</Badge>} />
             <p className="diagnostics-intro">Checks are read-only. The bridge self-test does not need LMU and proves that the bundled executable and local protocol can start. A live connection still requires Windows, LMU running, and a drivable session.</p>
@@ -199,13 +219,17 @@ export function SettingsView() {
             {showLogs && <div className="log-viewer"><div><strong>apex.log.jsonl</strong><Button variant="secondary" size="sm" icon={<Clipboard size={13} />} onClick={() => void navigator.clipboard.writeText(report?.logs || 'No logs recorded.')}>Copy</Button></div><pre>{report?.logs || 'No diagnostic events have been recorded yet.'}</pre></div>}
             <div className="support-privacy"><ShieldCheck size={15} /><span><strong>Safe to review before sending</strong>The JSON bundle contains app/system metadata, check results and Apex logs. Home paths and common secrets are redacted. It contains no telemetry frames, setup files, passwords, or account data.</span></div>
           </Card>
+          }
 
+          {activeSection === 'connection' &&
           <Card>
             <CardHeader eyebrow="Acquisition" title="Known live-data profile" action={<Badge tone="neutral">50 Hz</Badge>} />
             <div className="setting-row setting-row--stacked"><div><strong>Official shared memory</strong><span>The bridge requests a fixed 50 Hz update loop. Unsupported or absent fields remain unknown instead of being estimated.</span></div></div>
             <div className="sample-estimate"><HardDrive size={15} /><span>Continuous live-session recording</span><strong>Not enabled in alpha</strong></div>
           </Card>
+          }
 
+          {activeSection === 'data' && <>
           <Card className="privacy-card">
             <CardHeader eyebrow="Privacy" title="Nothing leaves this computer" action={<LockKeyhole size={20} />} />
             <div className="privacy-architecture">
@@ -218,10 +242,19 @@ export function SettingsView() {
             <CardHeader eyebrow="Local storage" title="Apex data folder" action={<Badge tone="neutral">Local only</Badge>} />
             <div className="path-field"><div><Database size={16} /><span><small>Electron user-data directory</small><strong>{environment?.userDataPath ?? 'Available in the desktop app'}</strong></span></div><Button variant="secondary" size="sm" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openDataFolder()} disabled={!window.apexDesktop}>Open folder</Button></div>
           </Card>
+          </>}
 
+          {activeSection === 'about' &&
+          <Card>
+            <CardHeader eyebrow="Learning & setup" title="Revisit guidance whenever you need it" description="Onboarding and contextual tips are local preferences. Resetting them does not touch telemetry, setups, or logs." />
+            <div className="diagnostic-actions"><Button variant="secondary" icon={<BookOpen size={14} />} onClick={() => { window.localStorage.removeItem('apex:onboarded'); window.location.reload() }}>Restart onboarding</Button><Button variant="secondary" icon={<RefreshCw size={14} />} onClick={() => { for (const key of Object.keys(window.localStorage)) if (key.startsWith('apex:discovered:')) window.localStorage.removeItem(key); window.localStorage.removeItem('apex:settings-section'); window.location.reload() }}>Reset view introductions</Button></div>
+          </Card>}
+
+          {activeSection === 'about' &&
           <Card className="about-card" id="settings-about">
-            <div className="about-card__mark">A</div><div><strong>Apex {environment?.version ?? '0.1.0-alpha'}</strong><span>GPL-3.0-or-later · Unofficial community software</span></div><Badge tone="accent">Free software</Badge>
+            <div className="about-card__mark">A</div><div><strong>Apex {environment?.version ?? 'browser preview'}</strong><span>GPL-3.0-or-later · Unofficial community software</span></div><Badge tone="accent">Free software</Badge>
           </Card>
+          }
         </div>
       </div>
     </div>

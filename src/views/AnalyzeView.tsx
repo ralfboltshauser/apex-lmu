@@ -22,7 +22,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Badge, Button, Card, CardHeader, Progress, Segmented, Select } from '../components/ui'
+import { Badge, Button, Card, CardHeader, Progress, Segmented, Select, TooltipHint } from '../components/ui'
 import { demoInsights, demoSessions, lapTrace, referenceTrace } from '../data/demo'
 
 type Channel = 'speed' | 'throttle' | 'brake' | 'delta'
@@ -126,7 +126,7 @@ export function AnalyzeView() {
         <div><span>Lap difference</span><strong className="negative">+0.713 s</strong><small>Comparable conditions</small></div>
         <div><span>Biggest loss</span><strong>T5–7 · +0.31</strong><small>Exit execution</small></div>
         <div><span>Your advantage</span><strong className="positive">T17 · −0.09</strong><small>Minimum speed</small></div>
-        <div><span>Optimal lap</span><strong>2:03.192</strong><small>0.492 s available</small></div>
+        <div><span>Optimal lap <TooltipHint>A stitched estimate using your best comparable segments. It is not a lap you actually drove.</TooltipHint></span><strong>2:03.192</strong><small>0.492 s available</small></div>
         <div className="analysis-quality"><Badge tone="positive"><Check size={12} /> 94% match quality</Badge><TooltipQuality /></div>
       </div>
 
@@ -167,7 +167,7 @@ export function AnalyzeView() {
             ))}
           </div>
           <div className="coach-detail">
-            <div className="coach-detail__confidence"><span>Confidence</span><strong>{selectedInsightData.confidence}%</strong><Progress value={selectedInsightData.confidence} tone={selectedInsightData.severity === 'positive' ? 'positive' : 'accent'} /></div>
+            <div className="coach-detail__confidence"><span>Confidence <TooltipHint>Evidence strength after lap comparability and repeatability checks—not a certainty score.</TooltipHint></span><strong>{selectedInsightData.confidence}%</strong><Progress value={selectedInsightData.confidence} tone={selectedInsightData.severity === 'positive' ? 'positive' : 'accent'} /></div>
             <h3>{selectedInsightData.title}</h3>
             <p>{selectedInsightData.body}</p>
             <div className="coach-detail__action"><Target size={16} /><span><small>Try next</small><strong>{selectedInsightData.action}</strong></span></div>

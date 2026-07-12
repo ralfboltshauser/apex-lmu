@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Activity,
   BarChart3,
@@ -9,12 +9,14 @@ import {
   Gauge,
   Layers3,
   LifeBuoy,
+  HelpCircle,
   Radio,
   Settings,
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react'
 import { Badge, Button } from './ui'
+import { DiscoveryPrompt, GuideDrawer, viewGuides } from './GuideDrawer'
 
 export type ViewId = 'home' | 'live' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'settings'
 
@@ -43,6 +45,17 @@ export function Shell({
   children: ReactNode
 }) {
   const current = primaryNavigation.find((item) => item.id === view)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [showDiscovery, setShowDiscovery] = useState(false)
+  const guide = viewGuides[view]
+  useEffect(() => { setGuideOpen(false); setShowDiscovery(window.localStorage.getItem(`apex:discovered:${view}`) !== 'true') }, [view])
+  const dismissDiscovery = () => { window.localStorage.setItem(`apex:discovered:${view}`, 'true'); setShowDiscovery(false) }
+  const openGuide = () => { dismissDiscovery(); setGuideOpen(true) }
+  const openSettings = (section: 'connection' | 'data' | 'about' | 'diagnostics') => {
+    window.localStorage.setItem('apex:settings-section', section)
+    onViewChange('settings')
+    window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: section })))
+  }
 
   return (
     <div className="app-shell">
@@ -82,11 +95,11 @@ export function Shell({
           })}
 
           <div className="nav-section-label nav-section-label--secondary">System</div>
-          <button type="button" className="nav-item" onClick={() => onViewChange('settings')}>
+          <button type="button" className="nav-item" onClick={() => openSettings('connection')}>
             <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>Settings</span>
           </button>
-          <button type="button" className="nav-item" onClick={() => onViewChange('settings')}>
+          <button type="button" className="nav-item" onClick={() => openSettings('about')}>
             <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>About & privacy</span>
           </button>
@@ -100,7 +113,7 @@ export function Shell({
               <span>Your telemetry never leaves this PC.</span>
             </div>
           </div>
-          <button type="button" className="sidebar-support" onClick={() => onViewChange('settings')}>
+          <button type="button" className="sidebar-support" onClick={() => openSettings('diagnostics')}>
             <LifeBuoy size={15} />
             <span>Diagnostics</span>
             <ChevronRight size={14} />
@@ -116,6 +129,7 @@ export function Shell({
             <strong>{current?.label ?? 'Settings'}</strong>
           </div>
           <div className="topbar__actions">
+            <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} onClick={openGuide}>Learn this view</Button>
             <div className={`connection-pill ${connected ? 'is-live' : ''}`}>
               <span className="connection-pill__pulse" />
               <div>
@@ -134,7 +148,9 @@ export function Shell({
           </div>
         </header>
         <main className="workspace__content">{children}</main>
+        <DiscoveryPrompt guide={guide} open={showDiscovery} onOpen={openGuide} onDismiss={dismissDiscovery} />
       </div>
+      <GuideDrawer guide={guide} open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   )
 }

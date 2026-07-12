@@ -6,6 +6,24 @@ The user learns the local-only model, Apex locates LMU, checks the three data
 surfaces, and opens with good defaults. Demo telemetry remains one click away so
 the product can be evaluated without starting the game.
 
+Onboarding is deliberately finite: welcome, factual installation/bridge checks,
+then the exact action required to connect. Failed discovery progressively reveals
+manual path entry, attempted locations, expected files and exportable evidence.
+
+## Progressive discovery
+
+Every workspace has three layers. The default view answers the most frequent
+question without requiring documentation. A one-time, dismissible introduction
+names the workspace's purpose. The persistent **Learn this view** guide then
+explains a recommended three-step flow, what a successful outcome looks like,
+and the domain terms used on that screen. Ambiguous high-value metrics retain
+small keyboard-accessible tooltips at the point of use.
+
+Guidance preferences are local and reversible. About can restart onboarding or
+reset all workspace introductions without touching telemetry, setups or logs.
+Settings uses real Connection, Data & storage, About, and Diagnostics sections;
+technical logs stay collapsed until requested or a failed check needs evidence.
+
 ## Live race
 
 The priority order is safety, finish feasibility, position, then raw detail.

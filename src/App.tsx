@@ -211,6 +211,10 @@ export default function App() {
   }
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [view])
+
+  useEffect(() => {
     if (!window.apexDesktop) return
     return window.apexDesktop.onUpdateState((state) => {
       if (!['available', 'downloaded'].includes(state.status)) return

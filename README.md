@@ -46,6 +46,8 @@ Verify the checksum before running it. Code signing is a release-roadmap item.
 
 The first-run wizard verifies the LMU installation path and runs the bundled bridge's isolated protocol self-test before calling the integration ready. The self-test does not require LMU to be running. For live data, start LMU and enter a drivable session; Apex will wait rather than inject into or modify the game.
 
+After onboarding, each workspace introduces itself once and keeps a **Learn this view** guide available. These guides explain the recommended flow, define unfamiliar race-engineering terms, and state what a useful outcome looks like. Settings → About can replay onboarding or reset all introductions without deleting user data.
+
 If connection or setup fails, open **Settings → Diagnostics**:
 
 - Run read-only platform, storage, bridge, and protocol checks.
