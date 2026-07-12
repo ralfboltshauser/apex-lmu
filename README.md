@@ -74,6 +74,7 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Area | Current behavior |
 | --- | --- |
 | Live session | Reads the `LMU_Data` mapping out of process; shows car/session/weather/standings before the race, then measured position, laps, speed, controls, fuel, hybrid state, tyres and brakes when player telemetry becomes available. |
+| Fuel calculator | Manual timed/lap planning plus automatic clean-lap consumption capture. Excludes pit/refuel laps, retains car/track samples locally, protects timed extra-lap boundaries, and reports total fuel, starting load, stops, final stint, reserve and confidence. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
 | Analysis | Distance-aligned comparison and evidence-scored coaching engines are implemented. The polished analysis workspace currently uses visibly labeled generated fixtures. |

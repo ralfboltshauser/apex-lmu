@@ -17,15 +17,34 @@ import { HomeView } from './views/HomeView'
 import { LiveView } from './views/LiveView'
 import { AnalyzeView } from './views/AnalyzeView'
 import { StrategyView } from './views/StrategyView'
+import { FuelCalculatorView } from './views/FuelCalculatorView'
 import { SetupsView } from './views/SetupsView'
 import { OverlaysView } from './views/OverlaysView'
 import { SettingsView } from './views/SettingsView'
-import { DesktopTelemetryAdapter, MockTelemetryAdapter, type TelemetryFrame } from './core'
+import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, updateFuelTracker, type LiveFuelEstimate, type TelemetryFrame } from './core'
 import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
+const FUEL_PROFILE_PREFIX = 'apex:fuel-profile:'
+
+function fuelProfileKey(track: string, car: string) {
+  return `${FUEL_PROFILE_PREFIX}${encodeURIComponent(`${track}\0${car}`)}`
+}
+
+function loadFuelProfile(track: string, car: string) {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(fuelProfileKey(track, car)) || '{}') as { fuel?: unknown; laps?: unknown }
+    const fuel = Array.isArray(value.fuel) ? value.fuel.filter((item): item is number => typeof item === 'number' && Number.isFinite(item) && item > 0).slice(-20) : []
+    const laps = Array.isArray(value.laps) ? value.laps.filter((item): item is number => typeof item === 'number' && Number.isFinite(item) && item >= 10).slice(-20) : []
+    return { fuel, laps }
+  } catch { return { fuel: [], laps: [] } }
+}
+
+function saveFuelProfile(track: string, car: string, fuel: readonly number[], laps: readonly number[]) {
+  try { window.localStorage.setItem(fuelProfileKey(track, car), JSON.stringify({ fuel, laps })) } catch { /* Live calculation still works for this run. */ }
+}
 
 type DetectionNotice =
   | { kind: 'searchCommon' | 'desktopOnly' | 'confirmedManually' | 'invalid' | 'inaccessible' }
@@ -166,12 +185,14 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const demoAdapter = useRef(new MockTelemetryAdapter({ autoTick: true, stepMs: 80, seed: 963 }))
   const desktopAdapter = useRef(new DesktopTelemetryAdapter())
+  const fuelTracker = useRef(emptyFuelTracker())
   const demoRunningRef = useRef(false)
   const viewRef = useRef<ViewId>('home')
   const lastUpdateNotice = useRef('')
   const [realConnected, setRealConnected] = useState(false)
   const [liveConnectionMessage, setLiveConnectionMessage] = useState(m.connection.starting)
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
+  const [liveFuel, setLiveFuel] = useState<LiveFuelEstimate | null>(null)
   demoRunningRef.current = demoRunning
   viewRef.current = view
 
@@ -281,7 +302,18 @@ export default function App() {
     void window.apexDesktop?.getEnvironment().then((environment) => {
       if (cancelled || environment.platform !== 'win32') return
       unsubscribeFrame = adapter.subscribe((frame) => {
-        if (!demoRunningRef.current && (viewRef.current === 'home' || viewRef.current === 'live')) { setLiveFrame(frame); setTick(frame.sequence) }
+        const previousFuel = fuelTracker.current
+        let nextFuel = updateFuelTracker(previousFuel, frame)
+        if (nextFuel.sessionId && nextFuel.sessionId !== previousFuel.sessionId) {
+          const saved = loadFuelProfile(nextFuel.trackName, nextFuel.carName)
+          nextFuel = { ...nextFuel, fuelSamplesLiters: saved.fuel, lapTimeSamplesSeconds: saved.laps }
+        }
+        if ((nextFuel.fuelSamplesLiters.length !== previousFuel.fuelSamplesLiters.length || nextFuel.lapTimeSamplesSeconds.length !== previousFuel.lapTimeSamplesSeconds.length) && nextFuel.sessionId) {
+          saveFuelProfile(nextFuel.trackName, nextFuel.carName, nextFuel.fuelSamplesLiters, nextFuel.lapTimeSamplesSeconds)
+        }
+        fuelTracker.current = nextFuel
+        if (fuelTracker.current.sessionId) setLiveFuel(fuelTracker.current)
+        if (!demoRunningRef.current && (viewRef.current === 'home' || viewRef.current === 'live' || viewRef.current === 'fuel')) { setLiveFrame(frame); setTick(frame.sequence) }
       })
       unsubscribeStatus = adapter.subscribeStatus((status) => {
         setRealConnected(status.state === 'connected' && status.framesReceived > 0)
@@ -298,6 +330,7 @@ export default function App() {
       if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
       if (event.key.toLowerCase() === 'l') setView('live')
       if (event.key.toLowerCase() === 'a') setView('analyze')
+      if (event.key.toLowerCase() === 'f') setView('fuel')
       if (event.key.toLowerCase() === 's') setView('strategy')
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -308,6 +341,7 @@ export default function App() {
     const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
     switch (view) {
       case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
+      case 'fuel': return <FuelCalculatorView live={liveFuel} />
       case 'analyze': return <AnalyzeView />
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />

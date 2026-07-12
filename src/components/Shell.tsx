@@ -6,6 +6,7 @@ import {
   Boxes,
   ChevronRight,
   CircleDot,
+  Fuel,
   Gauge,
   Layers3,
   LifeBuoy,
@@ -21,11 +22,12 @@ import { appMessages } from '../i18n/appMessages'
 import { useMessages } from '../i18n'
 import { LanguageToggle } from '../i18n/LanguageToggle'
 
-export type ViewId = 'home' | 'live' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'settings'
+export type ViewId = 'home' | 'live' | 'fuel' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'settings'
 
 const primaryNavigation: Array<{ id: Exclude<ViewId, 'settings'>; icon: typeof Gauge; shortcut?: string }> = [
   { id: 'home', icon: Gauge },
   { id: 'live', icon: Radio, shortcut: 'L' },
+  { id: 'fuel', icon: Fuel, shortcut: 'F' },
   { id: 'analyze', icon: BarChart3, shortcut: 'A' },
   { id: 'strategy', icon: Activity, shortcut: 'S' },
   { id: 'setups', icon: SlidersHorizontal },

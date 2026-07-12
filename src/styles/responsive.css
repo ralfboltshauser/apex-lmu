@@ -22,6 +22,8 @@
   .analysis-summary-strip { grid-template-columns: repeat(4, 1fr); }
   .analysis-quality { grid-column: 1 / -1; min-height: 38px; flex-direction: row !important; align-items: center !important; gap: 10px !important; border-top: 1px solid var(--line); border-left: 0 !important; }
   .strategy-layout { grid-template-columns: 260px minmax(0, 1fr); }
+  .fuel-calculator-layout { grid-template-columns: 270px minmax(0, 1fr); }
+  .fuel-result-grid { grid-template-columns: repeat(2, 1fr); }
   .strategy-verdict { grid-template-columns: 38px 1fr; }.strategy-verdict > .badge { grid-column: 2; }
   .setup-library-layout { grid-template-columns: minmax(0, 1fr) 265px; }
   .setup-context-card { flex-wrap: wrap; }.setup-context-card__search { min-width: 270px; }
@@ -35,6 +37,8 @@
   .analysis-layout { grid-template-columns: 1fr; }
   .coach-panel { min-height: auto; }
   .strategy-bottom-grid { grid-template-columns: 1fr; }
+  .fuel-calculator-layout { grid-template-columns: 1fr; }
+  .fuel-inputs { display: grid; grid-template-columns: repeat(2, 1fr); }
   .scenario-card__stats { gap: 6px; }
   .setup-library-layout { grid-template-columns: 1fr; }.setup-detail-panel { position: static; }
   .engineer-layout { grid-template-columns: 1fr; }
