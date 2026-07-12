@@ -88,6 +88,31 @@ func TestDecodeSnapshotReportsButDoesNotRejectUnknownGameVersion(t *testing.T) {
 	}
 }
 
+func TestDecodeSnapshotNormalizesTimedSessionMaximumLapsSentinel(t *testing.T) {
+	raw := makeContractFixture()
+	putI32(raw, lmuScoringOffset+84, math.MaxInt32-30000)
+
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("timed-session sentinel should not reject the snapshot: %v", err)
+	}
+	if decoded.Session.MaximumLaps != 0 {
+		t.Fatalf("maximum laps = %d, want 0 for a timed session", decoded.Session.MaximumLaps)
+	}
+	if decoded.Session.EndSeconds != 21600 {
+		t.Fatalf("end seconds = %g; timed-session duration was lost", decoded.Session.EndSeconds)
+	}
+}
+
+func TestDecodeSnapshotStillRejectsImplausibleMaximumLaps(t *testing.T) {
+	raw := makeContractFixture()
+	putI32(raw, lmuScoringOffset+84, lmuPlausibleMaximumLaps+1)
+
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected non-sentinel implausible maximum laps to be rejected")
+	}
+}
+
 func TestNormalizeSectorRemovesPitBitAndConvertsToOneBased(t *testing.T) {
 	for raw, want := range map[int32]int32{0: 1, 1: 2, 2: 3, -2147483646: 3, 8: 1} {
 		if got := normalizeSector(raw); got != want {

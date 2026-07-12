@@ -41,6 +41,15 @@ const (
 
 const kilopascalToPSI = 0.14503773773020923
 
+const (
+	// LMU inherits rFactor's convention of putting timed/unlimited session
+	// metadata near MaxInt32 in the maximum-laps field. For example, an
+	// eight-hour-twenty-minute session is reported as MaxInt32 - 30000.
+	// These values are not lap counts; EndSeconds remains the duration source.
+	lmuTimedSessionMaximumLapsFloor int32 = 2_000_000_000
+	lmuPlausibleMaximumLaps         int32 = 1_000_000
+)
+
 type decodedSnapshot struct {
 	GameVersion int32
 	Session     session
@@ -231,8 +240,12 @@ func decodeSession(view packedView) (session, error) {
 	if err != nil {
 		return session{}, err
 	}
-	if maximumLaps < -1 || maximumLaps > 1_000_000 {
+	if maximumLaps >= lmuTimedSessionMaximumLapsFloor {
+		maximumLaps = 0
+	} else if maximumLaps < -1 || maximumLaps > lmuPlausibleMaximumLaps {
 		return session{}, fmt.Errorf("LMU maximum lap count is invalid: %d", maximumLaps)
+	} else if maximumLaps < 0 {
+		maximumLaps = 0
 	}
 	trackLength, err := view.bounded64(base+88, "track length", 0, 1e7)
 	if err != nil {
