@@ -2,6 +2,10 @@
   "name": "apex-lmu",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/website"
+  ],
+  "packageManager": "npm@11.16.0",
   "description": "Local-first, open-source telemetry, strategy, setup and race engineering companion for Le Mans Ultimate.",
   "author": "Apex LMU contributors",
   "main": "electron/main.cjs",
@@ -29,6 +33,10 @@
     "build:desktop:win:zip": "node scripts/build-windows-zip.cjs zip",
     "build:desktop:win:all": "node scripts/build-windows-zip.cjs nsis zip",
     "preview": "vite preview --host 0.0.0.0",
+    "dev:site": "npm run dev --workspace=apex-lmu-site",
+    "build:site": "npm run build --workspace=apex-lmu-site",
+    "preview:site": "npm run preview --workspace=apex-lmu-site",
+    "typecheck:site": "npm run typecheck --workspace=apex-lmu-site",
     "test": "vitest run",
     "test:desktop": "node --test electron/*.node-test.cjs",
     "test:bridge": "cd bridge && go test -buildvcs=false ./...",

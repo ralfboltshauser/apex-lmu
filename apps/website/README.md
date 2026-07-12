@@ -1,6 +1,6 @@
 # Apex marketing site
 
-A motion-led landing page for [Apex](https://github.com/ralfboltshauser/apex-lmu), the free, local-first, open-source race engineering companion for Le Mans Ultimate.
+A motion-led landing page for [Apex](https://github.com/ralfboltshauser/apex-lmu), the free, local-first, open-source race engineering companion for Le Mans Ultimate. It lives in the canonical monorepo at `apps/website`.
 
 ![Apex site preview](docs/site-preview.webp)
 

@@ -10,6 +10,7 @@ artifacts/*
 !artifacts/onboarding.png
 coverage/
 .vite/
+.vercel/
 .packaging-cache/
 *.tsbuildinfo
 vite.config.js

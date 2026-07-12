@@ -15,6 +15,7 @@
   <a href="LICENSE"><img alt="GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-9bea3c"></a>
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-3b82f6">
   <img alt="Local only" src="https://img.shields.io/badge/data-local%20only-22c55e">
+  <a href="https://apex-lmu.openexp.dev"><img alt="Website" src="https://img.shields.io/badge/website-apex--lmu.openexp.dev-b9f34a"></a>
 </p>
 
 ![Apex command center](artifacts/final-home-truthful.png)
@@ -164,6 +165,7 @@ Run every local test:
 ```bash
 npm run test:all
 npm run build
+npm run build:site
 ```
 
 Build Windows artifacts:
@@ -187,6 +189,7 @@ release workflow until signing is configured.
 | `src/views` | End-to-end product workflows |
 | `electron` | Sandboxed desktop shell, file services and overlay lifecycle |
 | `bridge` | Windows LMU shared-memory sidecar and deterministic fixture tests |
+| `apps/website` | Motion-led public website deployed by Vercel |
 | `docs` | Product decisions, architecture, validation and roadmap |
 
 ## Contributing and security
