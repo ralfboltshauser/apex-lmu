@@ -1,6 +1,6 @@
 {
   "name": "apex-lmu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "workspaces": [
     "apps/website"
@@ -42,7 +42,9 @@
     "test:bridge": "cd bridge && go test -buildvcs=false ./...",
     "test:all": "npm test && npm run test:desktop && npm run test:bridge",
     "test:watch": "vitest",
-    "lint": "tsc -b --pretty false"
+    "lint": "tsc -b --pretty false",
+    "hooks:install": "node scripts/install-hooks.cjs",
+    "prepare": "node scripts/install-hooks.cjs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.4-r.1",
