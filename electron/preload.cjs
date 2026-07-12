@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getDiagnostics: () => ipcRenderer.invoke('apex:get-diagnostics'),
   exportSupportBundle: () => ipcRenderer.invoke('apex:export-support-bundle'),
   openLogsFolder: () => ipcRenderer.invoke('apex:open-logs-folder'),
+  getUpdateState: () => ipcRenderer.invoke('apex:get-update-state'),
+  checkForUpdates: () => ipcRenderer.invoke('apex:check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('apex:download-update'),
+  installUpdate: () => ipcRenderer.invoke('apex:install-update'),
+  openReleases: () => ipcRenderer.invoke('apex:open-releases'),
   reportError: (input) => ipcRenderer.invoke('apex:report-renderer-error', input),
   startTelemetry: () => ipcRenderer.invoke('apex:start-telemetry'),
   stopTelemetry: () => ipcRenderer.invoke('apex:stop-telemetry'),
@@ -23,5 +28,10 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, message) => callback(message)
     ipcRenderer.on('apex:telemetry-message', listener)
     return () => ipcRenderer.removeListener('apex:telemetry-message', listener)
+  },
+  onUpdateState: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:update-state', listener)
+    return () => ipcRenderer.removeListener('apex:update-state', listener)
   },
 })

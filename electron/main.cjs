@@ -6,12 +6,14 @@ const { inspectTelemetryDatabase } = require('./telemetry-import.cjs')
 const { safeInstallSetup } = require('./setup-manager.cjs')
 const { DiagnosticsService, serializeError } = require('./diagnostics.cjs')
 const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
+const { UpdateManager } = require('./updater.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
 let overlayWindow
 let mainWindow
 let diagnostics
+let updateManager
 const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -141,6 +143,11 @@ ipcMain.handle('apex:run-diagnostics', async () => {
   return diagnostics.getReport({ bridgePath: bridgeManager.getBinaryPath(), selfTest: completed })
 })
 ipcMain.handle('apex:open-logs-folder', () => shell.openPath(diagnostics.dir))
+ipcMain.handle('apex:get-update-state', () => updateManager?.getState())
+ipcMain.handle('apex:check-for-updates', () => updateManager?.check(false))
+ipcMain.handle('apex:download-update', () => updateManager?.download())
+ipcMain.handle('apex:install-update', () => updateManager?.install())
+ipcMain.handle('apex:open-releases', () => shell.openExternal('https://github.com/ralfboltshauser/apex-lmu/releases'))
 ipcMain.handle('apex:report-renderer-error', (_event, input = {}) => diagnostics.record('error', 'renderer', 'reported-error', String(input.message || 'Renderer error'), { stack: String(input.stack || ''), context: String(input.context || '') }).then(() => ({ ok: true })))
 ipcMain.handle('apex:export-support-bundle', async () => {
   const report = await diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() })
@@ -179,7 +186,15 @@ app.whenReady().then(() => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:telemetry-message', message)
     },
   })
+  updateManager = new UpdateManager({
+    app,
+    logger: diagnostics,
+    broadcast: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:update-state', state)
+    },
+  })
   createWindow()
+  updateManager.start()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

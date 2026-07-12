@@ -23,7 +23,9 @@ adapter diagnostic output and a short recording that reproduces the issue.
 
 1. Refuses to reuse the version from the remote comparison commit.
 2. Runs the complete renderer, native desktop, and Go bridge test suites.
-3. Builds the Windows installer, portable ZIP, and SHA-256 manifest.
+3. Builds the Windows installer, portable ZIP, updater metadata, and SHA-256 manifest.
 4. Blocks the push if any check or artifact fails.
 
 Website-only and documentation-only pushes skip desktop packaging. A successful build is cached by commit and version under `.git`, so retrying the same push does not rebuild it. The hook produces local release artifacts; publishing the GitHub Release remains an explicit post-push operation because a pre-push hook runs before the commit exists on GitHub.
+
+After the verified commit reaches `main`, run `npm run release:publish`. This attaches the installer, portable ZIP, `latest.yml`, and checksums to the matching prerelease. Omitting `latest.yml` breaks in-app update discovery and is therefore not a supported release procedure.

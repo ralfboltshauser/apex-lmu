@@ -57,6 +57,12 @@ Support bundles contain Apex version/system metadata, diagnostic results, and Ap
 
 LMU discovery uses Steam app ID `2399420`. Apex reads Steam's registry location, parses `steamapps/libraryfolders.vdf` for secondary libraries, and confirms the installation through `appmanifest_2399420.acf` and the game executable. If automatic discovery fails, onboarding and Settings show every attempted path and expectation; use Steam's **Properties → Installed Files → Browse** action to paste or choose the exact game folder manually. The discovery trace is also included in local diagnostic logs and support bundles.
 
+### Updating Apex
+
+Installed Windows builds check the public GitHub release channel shortly after startup. Apex shows an in-app notification when a newer alpha is available, but does not download it without confirmation. Open **Settings → Application updates** to check manually, review release notes, monitor download progress, and choose when to restart and install. Update metadata includes the installer SHA-512 digest used by `electron-updater`; updater events and errors are captured in the local support log.
+
+Portable ZIP builds cannot reliably replace their own running directory. They retain a **Releases** fallback that opens the exact public download page; running the per-user installer requires no administrator rights and preserves the existing Apex user-data directory.
+
 ## What works today
 
 | Area | Current behavior |

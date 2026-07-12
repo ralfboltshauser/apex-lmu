@@ -20,6 +20,11 @@ interface ApexDesktopApi {
   getDiagnostics(): Promise<ApexDiagnosticReport>
   exportSupportBundle(): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
   openLogsFolder(): Promise<string>
+  getUpdateState(): Promise<ApexUpdateState>
+  checkForUpdates(): Promise<ApexUpdateState>
+  downloadUpdate(): Promise<{ ok: boolean; reason?: string }>
+  installUpdate(): Promise<{ ok: boolean; reason?: string }>
+  openReleases(): Promise<void>
   reportError(input: { message: string; stack?: string; context?: string }): Promise<{ ok: boolean }>
   startTelemetry(): Promise<{ ok: boolean; reason?: string }>
   stopTelemetry(): Promise<{ ok: boolean }>
@@ -37,7 +42,10 @@ interface ApexDesktopApi {
   installSetup(input: { sourcePath: string; targetDirectory: string }): Promise<{ destination: string; backupPath: string | null; bytes: number }>
   openOverlay(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
+  onUpdateState(callback: (state: ApexUpdateState) => void): () => void
 }
+
+interface ApexUpdateState { status: 'development' | 'unsupported' | 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'; currentVersion: string; availableVersion: string | null; progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null; message: string; releaseNotes: string; releaseUrl: string; error?: { message: string; stack: string; code: string } }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
 interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }

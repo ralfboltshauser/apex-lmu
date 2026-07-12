@@ -71,6 +71,7 @@ const expected = [
   path.join(root, 'release', `Apex-for-LMU-Setup-${currentVersion}.exe`),
   path.join(root, 'release', `Apex-for-LMU-${currentVersion}-win.zip`),
   path.join(root, 'release', 'SHA256SUMS.txt'),
+  path.join(root, 'release', 'latest.yml'),
 ]
 if (fs.existsSync(marker) && expected.every(fs.existsSync)) {
   console.log(`pre-push: verified release ${currentVersion} already built for ${pushedHead.slice(0, 12)}.`)
@@ -78,7 +79,7 @@ if (fs.existsSync(marker) && expected.every(fs.existsSync)) {
 }
 
 console.log(`pre-push: desktop changes detected (${previousVersion || 'new'} → ${currentVersion}).`)
-console.log('pre-push: running all tests and building Windows installer, portable ZIP, and checksums…')
+console.log('pre-push: running all tests and building Windows installer, portable ZIP, updater metadata, and checksums…')
 runNpm('test:all')
 runNpm('build:desktop:win:all')
 if (!expected.every(fs.existsSync)) {

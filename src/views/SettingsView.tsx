@@ -5,6 +5,7 @@ import {
   FileCode2,
   Clipboard,
   Download,
+  ExternalLink,
   FolderOpen,
   Gauge,
   HardDrive,
@@ -46,6 +47,7 @@ export function SettingsView() {
   const [showLogs, setShowLogs] = useState(false)
   const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about'>('connection')
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
+  const [updateState, setUpdateState] = useState<ApexUpdateState | null>(null)
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
@@ -70,6 +72,12 @@ export function SettingsView() {
       }
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
+  }, [])
+
+  useEffect(() => {
+    if (!window.apexDesktop) return
+    void window.apexDesktop.getUpdateState().then(setUpdateState)
+    return window.apexDesktop.onUpdateState(setUpdateState)
   }, [])
 
   const autoDetectLmu = async () => {
@@ -137,6 +145,19 @@ export function SettingsView() {
         </nav>
 
         <div className="settings-content">
+          <Card className="update-card">
+            <CardHeader eyebrow="Application updates" title={`Apex ${updateState?.currentVersion || environment?.version || ''}`} action={<Badge tone={updateState?.status === 'available' || updateState?.status === 'downloaded' ? 'accent' : updateState?.status === 'error' ? 'warning' : 'neutral'}>{updateState?.status?.replaceAll('-', ' ') || 'Loading'}</Badge>} />
+            <div className="update-card__body"><div><strong>{updateState?.message || 'Reading update status…'}</strong><span>Windows installer updates come directly from the public GitHub release. Apex asks before downloading and again before restarting.</span></div><div className="update-card__actions">
+              {(!updateState || ['idle', 'up-to-date', 'error'].includes(updateState.status)) && <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={() => void window.apexDesktop?.checkForUpdates()} disabled={!window.apexDesktop || updateState?.status === 'checking'}>Check now</Button>}
+              {updateState?.status === 'available' && <Button size="sm" icon={<Download size={14} />} onClick={() => void window.apexDesktop?.downloadUpdate()}>Download {updateState.availableVersion}</Button>}
+              {updateState?.status === 'downloaded' && <Button size="sm" onClick={() => void window.apexDesktop?.installUpdate()}>Restart and install</Button>}
+              <Button variant="secondary" size="sm" icon={<ExternalLink size={13} />} onClick={() => void window.apexDesktop?.openReleases()}>Releases</Button>
+            </div></div>
+            {updateState?.progress && <div className="update-progress"><span style={{ width: `${Math.max(0, Math.min(100, updateState.progress.percent))}%` }} /><small>{Math.floor(updateState.progress.percent)}%</small></div>}
+            {updateState?.releaseNotes && <details className="update-notes"><summary>What changed in {updateState.availableVersion}</summary><pre>{updateState.releaseNotes}</pre></details>}
+            {updateState?.error && <details className="update-notes update-notes--error"><summary>Update error details</summary><pre>{updateState.error.code ? `${updateState.error.code}: ` : ''}{updateState.error.message}\n{updateState.error.stack}</pre><p>The portable ZIP cannot replace itself. Download the latest installer from Releases; it installs per-user without administrator rights and keeps Apex data.</p></details>}
+          </Card>
+
           <Card className="health-card" id="settings-connection">
             <div className={`health-card__icon ${ready ? 'is-ready' : ''}`}>{ready ? <HeartPulse size={22} /> : <Info size={22} />}</div>
             <div>

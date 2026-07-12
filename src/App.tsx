@@ -145,6 +145,7 @@ export default function App() {
   const desktopAdapter = useRef(new DesktopTelemetryAdapter())
   const demoRunningRef = useRef(false)
   const viewRef = useRef<ViewId>('home')
+  const lastUpdateNotice = useRef('')
   const [realConnected, setRealConnected] = useState(false)
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
   demoRunningRef.current = demoRunning
@@ -208,6 +209,17 @@ export default function App() {
       .then((result) => addToast(result.ok ? 'Overlay window opened' : 'Overlay did not open', result.ok ? 'It is always-on-top and click-through while you race.' : 'Check desktop diagnostics and try again.'))
       .catch((error) => addToast('Overlay did not open', error instanceof Error ? error.message : String(error)))
   }
+
+  useEffect(() => {
+    if (!window.apexDesktop) return
+    return window.apexDesktop.onUpdateState((state) => {
+      if (!['available', 'downloaded'].includes(state.status)) return
+      const key = `${state.status}:${state.availableVersion}`
+      if (lastUpdateNotice.current === key) return
+      lastUpdateNotice.current = key
+      addToast(state.status === 'downloaded' ? 'Update ready to install' : `Apex ${state.availableVersion} is available`, state.status === 'downloaded' ? 'Open Settings to restart and install when convenient.' : 'Open Settings to review and download it.')
+    })
+  }, [])
 
   useEffect(() => {
     const report = (event: ErrorEvent | PromiseRejectionEvent) => {

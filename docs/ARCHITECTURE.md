@@ -71,3 +71,9 @@ without changing UI consumers.
 The Electron main process owns a rotating JSONL log under the application user-data directory. It records lifecycle failures, bridge stderr and process exits, renderer termination/load failures, and explicitly reported renderer exceptions. Telemetry frames and setup file contents are never written to this log.
 
 Renderer access is limited to narrow preload calls for running read-only checks, viewing logs, opening the log folder, and exporting a redacted JSON support bundle. A bridge self-test is only considered successful after its correlated completion frame arrives; process launch alone is not success.
+
+## Updates
+
+Packaged Windows builds use `electron-updater` with the GitHub provider and the existing per-user NSIS target. The main process owns update checks, downloads, progress, installation, and logs; the sandboxed renderer receives state and can invoke only narrow check/download/install actions. Automatic checks never imply automatic downloads, and installation requires an explicit restart action.
+
+Each GitHub release must attach the versioned installer and `latest.yml`. The metadata carries the installer's SHA-512 digest. Portable archives use the public Releases page as a manual fallback. The pre-push gate refuses a desktop release unless updater metadata was generated alongside the installer, ZIP, and checksum manifest.
