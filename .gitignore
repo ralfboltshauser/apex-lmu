@@ -17,3 +17,4 @@ vite.config.js
 vite.config.d.ts
 *.log
 .DS_Store
+.env*.local
