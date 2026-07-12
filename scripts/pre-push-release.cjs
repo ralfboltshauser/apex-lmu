@@ -65,7 +65,11 @@ if (previousVersion === currentVersion) {
   process.exit(1)
 }
 
-const markerDir = path.join(root, '.git', 'apex-release-prepush')
+const commonGitDirValue = git(['rev-parse', '--git-common-dir'])
+const commonGitDir = path.isAbsolute(commonGitDirValue)
+  ? commonGitDirValue
+  : path.resolve(root, commonGitDirValue)
+const markerDir = path.join(commonGitDir, 'apex-release-prepush')
 const marker = path.join(markerDir, `${pushedHead}-${currentVersion}.done`)
 const expected = [
   path.join(root, 'release', `Apex-for-LMU-Setup-${currentVersion}.exe`),
