@@ -181,12 +181,20 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	playerName, err := view.cString(lmuScoringOffset+116, 32)
+	if err != nil {
+		return nil, err
+	}
 	opponents := make([]opponent, 0, max(0, int(numScoringVehicles)-1))
 	var playerScore *decodedVehicleScoring
+	playerNameMatches := make([]decodedVehicleScoring, 0, 1)
 	for index := 0; index < int(numScoringVehicles); index++ {
 		score, decodeErr := decodeVehicleScoring(view, lmuVehicleScoringBase+index*lmuVehicleScoringSize)
 		if decodeErr != nil {
 			return nil, fmt.Errorf("decode scoring vehicle %d: %w", index, decodeErr)
+		}
+		if playerName != "" && strings.EqualFold(score.Driver, playerName) {
+			playerNameMatches = append(playerNameMatches, score)
 		}
 		if score.IsPlayer {
 			if playerScore == nil {
@@ -196,6 +204,13 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 			continue
 		}
 		opponents = append(opponents, score.Opponent)
+	}
+	// LMU can publish the selected car in scoring before it sets either the
+	// per-row player flag or the telemetry playerHasVehicle flag. The scoring
+	// header's player name is available in that gap and identifies the row.
+	if playerScore == nil && len(playerNameMatches) == 1 {
+		copy := playerNameMatches[0]
+		playerScore = &copy
 	}
 
 	var decodedPlayer vehicle
@@ -228,7 +243,7 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 		}
 	} else {
 		if playerScore == nil {
-			return nil, errLMUPlayerHasNoVehicle
+			return nil, fmt.Errorf("%w: no scoring row is marked as the player; session player name %q matched %d of %d scoring vehicles", errLMUPlayerHasNoVehicle, playerName, len(playerNameMatches), numScoringVehicles)
 		}
 		// Garage and pre-race pit-lane snapshots still expose the selected car
 		// through scoring, plus complete session/weather data. Emit those facts

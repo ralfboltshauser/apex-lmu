@@ -70,6 +70,28 @@ func TestDecodeSnapshotKeepsSessionAndSelectedCarBeforeVehicleTelemetry(t *testi
 	}
 }
 
+func TestDecodeSnapshotMatchesSessionPlayerNameBeforeVehicleTelemetry(t *testing.T) {
+	raw := makeContractFixture()
+	raw[lmuTelemetryOffset] = 0
+	raw[lmuTelemetryOffset+1] = 0
+	raw[lmuTelemetryOffset+2] = 0
+	raw[lmuVehicleScoringBase+lmuVehicleScoringSize+196] = 0
+
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("decode pre-race snapshot without player flag: %v", err)
+	}
+	if decoded.PlayerTelemetryAvailable {
+		t.Fatal("player-name correlation must not claim per-vehicle telemetry")
+	}
+	if decoded.Player.ID != 42 || decoded.Player.Name != "Porsche 963" || decoded.Player.Driver != "Apex Driver" {
+		t.Fatalf("selected car was not correlated by session player name: %#v", decoded.Player)
+	}
+	if len(decoded.Opponents) != 2 {
+		t.Fatalf("matched player must not be duplicated in standings: %#v", decoded.Opponents)
+	}
+}
+
 func TestDecodeSnapshotWaitsWhenNeitherTelemetryNorSelectedCarExists(t *testing.T) {
 	raw := makeContractFixture()
 	raw[lmuTelemetryOffset] = 0
@@ -78,9 +100,24 @@ func TestDecodeSnapshotWaitsWhenNeitherTelemetryNorSelectedCarExists(t *testing.
 	raw[lmuVehicleScoringBase+196] = 0
 	raw[lmuVehicleScoringBase+lmuVehicleScoringSize+196] = 0
 	raw[lmuVehicleScoringBase+2*lmuVehicleScoringSize+196] = 0
+	clear(raw[lmuScoringOffset+116 : lmuScoringOffset+148])
 
 	if _, err := decodeSnapshot(raw); !errors.Is(err, errLMUPlayerHasNoVehicle) {
 		t.Fatalf("expected no-vehicle sentinel, got %v", err)
+	}
+}
+
+func TestDecodeSnapshotDoesNotGuessWhenSessionPlayerNameIsAmbiguous(t *testing.T) {
+	raw := makeContractFixture()
+	raw[lmuTelemetryOffset] = 0
+	raw[lmuTelemetryOffset+1] = 0
+	raw[lmuTelemetryOffset+2] = 0
+	raw[lmuVehicleScoringBase+lmuVehicleScoringSize+196] = 0
+	clear(raw[lmuVehicleScoringBase+2*lmuVehicleScoringSize+4 : lmuVehicleScoringBase+2*lmuVehicleScoringSize+36])
+	putText(raw, lmuVehicleScoringBase+2*lmuVehicleScoringSize+4, 32, "Apex Driver")
+
+	if _, err := decodeSnapshot(raw); !errors.Is(err, errLMUPlayerHasNoVehicle) {
+		t.Fatalf("ambiguous player name must remain unresolved, got %v", err)
 	}
 }
 
@@ -185,6 +222,7 @@ func makeContractFixture() []byte {
 	raw[lmuScoringOffset+108] = 5
 	raw[lmuScoringOffset+109] = 0xff
 	raw[lmuScoringOffset+115] = 1
+	putText(raw, lmuScoringOffset+116, 32, "Apex Driver")
 	putF64(raw, lmuScoringOffset+220, 0.2)
 	putF64(raw, lmuScoringOffset+228, 19.5)
 	putF64(raw, lmuScoringOffset+236, 24.25)
