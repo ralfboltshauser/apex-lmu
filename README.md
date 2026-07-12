@@ -33,7 +33,9 @@ administrator privileges.
 
 1. Download the **[latest Windows installer](https://github.com/ralfboltshauser/apex-lmu/releases/latest)**.
 2. Run it and open **Apex for LMU**.
-3. Start LMU and enter a session. Apex waits locally for LMU's shared-memory
+3. Start LMU and enter a session. Apex detects the selected car, track and
+   environment from the garage/pre-race pit lane, then adds full vehicle data
+   as soon as LMU publishes it. Apex waits locally for LMU's shared-memory
    interface; it does not inject anything into the game.
 
 A portable ZIP and SHA-256 checksums
@@ -44,7 +46,7 @@ Verify the checksum before running it. Code signing is a release-roadmap item.
 
 ### First run and troubleshooting
 
-The first-run wizard verifies the LMU installation path and runs the bundled bridge's isolated protocol self-test before calling the integration ready. The self-test does not require LMU to be running. For live data, start LMU and enter a drivable session; Apex will wait rather than inject into or modify the game.
+The first-run wizard verifies the LMU installation path and runs the bundled bridge's isolated protocol self-test before calling the integration ready. The self-test does not require LMU to be running. Apex can show session, selected car, standings and weather as soon as LMU exposes scoring in the garage or pre-race pit lane. Fuel, controls, tyres and brakes appear only when LMU activates the player's vehicle-telemetry block; Apex labels that boundary instead of displaying invented zeroes.
 
 After onboarding, each workspace introduces itself once and keeps a **Learn this view** guide available. These guides explain the recommended flow, define unfamiliar race-engineering terms, and state what a useful outcome looks like. Settings → About can replay onboarding or reset all introductions without deleting user data.
 
@@ -71,7 +73,7 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 
 | Area | Current behavior |
 | --- | --- |
-| Live session | Reads the `LMU_Data` mapping out of process; shows measured position, laps, speed, controls, fuel, hybrid state, tyres, brakes, weather and standings. |
+| Live session | Reads the `LMU_Data` mapping out of process; shows car/session/weather/standings before the race, then measured position, laps, speed, controls, fuel, hybrid state, tyres and brakes when player telemetry becomes available. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
 | Analysis | Distance-aligned comparison and evidence-scored coaching engines are implemented. The polished analysis workspace currently uses visibly labeled generated fixtures. |

@@ -40,6 +40,20 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.sample.sequence).toBe(42)
   })
 
+  it('maps a pre-race scoring snapshot without claiming vehicle telemetry', () => {
+    const raw: Parameters<typeof mapBridgeFrame>[0] = {
+      type: 'telemetry', capturedAt: '2026-07-12T12:00:00.000Z', sequence: 1, playerTelemetryAvailable: false,
+      session: { track: 'Spa-Francorchamps', elapsedSeconds: 0, endSeconds: 3600, maximumLaps: 0, trackLengthM: 7004, phase: 2, inRealtime: false, airTempC: 18, trackTempC: 24, rain: 0, wetness: 0, windSpeedMps: 2, yellowState: 0 },
+      player: { id: 6, driver: 'Player', name: 'Porsche 963', class: 'Hypercar', position: 3, lap: 1, sector: 1, lapDistanceM: 0, speedKph: 0, rpm: 0, maximumRpm: 0, gear: 0, throttle: 0, brake: 0, steering: 0, clutch: 0, fuelL: 0, fuelCapacityL: 0, batteryFraction: 0, rearBrakeBias: 0, deltaBestSeconds: 0, bestLapSeconds: 0, lastLapSeconds: 0, timeBehindLeaderSeconds: 0, timeBehindNextSeconds: 0, inPits: true, pitState: 3, frontCompound: '', rearCompound: '', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')].map((value) => ({ ...value, pressurePsi: 0, surfaceTempC: [0, 0, 0] as [number, number, number], carcassTempC: 0, brakeTempC: 0 })) as ReturnType<typeof wheel>[] as Parameters<typeof mapBridgeFrame>[0]['player']['wheels'] },
+      opponents: [],
+    }
+    const frame = mapBridgeFrame(raw, raw.capturedAt)
+    expect(frame.sourceState).toBe('session-only')
+    expect(frame.player.car.model).toBe('Porsche 963')
+    expect(frame.weather.trackTemperatureC).toBe(24)
+    expect(frame.sessionState.phase).toBe('garage')
+  })
+
   it('ignores self-test traffic on the production live adapter', async () => {
     const originalDesktop = window.apexDesktop
     let bridgeListener: ((message: unknown) => void) | undefined
