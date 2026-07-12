@@ -10,20 +10,21 @@ const (
 )
 
 type message struct {
-	ProtocolVersion int        `json:"protocolVersion"`
-	Source          string     `json:"source"`
-	RunID           string     `json:"runId,omitempty"`
-	Fixture         string     `json:"fixture,omitempty"`
-	Type            string     `json:"type"`
-	State           string     `json:"state,omitempty"`
-	Message         string     `json:"message,omitempty"`
-	Frames          int        `json:"frames,omitempty"`
-	GameVersion     int32      `json:"gameVersion,omitempty"`
-	CapturedAt      string     `json:"capturedAt,omitempty"`
-	Sequence        uint64     `json:"sequence,omitempty"`
-	Session         *session   `json:"session,omitempty"`
-	Player          *vehicle   `json:"player,omitempty"`
-	Opponents       []opponent `json:"opponents,omitempty"`
+	ProtocolVersion          int        `json:"protocolVersion"`
+	Source                   string     `json:"source"`
+	RunID                    string     `json:"runId,omitempty"`
+	Fixture                  string     `json:"fixture,omitempty"`
+	Type                     string     `json:"type"`
+	State                    string     `json:"state,omitempty"`
+	Message                  string     `json:"message,omitempty"`
+	Frames                   int        `json:"frames,omitempty"`
+	GameVersion              int32      `json:"gameVersion,omitempty"`
+	CapturedAt               string     `json:"capturedAt,omitempty"`
+	Sequence                 uint64     `json:"sequence,omitempty"`
+	Session                  *session   `json:"session,omitempty"`
+	Player                   *vehicle   `json:"player,omitempty"`
+	Opponents                []opponent `json:"opponents,omitempty"`
+	PlayerTelemetryAvailable bool       `json:"playerTelemetryAvailable"`
 }
 
 type session struct {

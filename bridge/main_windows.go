@@ -154,6 +154,7 @@ func run(hz int, parentID int) {
 				Type: "telemetry", CapturedAt: time.Now().UTC().Format(time.RFC3339Nano), Sequence: sequence,
 				GameVersion: decoded.GameVersion,
 				Session:     &decoded.Session, Player: &decoded.Player, Opponents: decoded.Opponents,
+				PlayerTelemetryAvailable: decoded.PlayerTelemetryAvailable,
 			})
 		}
 

@@ -51,10 +51,11 @@ const (
 )
 
 type decodedSnapshot struct {
-	GameVersion int32
-	Session     session
-	Player      vehicle
-	Opponents   []opponent
+	GameVersion              int32
+	Session                  session
+	Player                   vehicle
+	Opponents                []opponent
+	PlayerTelemetryAvailable bool
 }
 
 type packedView struct {
@@ -160,9 +161,6 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	if activeVehicles > lmuMaximumVehicles {
-		return nil, fmt.Errorf("LMU reports %d active telemetry vehicles; maximum is %d", activeVehicles, lmuMaximumVehicles)
-	}
 	playerIndex, err := view.u8(lmuTelemetryOffset + 1)
 	if err != nil {
 		return nil, err
@@ -171,13 +169,6 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !playerHasVehicle {
-		return nil, errLMUPlayerHasNoVehicle
-	}
-	if activeVehicles == 0 || playerIndex >= activeVehicles || playerIndex >= lmuMaximumVehicles {
-		return nil, fmt.Errorf("LMU player telemetry index %d is outside active vehicle count %d", playerIndex, activeVehicles)
-	}
-
 	numScoringVehicles, err := view.i32(lmuScoringOffset + 104)
 	if err != nil {
 		return nil, err
@@ -190,12 +181,6 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	playerTelemetryOffset := lmuTelemetryArrayBase + int(playerIndex)*lmuVehicleTelemetrySize
-	decodedPlayer, err := decodePlayerTelemetry(view, playerTelemetryOffset)
-	if err != nil {
-		return nil, err
-	}
-
 	opponents := make([]opponent, 0, max(0, int(numScoringVehicles)-1))
 	var playerScore *decodedVehicleScoring
 	for index := 0; index < int(numScoringVehicles); index++ {
@@ -203,8 +188,8 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 		if decodeErr != nil {
 			return nil, fmt.Errorf("decode scoring vehicle %d: %w", index, decodeErr)
 		}
-		if score.IsPlayer || score.ID == decodedPlayer.ID {
-			if playerScore == nil || score.IsPlayer {
+		if score.IsPlayer {
+			if playerScore == nil {
 				copy := score
 				playerScore = &copy
 			}
@@ -212,14 +197,59 @@ func decodeSnapshot(data []byte) (*decodedSnapshot, error) {
 		}
 		opponents = append(opponents, score.Opponent)
 	}
+
+	var decodedPlayer vehicle
+	if playerHasVehicle {
+		if activeVehicles > lmuMaximumVehicles {
+			return nil, fmt.Errorf("LMU reports %d active telemetry vehicles; maximum is %d", activeVehicles, lmuMaximumVehicles)
+		}
+		if activeVehicles == 0 || playerIndex >= activeVehicles || playerIndex >= lmuMaximumVehicles {
+			return nil, fmt.Errorf("LMU player telemetry index %d is outside active vehicle count %d", playerIndex, activeVehicles)
+		}
+		playerTelemetryOffset := lmuTelemetryArrayBase + int(playerIndex)*lmuVehicleTelemetrySize
+		decodedPlayer, err = decodePlayerTelemetry(view, playerTelemetryOffset)
+		if err != nil {
+			return nil, err
+		}
+		// Some SDK builds do not reliably set IsPlayer in scoring once live
+		// telemetry starts, so retain the ID correlation used by the full path.
+		if playerScore == nil {
+			for index := 0; index < int(numScoringVehicles); index++ {
+				score, scoreErr := decodeVehicleScoring(view, lmuVehicleScoringBase+index*lmuVehicleScoringSize)
+				if scoreErr != nil {
+					return nil, scoreErr
+				}
+				if score.ID == decodedPlayer.ID {
+					copy := score
+					playerScore = &copy
+					break
+				}
+			}
+		}
+	} else {
+		if playerScore == nil {
+			return nil, errLMUPlayerHasNoVehicle
+		}
+		// Garage and pre-race pit-lane snapshots still expose the selected car
+		// through scoring, plus complete session/weather data. Emit those facts
+		// without pretending that the per-wheel telemetry array is available.
+		decodedPlayer = vehicle{ID: playerScore.ID, Lap: int32(playerScore.Opponent.Laps) + 1, Sector: 1}
+	}
 	if playerScore != nil {
 		applyPlayerScoring(&decodedPlayer, *playerScore)
 	}
+	filteredOpponents := opponents[:0]
+	for _, current := range opponents {
+		if current.ID != decodedPlayer.ID {
+			filteredOpponents = append(filteredOpponents, current)
+		}
+	}
+	opponents = filteredOpponents
 	sort.SliceStable(opponents, func(left, right int) bool {
 		return opponents[left].Position < opponents[right].Position
 	})
 
-	return &decodedSnapshot{GameVersion: gameVersion, Session: decodedSession, Player: decodedPlayer, Opponents: opponents}, nil
+	return &decodedSnapshot{GameVersion: gameVersion, Session: decodedSession, Player: decodedPlayer, Opponents: opponents, PlayerTelemetryAvailable: playerHasVehicle}, nil
 }
 
 func decodeSession(view packedView) (session, error) {

@@ -31,10 +31,10 @@ const scenes = [
   {
     id: "strategy",
     number: "03",
-    label: "Strategy",
-    kicker: "ASSUMPTIONS EXPOSED",
-    title: "Stress-test the finish.",
-    body: "Model fuel, Virtual Energy, race boundaries and extra-lap risk with editable inputs. The model shows its working—and its uncertainty.",
+    label: "Fuel + strategy",
+    kicker: "LIVE SAMPLES · MANUAL FALLBACK",
+    title: "Fuel the finish—not the guess.",
+    body: "Learn consumption from clean LMU laps or enter it manually. See total fuel, opening load, stops, final stint and extra-lap risk with every assumption exposed.",
   },
   {
     id: "setups",

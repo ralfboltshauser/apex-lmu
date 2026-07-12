@@ -269,6 +269,8 @@ export interface TelemetryFrame {
   readonly opponents: readonly OpponentState[]
   readonly sample: TelemetrySample
   readonly events: readonly TelemetryEvent[]
+  /** Session-only means LMU exposes scoring/weather but not the player's per-wheel telemetry yet. */
+  readonly sourceState?: 'session-only' | 'vehicle-telemetry'
 }
 
 export type LapValidityReason =

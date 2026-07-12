@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
 	"testing"
 )
@@ -42,6 +43,44 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	}
 	if len(decoded.Opponents) != 2 || decoded.Opponents[0].Position != 1 || decoded.Opponents[1].Position != 3 {
 		t.Fatalf("opponents were not sorted: %#v", decoded.Opponents)
+	}
+}
+
+func TestDecodeSnapshotKeepsSessionAndSelectedCarBeforeVehicleTelemetry(t *testing.T) {
+	raw := makeContractFixture()
+	raw[lmuTelemetryOffset] = 0
+	raw[lmuTelemetryOffset+1] = 0
+	raw[lmuTelemetryOffset+2] = 0
+
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("decode pre-race snapshot: %v", err)
+	}
+	if decoded.PlayerTelemetryAvailable {
+		t.Fatal("pre-race snapshot must not claim per-vehicle telemetry")
+	}
+	if decoded.Player.ID != 42 || decoded.Player.Name != "Porsche 963" || decoded.Player.Driver != "Apex Driver" {
+		t.Fatalf("selected car was not recovered from scoring: %#v", decoded.Player)
+	}
+	if decoded.Session.Track != "Circuit de la Sarthe" || decoded.Session.TrackTempC != 24.25 || decoded.Session.AirTempC != 19.5 {
+		t.Fatalf("session environment was lost: %#v", decoded.Session)
+	}
+	if len(decoded.Opponents) != 2 {
+		t.Fatalf("player must not be duplicated in standings: %#v", decoded.Opponents)
+	}
+}
+
+func TestDecodeSnapshotWaitsWhenNeitherTelemetryNorSelectedCarExists(t *testing.T) {
+	raw := makeContractFixture()
+	raw[lmuTelemetryOffset] = 0
+	raw[lmuTelemetryOffset+1] = 0
+	raw[lmuTelemetryOffset+2] = 0
+	raw[lmuVehicleScoringBase+196] = 0
+	raw[lmuVehicleScoringBase+lmuVehicleScoringSize+196] = 0
+	raw[lmuVehicleScoringBase+2*lmuVehicleScoringSize+196] = 0
+
+	if _, err := decodeSnapshot(raw); !errors.Is(err, errLMUPlayerHasNoVehicle) {
+		t.Fatalf("expected no-vehicle sentinel, got %v", err)
 	}
 }
 
