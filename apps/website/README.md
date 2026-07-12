@@ -60,6 +60,7 @@ All hero imagery was created for this project; no downloaded stock vehicle or tr
 
 - `public/media/hero-windtunnel.avif` — generated in the built-in image generator's stylized-concept mode: an original graphite endurance prototype in a black wind tunnel, acid-lime flow lines, silver highlights, no text, logos, real livery, or identifiable production car.
 - `public/media/signal-circuit.avif` — generated in stylized-concept mode: an abstract top-down endurance circuit whose lime racing line becomes a telemetry waveform and engineering grid, with no text, logos, or real circuit geometry.
+- `public/og-image.jpg` — a 1200×630 image-generated wind-tunnel composition with deterministic brand typography for Open Graph and large-card social previews.
 The unoptimized generation sources and reference captures live under the git-ignored `research/` directory.
 
 ## Product accuracy
