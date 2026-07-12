@@ -27,13 +27,14 @@ import {
 import { MagneticLink } from "./components/MagneticLink";
 import ProductTheatre from "./components/ProductTheatre";
 import { usePageMotion, useReducedMotion, useRevealObserver } from "./hooks/useMotion";
+import { RELEASE } from "./release";
 
 const URLS = {
-  repository: "https://github.com/ralfboltshauser/apex-lmu",
-  release: "https://github.com/ralfboltshauser/apex-lmu/releases/tag/v0.1.0",
-  installer: "https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex-for-LMU-Setup-0.1.0.exe",
-  portable: "https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex-for-LMU-0.1.0-win.zip",
-  checksums: "https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/SHA256SUMS.txt",
+  repository: RELEASE.repository,
+  release: RELEASE.page,
+  installer: RELEASE.installer,
+  portable: RELEASE.portable,
+  checksums: RELEASE.checksums,
 };
 
 const navItems = [
@@ -123,7 +124,7 @@ function Header() {
             </a>
           ))}
           <a className="mobile-menu__download" href={URLS.installer} tabIndex={open ? 0 : -1}>
-            <Download size={18} /> Download v0.1.0 alpha
+            <Download size={18} /> Download {RELEASE.tag} alpha
           </a>
         </div>
       </div>
@@ -203,7 +204,7 @@ function Hero() {
           <div className="hero-bottom">
             <div className="hero-actions">
               <MagneticLink className="button button--lime" href={URLS.installer}>
-                <Download size={18} /> Download v0.1.0 <ArrowDown size={16} />
+                <Download size={18} /> Download {RELEASE.tag} <ArrowDown size={16} />
               </MagneticLink>
               <MagneticLink className="button button--ghost" href={URLS.repository} target="_blank" rel="noreferrer">
                 <Github size={18} /> View source <ArrowUpRight size={16} />
@@ -365,7 +366,7 @@ function TrustSection() {
           </div>
           <div className="proof-list">
             <p><CheckCircle2 size={17} /><span><b>Windows 11 VM</b>Secure Boot + TPM 2.0</span></p>
-            <p><CheckCircle2 size={17} /><span><b>Zero known npm audit issues</b>At the v0.1.0 release boundary</span></p>
+            <p><CheckCircle2 size={17} /><span><b>Automated release verification</b>At the {RELEASE.tag} release boundary</span></p>
             <p><CheckCircle2 size={17} /><span><b>No administrator requirement</b>Installer and portable lifecycle tested</span></p>
           </div>
           <MagneticLink className="button button--dark" href={URLS.repository} target="_blank" rel="noreferrer">
@@ -392,7 +393,7 @@ function RoadmapSection() {
       <div className="roadmap-heading container" data-reveal>
         <p className="eyebrow eyebrow--amber"><Sparkles size={15} /> PUBLIC ALPHA / REAL BOUNDARIES</p>
         <h2>Built in public.<br /><em>Honest about the gap.</em></h2>
-        <p>v0.1.0 is a foundation, not a victory lap. These are the edges that matter before Apex can call itself race-proven.</p>
+        <p>{RELEASE.tag} is a foundation, not a victory lap. These are the edges that matter before Apex can call itself race-proven.</p>
       </div>
       <div className="alpha-grid container">
         {alphaItems.map((item, index) => (
@@ -415,7 +416,7 @@ function RoadmapSection() {
 }
 
 const installSteps = [
-  { number: "01", icon: Download, title: "Download", copy: "Choose the v0.1.0 installer or portable ZIP from GitHub." },
+  { number: "01", icon: Download, title: "Download", copy: `Choose the ${RELEASE.tag} installer or portable ZIP from GitHub.` },
   { number: "02", icon: FileCheck2, title: "Verify", copy: "Match the file against the published SHA-256 checksum." },
   { number: "03", icon: MonitorDown, title: "Explore", copy: "Open the local demo first. No game or network connection required." },
 ];
@@ -426,7 +427,7 @@ function InstallSection() {
       <div className="install-card container" data-reveal>
         <div className="install-glow" aria-hidden="true" />
         <div className="install-heading">
-          <p className="eyebrow"><span className="pulse-dot pulse-dot--dark" /> GREEN FLAG / V0.1.0</p>
+          <p className="eyebrow"><span className="pulse-dot pulse-dot--dark" /> GREEN FLAG / {RELEASE.tag.toUpperCase()}</p>
           <h2>Take Apex for<br />a test lap.</h2>
           <p>Free forever. Open source. Fully local. Start with the deterministic demo and help close the gap to race-proven.</p>
           <div className="install-actions">
@@ -437,7 +438,7 @@ function InstallSection() {
               Portable ZIP <ArrowDown size={16} />
             </MagneticLink>
           </div>
-          <small>Windows 11 x64 · 0.1.0 public alpha · no admin · unsigned</small>
+          <small>Windows 11 x64 · {RELEASE.version} public alpha · no admin · unsigned</small>
         </div>
         <div className="install-steps">
           {installSteps.map(({ number, icon: Icon, title, copy }) => (
@@ -457,7 +458,7 @@ const faqs = [
   ["Does it upload telemetry?", "No. Apex has no telemetry upload, analytics, advertising, remote fonts or runtime cloud service. Your data stays on your PC."],
   ["Does it inject into Le Mans Ultimate?", "No. The integration is designed as a separate unprivileged reader targeting LMU’s official shared-memory surface."],
   ["Can I explore it without LMU?", "Yes. A deterministic multiclass demo makes the live pit wall and core workflows explorable locally, with no game or network required."],
-  ["Is it production-ready?", "No. v0.1.0 is a public alpha. Current real-game compatibility, EAC, fullscreen and multi-hour race behavior still need validation."],
+  ["Is it production-ready?", `No. ${RELEASE.tag} is a public alpha. Current real-game compatibility, EAC, fullscreen and multi-hour race behavior still need validation.`],
   ["Why might Windows warn?", "The alpha binaries are not code-signed yet. Windows SmartScreen may show a warning; compare the file with the published SHA-256 checksum."],
 ] as const;
 

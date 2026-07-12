@@ -65,9 +65,9 @@ The unoptimized generation sources and reference captures live under the git-ign
 
 ## Product accuracy
 
-The page deliberately calls v0.1.0 a public alpha. It does not claim current real-game compatibility. The validation panel distinguishes deterministic demo and package lifecycle coverage from still-open LMU, EAC, fullscreen, continuous recording, and analysis-ingestion work.
+The page derives the displayed release version and every artifact URL from the monorepo root package version. It calls that release a public alpha and does not claim current real-game compatibility. The validation panel distinguishes deterministic demo and package lifecycle coverage from still-open LMU, EAC, fullscreen, continuous recording, and analysis-ingestion work.
 
-The download URLs target the explicit v0.1.0 prerelease because GitHub prereleases do not populate the normal `releases/latest` endpoint.
+Download URLs target the explicit versioned prerelease because GitHub prereleases do not populate the normal `releases/latest` endpoint. Bumping the root package version therefore updates the visible site version, installer, portable ZIP, checksum, and release-page links together at build time.
 
 ## License
 
