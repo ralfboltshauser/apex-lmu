@@ -74,17 +74,23 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Area | Current behavior |
 | --- | --- |
 | Live session | Reads the `LMU_Data` mapping out of process; shows car/session/weather/standings before the race, then measured position, laps, speed, controls, fuel, hybrid state, tyres and brakes when player telemetry becomes available. |
+| Track & braking | Reconstructs the measured driven line locally from official world coordinates, places measured cars, detects stable brake zones, and links map/text/speed/brake evidence by LMU lap distance. It does not claim surveyed track limits or invented corner names. |
+| Lifetime activity | Durably tracks local-player driving distance by raw LMU vehicle name/class with idempotent SQLite checkpoints, recovery, verified backups and replay/AI/demo exclusion. |
 | Session recorder | One-click raw `.apexrec` capture starts before LMU, records every official shared-memory snapshot at 50 Hz, and replays through the current decoder without the game. Files remain local and are explicitly user-shared. See [recording format and workflow](docs/RECORDINGS.md). |
 | Fuel calculator | Manual timed/lap planning plus automatic clean-lap consumption capture. Excludes pit/refuel laps, retains car/track samples locally, protects timed extra-lap boundaries, and reports total fuel, starting load, stops, final stint, reserve and confidence. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
 | Analysis | Distance-aligned comparison and evidence-scored coaching engines are implemented. The polished analysis workspace currently uses visibly labeled generated fixtures. |
-| Strategy | Deterministic fuel, Virtual Energy, timed-finish, tyre and pit-service models with editable assumptions, alternatives and risk ranges. Automatic calibration from a live recording is not implemented yet. |
+| Strategy | Deterministic manual fuel-only candidates with integer-lap stints and pit/refuel time coupled back into timed-race distance. VE, tyres, traffic, weather and driver rules are explicitly not modeled until verified inputs exist. |
 | Setups | Imports `.svm` files only into LMU settings folders, creates durable collision backups, handles read-only files and rolls back a failed replacement. |
 | Demo | Seeded multiclass telemetry makes every workflow explorable without LMU or a network connection. |
 
 Recording-to-analysis ingestion, real community content and freeform overlay
 positioning are deliberately still marked unavailable.
+
+The finite shipped/rejected scope—including why cloud, “pro” data and
+fixture-less import/setup features are not claimed—is documented in the
+**[capability and provenance matrix](docs/CAPABILITIES.md)**.
 
 ## Designed to be useful at 280 km/h
 
@@ -157,15 +163,16 @@ practice/online-session compatibility pass. See the
 
 The current tree passes:
 
-- 45 React/domain tests;
-- 6 Electron service and rollback tests;
-- Linux Go tests plus the complete Win32 bridge suite under Wine;
-- a Windows 11 Enterprise 25H2 VM with Secure Boot and TPM 2.0;
-- 19 packaged renderer/IPC/shared-memory assertions;
-- disconnect cleanup for both main UI and overlay;
-- 17 portable lifecycle/package assertions;
-- 28 non-elevated NSIS install/launch/uninstall assertions;
-- `npm audit` with zero known vulnerabilities.
+- 110 React/domain/renderer tests;
+- 54 Electron service, durability, lifecycle and rollback tests;
+- script contract tests and Electron-runtime SQLite acceptance;
+- Linux Go tests and a Windows bridge cross-compile;
+- strict replay of all 18,039 frames in the approved real raw recording,
+  including position/speed physical consistency;
+- source and packaged native-Windows replay definitions covering renderer/IPC,
+  measured route/braking, overlay lifecycle and lifetime-stat exclusion;
+- production renderer and website builds;
+- `npm audit` at the high-severity release threshold.
 
 The external fixture is a separately built test process named `Le Mans
 Ultimate.exe`. It exercises Windows mapping and process-lifecycle behavior but

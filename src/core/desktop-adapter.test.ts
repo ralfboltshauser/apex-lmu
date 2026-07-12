@@ -43,6 +43,14 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.sample.sessionElapsedMs).toBe(900500)
     expect(frame.sample.lapElapsedMs).toBe(200500)
     expect(frame.opponents[0].worldPositionM).toEqual({ x: 140, y: 4, z: -440 })
+    expect(frame.player.motion.velocityMps).toBeUndefined()
+    expect(frame.player.motion.accelerationMps2).toBeUndefined()
+    expect(frame.player.powertrain.engineTemperatureC).toBeUndefined()
+    expect(frame.player.hybrid?.virtualEnergyPercent).toBeUndefined()
+    expect(frame.player.damage).toBeUndefined()
+    expect(frame.opponents[0].speedKph).toBeUndefined()
+    expect(frame.weather.cloudCover).toBeUndefined()
+    expect(frame.player.car.carNumber).toBe('')
   })
 
   it('maps a pre-race scoring snapshot without claiming vehicle telemetry', () => {

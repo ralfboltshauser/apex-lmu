@@ -3,7 +3,7 @@ title: "Premium-grade feature program"
 issue: 3
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/3"
 issue_state: "open"
-implementation_status: "requires-decomposition"
+implementation_status: "portfolio-disposition-complete-release-pending"
 plan_order: 8
 phase: "0 discovery; 3 implementation"
 workstream: "product-portfolio"
@@ -20,7 +20,7 @@ parallel_with: [9, 7, 13, 6, 8, 4]
 source_updated_at: "2026-07-12T12:27:48Z"
 research_baseline: "2026-07-12"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+last_verified: "2026-07-13"
 ---
 
 # Issue #3 — premium-grade feature program
@@ -34,6 +34,51 @@ acceptance criteria, and independently estimable child issue. Apex implements
 the valuable local-only subset across staged releases; it does not clone a
 competitor, copy proprietary assets/data, or silently add an account/cloud
 business model.
+
+## Implementation and disposition evidence — 2026-07-13
+
+The finite release-candidate disposition is now published in
+[`docs/CAPABILITIES.md`](../../CAPABILITIES.md). No approved row is left
+ownerless:
+
+- Tranche A is implemented on the local branch: bilingual changelog/release
+  gates (#9), safe localized numeric drafts (#7), strict real Windows replay
+  (#13), durable lifetime activity (#6), hardened multi-display overlays (#5),
+  deterministic explainable fuel strategy (#8), and measured route/braking
+  context (#4).
+- Current-session deterministic comparison is now real for measured braking:
+  official position/brake/speed/time produce a reconstructed map, distance
+  traces, synchronized selection, and textual evidence. It is not described as
+  historical DuckDB coaching.
+- Tranche H placeholder hardening is implemented. Unsupported official adapter
+  fields are optional/absent rather than zero/100: acceleration, orientation,
+  G force, engine temperatures, weather direction/humidity/cloud, opponent
+  speed, tyre slip, Virtual Energy, hybrid power, damage, manufacturer and car
+  number.
+- The raw recorder is the approved portable evidence bundle. It is opt-in,
+  lossless, private, checksummed and replays through the current decoder.
+- Guarded setup installation remains real and reversible; the manual setup
+  reasoning engine remains bounded to recommendations and never invents parsed
+  values.
+
+An exhaustive filesystem audit found no LMU DuckDB recording and no real `.svm`
+fixture available to this workspace. Therefore normalized historic ingestion,
+session/stint history, historic lap coaching, setup-schema round-trip,
+car-specific targets, derived exports, and imported reference laps are
+**rejected for the current issue scope**, not silently half-built. Each row in
+the capability matrix names the exact fixture, rights, privacy, schema or
+product decision required to reopen it.
+
+Account/cloud/team/global leaderboard and commercial “pro” content remain
+rejected by the GPL, local-first, no-upload product decision and absent
+redistribution rights. This is a durable scope decision, not an engineering
+shortcut.
+
+The implementation is locally complete; native/package/current-header and
+shared release gates remain before publication. Issue #3 can close with the
+release once every implemented linked issue passes those gates. It must be
+reopened only through a concrete child issue backed by the evidence named in
+the matrix, never by a moving competitor feature count.
 
 ## Scope finding
 

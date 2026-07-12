@@ -179,13 +179,12 @@ function phase(frame: RawBridgeFrame): SessionPhase {
 }
 
 function makeCar(id: number, name: string, rawClass: string, fuelCapacity = 0): CarDescriptor {
-  const words = name.trim().split(/\s+/)
   return {
     id: `lmu-car-${id}`,
-    manufacturer: words[0] || 'Unknown',
+    manufacturer: '',
     model: name || `Car ${id}`,
     vehicleClass: normalizeClass(rawClass),
-    carNumber: String(id),
+    carNumber: '',
     teamName: '',
     maxFuelLiters: Math.max(0, fuelCapacity),
     electricHybrid: normalizeClass(rawClass) === 'HYPERCAR',
@@ -199,7 +198,7 @@ function makeDriver(id: number, name: string, isPlayer = false): DriverDescripto
 }
 
 function emptyTyre(compound: TyreCompound): TyreState {
-  return { compound, pressureKpa: 0, innerTemperatureC: 0, middleTemperatureC: 0, outerTemperatureC: 0, carcassTemperatureC: 0, brakeTemperatureC: 0, wearPercent: 100, slipRatio: 0, slipAngleDeg: 0, rideHeightMm: 0, detached: false }
+  return { compound, pressureKpa: 0, innerTemperatureC: 0, middleTemperatureC: 0, outerTemperatureC: 0, carcassTemperatureC: 0, brakeTemperatureC: 0, wearPercent: 100, rideHeightMm: 0, detached: false }
 }
 
 function mapWheel(raw: RawBridgeWheel | undefined, compound: TyreCompound): TyreState {
@@ -213,8 +212,6 @@ function mapWheel(raw: RawBridgeWheel | undefined, compound: TyreCompound): Tyre
     carcassTemperatureC: finite(raw.carcassTempC),
     brakeTemperatureC: finite(raw.brakeTempC),
     wearPercent: Math.max(0, Math.min(100, finite(raw.wearRemaining, 1) * 100)),
-    slipRatio: 0,
-    slipAngleDeg: 0,
     rideHeightMm: finite(raw.rideHeightM) * 1000,
     detached: Boolean(raw.detached),
   }
@@ -226,10 +223,7 @@ function mapWeather(raw: RawBridgeFrame['session']): WeatherState {
     ambientTemperatureC: finite(raw.airTempC),
     trackTemperatureC: finite(raw.trackTempC),
     rainIntensity: Math.max(0, Math.min(1, finite(raw.rain))),
-    cloudCover: 0,
     windSpeedMps: finite(raw.windSpeedMps),
-    windDirectionDeg: 0,
-    humidityPercent: 0,
     trackCondition: wetness > 0.75 ? 'flooded' : wetness > 0.35 ? 'wet' : wetness > 0.05 ? 'damp' : 'dry',
     wetness,
   }
@@ -243,9 +237,9 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
   const wheelPositions: WheelPosition[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight']
   const wheels = Object.fromEntries(wheelPositions.map((position, index) => [position, mapWheel(raw.player.wheels[index], index < 2 ? frontCompound : rearCompound)])) as unknown as WheelStates
   const inputs = { throttle: finite(raw.player.throttle), brake: finite(raw.player.brake), clutch: finite(raw.player.clutch), steering: finite(raw.player.steering), handbrake: 0 }
-  const motion = { speedKph: finite(raw.player.speedKph), velocityMps: { x: 0, y: 0, z: finite(raw.player.speedKph) / 3.6 }, accelerationMps2: { x: 0, y: 0, z: 0 }, gForce: { x: 0, y: 0, z: 0 }, yawRad: 0, pitchRad: 0, rollRad: 0, yawRateRadPerSec: 0 }
-  const powertrain = { gear: Math.trunc(finite(raw.player.gear)), rpm: finite(raw.player.rpm), maxRpm: finite(raw.player.maximumRpm), engineTemperatureC: 0, oilTemperatureC: 0, waterTemperatureC: 0, fuelLiters: finite(raw.player.fuelL), fuelPerLapEstimateLiters: null, lapsOfFuelEstimate: null }
-  const hybrid = playerClass === 'HYPERCAR' ? { stateOfChargePercent: finite(raw.player.batteryFraction) * 100, virtualEnergyPercent: 0, deploymentKw: 0, regenerationKw: 0, deploymentMode: 'unknown' } : null
+  const motion = { speedKph: finite(raw.player.speedKph) }
+  const powertrain = { gear: Math.trunc(finite(raw.player.gear)), rpm: finite(raw.player.rpm), maxRpm: finite(raw.player.maximumRpm), fuelLiters: finite(raw.player.fuelL), fuelPerLapEstimateLiters: null, lapsOfFuelEstimate: null }
+  const hybrid = playerClass === 'HYPERCAR' ? { stateOfChargePercent: finite(raw.player.batteryFraction) * 100 } : null
   const playerCar = makeCar(raw.player.id, raw.player.name, raw.player.class, raw.player.fuelCapacityL)
   const player: CarState = {
     car: playerCar,
@@ -268,14 +262,13 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     absLevel: 0,
     engineMap: 0,
     inputs, motion, powertrain, hybrid, wheels,
-    damage: { aeroPercent: 100, enginePercent: 100, transmissionPercent: 100, suspensionPercent: { frontLeft: 100, frontRight: 100, rearLeft: 100, rearRight: 100 }, headlightsWorking: true },
     worldPositionM: optionalVector(raw.player.worldPositionM),
   }
   const opponents: OpponentState[] = raw.opponents.map((opponent) => ({
     car: makeCar(opponent.id, opponent.name, opponent.class), driver: makeDriver(opponent.id, opponent.driver),
     overallPosition: Math.max(1, opponent.position), classPosition: 1 + raw.opponents.filter((candidate) => normalizeClass(candidate.class) === normalizeClass(opponent.class) && candidate.position < opponent.position).length,
     completedLaps: Math.max(0, opponent.laps), currentLapNumber: Math.max(1, opponent.laps + 1), distanceM: finite(opponent.lapDistanceM),
-    distanceFraction: Math.max(0, Math.min(1, finite(opponent.lapDistanceM) / trackLength)), speedKph: 0,
+    distanceFraction: Math.max(0, Math.min(1, finite(opponent.lapDistanceM) / trackLength)),
     gapToPlayerMs: (finite(opponent.behindLeaderSeconds) - finite(raw.player.timeBehindLeaderSeconds)) * 1000,
     intervalAheadMs: opponent.behindNextSeconds > 0 ? opponent.behindNextSeconds * 1000 : null,
     lastLapTimeMs: opponent.lastLapSeconds > 0 ? opponent.lastLapSeconds * 1000 : null, bestLapTimeMs: opponent.bestLapSeconds > 0 ? opponent.bestLapSeconds * 1000 : null,

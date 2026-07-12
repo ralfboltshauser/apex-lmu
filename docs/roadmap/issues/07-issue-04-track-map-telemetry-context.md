@@ -70,7 +70,7 @@ recorder remains the lossless opt-in path.
 
 Focused and full local gates pass: packed offset/rejection tests, geometry and
 brake engine tests, renderer safety/interaction tests, all 18,039 real frames,
-109 renderer tests, 54 desktop tests, scripts, Go, Electron SQLite, production
+110 renderer tests, 54 desktop tests, scripts, Go, Electron SQLite, production
 build, EN/DE, TypeScript, and Windows cross-compile. The native source/package
 Windows E2E now requires 99% route coverage and all 11 zones in both views; the
 hosted run and an installed-header diff remain release gates.

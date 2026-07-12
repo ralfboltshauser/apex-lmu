@@ -95,10 +95,10 @@ export interface WeatherState {
   readonly ambientTemperatureC: number
   readonly trackTemperatureC: number
   readonly rainIntensity: number
-  readonly cloudCover: number
+  readonly cloudCover?: number
   readonly windSpeedMps: number
-  readonly windDirectionDeg: number
-  readonly humidityPercent: number
+  readonly windDirectionDeg?: number
+  readonly humidityPercent?: number
   readonly trackCondition: TrackCondition
   readonly wetness: number
 }
@@ -113,13 +113,13 @@ export interface DriverInputs {
 
 export interface MotionState {
   readonly speedKph: number
-  readonly velocityMps: ReadonlyVector3
-  readonly accelerationMps2: ReadonlyVector3
-  readonly gForce: ReadonlyVector3
-  readonly yawRad: number
-  readonly pitchRad: number
-  readonly rollRad: number
-  readonly yawRateRadPerSec: number
+  readonly velocityMps?: ReadonlyVector3
+  readonly accelerationMps2?: ReadonlyVector3
+  readonly gForce?: ReadonlyVector3
+  readonly yawRad?: number
+  readonly pitchRad?: number
+  readonly rollRad?: number
+  readonly yawRateRadPerSec?: number
 }
 
 export interface ReadonlyVector3 {
@@ -132,9 +132,9 @@ export interface PowertrainState {
   readonly gear: number
   readonly rpm: number
   readonly maxRpm: number
-  readonly engineTemperatureC: number
-  readonly oilTemperatureC: number
-  readonly waterTemperatureC: number
+  readonly engineTemperatureC?: number
+  readonly oilTemperatureC?: number
+  readonly waterTemperatureC?: number
   readonly fuelLiters: number
   readonly fuelPerLapEstimateLiters: number | null
   readonly lapsOfFuelEstimate: number | null
@@ -142,10 +142,10 @@ export interface PowertrainState {
 
 export interface HybridState {
   readonly stateOfChargePercent: number
-  readonly virtualEnergyPercent: number
-  readonly deploymentKw: number
-  readonly regenerationKw: number
-  readonly deploymentMode: string
+  readonly virtualEnergyPercent?: number
+  readonly deploymentKw?: number
+  readonly regenerationKw?: number
+  readonly deploymentMode?: string
 }
 
 export interface TyreState {
@@ -157,8 +157,8 @@ export interface TyreState {
   readonly carcassTemperatureC: number
   readonly brakeTemperatureC: number
   readonly wearPercent: number
-  readonly slipRatio: number
-  readonly slipAngleDeg: number
+  readonly slipRatio?: number
+  readonly slipAngleDeg?: number
   readonly rideHeightMm: number
   readonly detached: boolean
 }
@@ -198,7 +198,7 @@ export interface CarState {
   readonly powertrain: PowertrainState
   readonly hybrid: HybridState | null
   readonly wheels: WheelStates
-  readonly damage: DamageState
+  readonly damage?: DamageState
   /** Official LMU world position when the vehicle telemetry block is available. */
   readonly worldPositionM?: ReadonlyVector3
 }
@@ -212,7 +212,7 @@ export interface OpponentState {
   readonly currentLapNumber: number
   readonly distanceM: number
   readonly distanceFraction: number
-  readonly speedKph: number
+  readonly speedKph?: number
   readonly gapToPlayerMs: number
   readonly intervalAheadMs: number | null
   readonly lastLapTimeMs: number | null
