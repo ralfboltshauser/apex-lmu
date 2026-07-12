@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { formatMessage, useI18n, useMessages, type TranslationShape } from "../../i18n";
+import { visualMessages } from "../../i18n/visualMessages";
 import "./visuals.css";
 
 export type WheelPosition = "frontLeft" | "frontRight" | "rearLeft" | "rearRight";
@@ -37,11 +39,11 @@ export interface TyreBrakeStateProps {
 }
 
 const POSITIONS: readonly WheelPosition[] = ["frontLeft", "frontRight", "rearLeft", "rearRight"];
-const POSITION_LABELS: Record<WheelPosition, { short: string; long: string; axle: string; side: "left" | "right" }> = {
-  frontLeft: { short: "FL", long: "Front left", axle: "front", side: "left" },
-  frontRight: { short: "FR", long: "Front right", axle: "front", side: "right" },
-  rearLeft: { short: "RL", long: "Rear left", axle: "rear", side: "left" },
-  rearRight: { short: "RR", long: "Rear right", axle: "rear", side: "right" },
+const POSITION_LABELS: Record<WheelPosition, { short: string; axle: string; side: "left" | "right" }> = {
+  frontLeft: { short: "FL", axle: "front", side: "left" },
+  frontRight: { short: "FR", axle: "front", side: "right" },
+  rearLeft: { short: "RL", axle: "rear", side: "left" },
+  rearRight: { short: "RR", axle: "rear", side: "right" },
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -79,10 +81,6 @@ function meanTemperature(temperatures: TyreTemperatures | undefined) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : undefined;
 }
 
-function formatMetric(value: number | undefined, digits = 0) {
-  return finite(value) ? value.toFixed(digits) : "—";
-}
-
 interface WheelCardProps {
   position: WheelPosition;
   state: WheelState | undefined;
@@ -91,6 +89,7 @@ interface WheelCardProps {
   targetTyreTemperature: ThermalRange;
   targetBrakeTemperature: ThermalRange;
   targetPressure?: ThermalRange;
+  messages: TranslationShape<typeof visualMessages.en>['tyres'];
 }
 
 function WheelCard({
@@ -101,7 +100,12 @@ function WheelCard({
   targetTyreTemperature,
   targetBrakeTemperature,
   targetPressure,
+  messages: m,
 }: WheelCardProps) {
+  const { language } = useI18n();
+  const formatMetric = (value: number | undefined, digits = 0) => finite(value)
+    ? new Intl.NumberFormat(language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)
+    : "—";
   const meta = POSITION_LABELS[position];
   const average = meanTemperature(state?.temperatures);
   const status = state?.status ?? thermalStatus(average, targetTyreTemperature);
@@ -126,7 +130,7 @@ function WheelCard({
       data-side={meta.side}
       data-status={status}
       style={style}
-      aria-label={`${meta.long} tyre and brake`}
+      aria-label={formatMessage(m.tyreAndBrake, { position: m.positions[position] })}
     >
       <header className="wheel-card-header">
         <div>
@@ -134,7 +138,7 @@ function WheelCard({
           {state?.compound && <span>{state.compound}</span>}
         </div>
         <span className="wheel-status">
-          <i aria-hidden="true" /> {status === "unknown" ? "No data" : status}
+          <i aria-hidden="true" /> {status === "unknown" ? m.noData : m.status[status]}
         </span>
       </header>
 
@@ -151,32 +155,32 @@ function WheelCard({
             ))}
           </div>
         </div>
-        <div className="brake-glyph" title="Brake temperature">
+        <div className="brake-glyph" title={m.brakeTemperature}>
           <span />
           <i />
         </div>
         <div className="wheel-primary-temp">
           <strong>{formatMetric(average)}</strong>
-          <span>{temperatureUnit} avg</span>
+          <span>{temperatureUnit} {m.average}</span>
         </div>
       </div>
 
       <dl className="wheel-metrics">
         <div>
-          <dt>Pressure</dt>
+          <dt>{m.pressure}</dt>
           <dd data-alert={targetPressure && pressureStatus !== "optimal" ? true : undefined}>
             {formatMetric(state?.pressure, pressureUnit === "bar" ? 2 : 1)} <span>{pressureUnit}</span>
           </dd>
         </div>
         <div>
-          <dt>Brake</dt>
+          <dt>{m.brake}</dt>
           <dd>
             {formatMetric(state?.brakeTemperature)} <span>{temperatureUnit}</span>
           </dd>
         </div>
       </dl>
 
-      <div className="tyre-temperature-detail" aria-label="Tyre carcass temperatures">
+      <div className="tyre-temperature-detail" aria-label={m.carcass}>
         {(["inner", "middle", "outer"] as const).map((zone) => (
           <div key={zone}>
             <span>{zone[0].toUpperCase()}</span>
@@ -187,7 +191,7 @@ function WheelCard({
 
       <div className="wheel-wear" data-empty={!finite(wear) || undefined}>
         <span>
-          <i>Tyre remaining</i>
+          <i>{m.remaining}</i>
           <b>{finite(wear) ? `${Math.round(wear)}%` : "—"}</b>
         </span>
         <div aria-hidden="true">
@@ -200,8 +204,8 @@ function WheelCard({
 
 export function TyreBrakeState({
   wheels,
-  title = "Tyres & brakes",
-  eyebrow = "Car state",
+  title,
+  eyebrow,
   pressureUnit = "bar",
   temperatureUnit = "°C",
   targetTyreTemperature = { min: 75, max: 105 },
@@ -210,17 +214,20 @@ export function TyreBrakeState({
   className = "",
   ariaLabel,
 }: TyreBrakeStateProps) {
+  const m = useMessages(visualMessages).tyres;
+  const resolvedTitle = title ?? m.defaultTitle;
+  const resolvedEyebrow = eyebrow ?? m.defaultEyebrow;
   return (
-    <section className={`visual-card tyre-state ${className}`.trim()} aria-label={ariaLabel ?? title}>
+    <section className={`visual-card tyre-state ${className}`.trim()} aria-label={ariaLabel ?? resolvedTitle}>
       <header className="visual-header">
         <div className="visual-title-group">
-          <span className="visual-eyebrow">{eyebrow}</span>
-          <h3 className="visual-title">{title}</h3>
+          <span className="visual-eyebrow">{resolvedEyebrow}</span>
+          <h3 className="visual-title">{resolvedTitle}</h3>
         </div>
-        <div className="thermal-legend" aria-label="Temperature status legend">
-          <span><i className="is-cold" /> Cold</span>
-          <span><i className="is-optimal" /> Window</span>
-          <span><i className="is-hot" /> Hot</span>
+        <div className="thermal-legend" aria-label={m.legend}>
+          <span><i className="is-cold" /> {m.cold}</span>
+          <span><i className="is-optimal" /> {m.window}</span>
+          <span><i className="is-hot" /> {m.hot}</span>
         </div>
       </header>
 
@@ -231,7 +238,7 @@ export function TyreBrakeState({
             <path d="M25 48h26l7 20-5 29H23l-5-29zM24 112h28l3 56-8 19H29l-8-19z" />
             <path d="M7 36h16M53 36h16M5 178h18M53 178h18" />
           </svg>
-          <span>Front</span>
+          <span>{m.front}</span>
         </div>
         {POSITIONS.map((position) => (
           <WheelCard
@@ -243,6 +250,7 @@ export function TyreBrakeState({
             targetTyreTemperature={targetTyreTemperature}
             targetBrakeTemperature={targetBrakeTemperature}
             targetPressure={targetPressure}
+            messages={m}
           />
         ))}
       </div>

@@ -1,4 +1,6 @@
 import { useId, useMemo, type CSSProperties } from "react";
+import { formatMessage, useI18n, useMessages } from "../../i18n";
+import { visualMessages } from "../../i18n/visualMessages";
 import "./visuals.css";
 
 export interface TelemetryPoint {
@@ -89,9 +91,6 @@ function closestPoint(values: readonly TelemetryPoint[], targetX: number) {
   );
 }
 
-const defaultNumber = (value: number) =>
-  new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
-
 export function TelemetryChart({
   series,
   zones = [],
@@ -99,7 +98,7 @@ export function TelemetryChart({
   yDomain,
   cursorX,
   height = 220,
-  title = "Telemetry",
+  title,
   eyebrow,
   xLabel,
   live = false,
@@ -107,10 +106,16 @@ export function TelemetryChart({
   showGrid = true,
   className = "",
   ariaLabel,
-  formatX = defaultNumber,
-  formatY = defaultNumber,
+  formatX,
+  formatY,
   formatValue,
 }: TelemetryChartProps) {
+  const m = useMessages(visualMessages).telemetry;
+  const { language } = useI18n();
+  const localeNumber = useMemo(() => new Intl.NumberFormat(language, { maximumFractionDigits: 1 }), [language]);
+  const resolvedFormatX = formatX ?? ((value: number) => localeNumber.format(value));
+  const resolvedFormatY = formatY ?? ((value: number) => localeNumber.format(value));
+  const resolvedTitle = title ?? m.defaultTitle;
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const visibleSeries = series.filter((item) => !item.hidden);
   const allPoints = visibleSeries.flatMap((item) =>
@@ -168,25 +173,25 @@ export function TelemetryChart({
     <section
       className={`visual-card telemetry-chart ${className}`.trim()}
       style={style}
-      aria-label={ariaLabel ?? title}
+      aria-label={ariaLabel ?? resolvedTitle}
     >
       <header className="visual-header">
         <div className="visual-title-group">
           {eyebrow && <span className="visual-eyebrow">{eyebrow}</span>}
-          <h3 className="visual-title">{title}</h3>
+          <h3 className="visual-title">{resolvedTitle}</h3>
         </div>
         {live && (
-          <span className="visual-live" aria-label="Receiving live data">
-            <span aria-hidden="true" /> Live
+          <span className="visual-live" aria-label={m.receiving}>
+            <span aria-hidden="true" /> {m.live}
           </span>
         )}
       </header>
 
       {showLegend && renderedSeries.length > 0 && (
-        <div className="telemetry-legend" aria-label="Telemetry channels">
+        <div className="telemetry-legend" aria-label={m.channels}>
           {renderedSeries.map((item) => {
             const formatted = item.last
-              ? formatValue?.(item.last.y, item) ?? `${defaultNumber(item.last.y)}${item.unit ?? ""}`
+              ? formatValue?.(item.last.y, item) ?? `${localeNumber.format(item.last.y)}${item.unit ?? ""}`
               : "—";
             return (
               <div className="telemetry-legend-item" key={item.id}>
@@ -204,7 +209,7 @@ export function TelemetryChart({
           viewBox={`0 0 ${WIDTH} ${height}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={ariaLabel ?? `${title} line chart`}
+          aria-label={ariaLabel ?? formatMessage(m.lineChart, { title: resolvedTitle })}
           aria-describedby={descriptionId}
         >
           <defs>
@@ -257,7 +262,7 @@ export function TelemetryChart({
           <g className="telemetry-axis" aria-hidden="true">
             {yTicks.map((tick) => (
               <text key={tick.y} x={PADDING.left - 9} y={tick.y + 4} textAnchor="end">
-                {formatY(tick.value)}
+                {resolvedFormatY(tick.value)}
               </text>
             ))}
             {xTicks.map((tick, index) => (
@@ -267,7 +272,7 @@ export function TelemetryChart({
                 y={height - 9}
                 textAnchor={index === 0 ? "start" : index === xTicks.length - 1 ? "end" : "middle"}
               >
-                {formatX(tick.value)}
+                {resolvedFormatX(tick.value)}
               </text>
             ))}
             {xLabel && (
@@ -332,9 +337,9 @@ export function TelemetryChart({
       <p id={descriptionId} className="visuals-sr-only">
         {renderedSeries.length
           ? renderedSeries
-              .map((item) => `${item.label}: ${item.values.length} samples${item.unit ? ` in ${item.unit}` : ""}`)
+              .map((item) => formatMessage(item.unit ? m.samplesIn : m.samples, { series: item.label, count: item.values.length, unit: item.unit ?? '' }))
               .join(". ")
-          : "No telemetry samples available."}
+          : m.empty}
       </p>
     </section>
   );

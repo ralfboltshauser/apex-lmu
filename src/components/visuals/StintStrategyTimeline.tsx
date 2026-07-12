@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { formatMessage, useMessages } from "../../i18n";
+import { visualMessages } from "../../i18n/visualMessages";
 import "./visuals.css";
 
 export type StintStatus = "completed" | "current" | "planned";
@@ -65,12 +67,15 @@ export function StintStrategyTimeline({
   currentLap = 0,
   pitWindows = [],
   events = [],
-  title = "Stint strategy",
-  eyebrow = "Race plan",
+  title,
+  eyebrow,
   reserveLaps,
   className = "",
   ariaLabel,
 }: StintStrategyTimelineProps) {
+  const m = useMessages(visualMessages).strategy;
+  const resolvedTitle = title ?? m.defaultTitle;
+  const resolvedEyebrow = eyebrow ?? m.defaultEyebrow;
   const safeTotal = Math.max(totalLaps, 1);
   const progress = clamp(currentLap / safeTotal, 0, 1);
   const remaining = Math.max(Math.ceil(totalLaps - currentLap), 0);
@@ -80,16 +85,16 @@ export function StintStrategyTimeline({
   );
 
   return (
-    <section className={`visual-card visual-strategy-timeline ${className}`.trim()} aria-label={ariaLabel ?? title}>
+    <section className={`visual-card visual-strategy-timeline ${className}`.trim()} aria-label={ariaLabel ?? resolvedTitle}>
       <header className="visual-header strategy-header">
         <div className="visual-title-group">
-          <span className="visual-eyebrow">{eyebrow}</span>
-          <h3 className="visual-title">{title}</h3>
+          <span className="visual-eyebrow">{resolvedEyebrow}</span>
+          <h3 className="visual-title">{resolvedTitle}</h3>
         </div>
-        <div className="strategy-summary" aria-label="Race progress">
-          <span><i>Now</i><strong>L{Math.floor(currentLap)}</strong></span>
-          <span><i>Remaining</i><strong>{remaining} laps</strong></span>
-          {Number.isFinite(reserveLaps) && <span><i>Reserve</i><strong>+{reserveLaps} L</strong></span>}
+        <div className="strategy-summary" aria-label={m.raceProgress}>
+          <span><i>{m.now}</i><strong>L{Math.floor(currentLap)}</strong></span>
+          <span><i>{m.remaining}</i><strong>{remaining} {m.laps}</strong></span>
+          {Number.isFinite(reserveLaps) && <span><i>{m.reserve}</i><strong>+{reserveLaps} L</strong></span>}
         </div>
       </header>
 
@@ -101,7 +106,7 @@ export function StintStrategyTimeline({
               style={{ left: percent(tick, safeTotal) }}
               data-edge={index === 0 ? "start" : index === ticks.length - 1 ? "end" : undefined}
             >
-              {tick === 0 ? "START" : `L${tick}`}
+              {tick === 0 ? m.start : `L${tick}`}
             </span>
           ))}
         </div>
@@ -126,7 +131,7 @@ export function StintStrategyTimeline({
                 key={window.id}
                 className="strategy-pit-window"
                 style={style}
-                title={window.label ?? `Pit window, laps ${window.fromLap} to ${window.toLap}`}
+                title={window.label ?? formatMessage(m.pitWindowRange, { from: window.fromLap, to: window.toLap })}
               >
                 {window.preferredLap !== undefined && (
                   <i
@@ -167,14 +172,14 @@ export function StintStrategyTimeline({
               "--event-color": event.color ?? "#f5f7fb",
             } as CSSProperties;
             return (
-              <div className="strategy-event" key={event.id} style={style} title={`${event.label}, lap ${event.lap}`}>
+              <div className="strategy-event" key={event.id} style={style} title={formatMessage(m.eventLap, { event: event.label, lap: event.lap })}>
                 <span>{EVENT_SYMBOLS[event.type]}</span>
               </div>
             );
           })}
 
           <div className="strategy-now" style={{ left: `${progress * 100}%` }} aria-hidden="true">
-            <span>NOW</span>
+            <span>{m.now.toUpperCase()}</span>
             <i />
           </div>
         </div>
@@ -184,14 +189,14 @@ export function StintStrategyTimeline({
             {pitWindows.map((window) => (
               <span key={window.id}>
                 <i style={{ background: window.color ?? "#f4c35d" }} />
-                {window.label ?? "Pit window"} · L{window.fromLap}–{window.toLap}
+                {window.label ?? m.pitWindow} · L{window.fromLap}–{window.toLap}
               </span>
             ))}
           </div>
         )}
       </div>
 
-      <ol className="strategy-stint-list" aria-label="Planned stints">
+      <ol className="strategy-stint-list" aria-label={m.plannedStints}>
         {stints.map((stint, index) => {
           const status = stint.status ??
             (currentLap >= stint.endLap ? "completed" : currentLap >= stint.startLap ? "current" : "planned");
@@ -205,24 +210,24 @@ export function StintStrategyTimeline({
               </div>
               <div className="strategy-stint-driver">
                 <strong>{stint.driver}</strong>
-                <span>L{stint.startLap}–{stint.endLap} · {Math.max(stint.endLap - stint.startLap, 0)} laps</span>
+                <span>L{stint.startLap}–{stint.endLap} · {Math.max(stint.endLap - stint.startLap, 0)} {m.laps}</span>
               </div>
               <div className="strategy-stint-meta">
-                {stint.compound && <span><i>Tyre</i><strong>{stint.compound}</strong></span>}
+                {stint.compound && <span><i>{m.tyre}</i><strong>{stint.compound}</strong></span>}
                 {Number.isFinite(stint.fuelStart) && (
-                  <span><i>Fuel</i><strong>{stint.fuelStart} → {stint.fuelEnd ?? "—"} L</strong></span>
+                  <span><i>{m.fuel}</i><strong>{stint.fuelStart} → {stint.fuelEnd ?? "—"} L</strong></span>
                 )}
-                {stint.targetPace && <span><i>Target</i><strong>{stint.targetPace}</strong></span>}
+                {stint.targetPace && <span><i>{m.target}</i><strong>{stint.targetPace}</strong></span>}
               </div>
-              {status === "current" && <b className="strategy-current-badge">On track</b>}
+              {status === "current" && <b className="strategy-current-badge">{m.onTrack}</b>}
             </li>
           );
         })}
       </ol>
 
       {events.length > 0 && (
-        <ul className="visuals-sr-only" aria-label="Strategy events">
-          {events.map((event) => <li key={event.id}>{`${event.label} on lap ${event.lap}`}</li>)}
+        <ul className="visuals-sr-only" aria-label={m.events}>
+          {events.map((event) => <li key={event.id}>{formatMessage(m.eventOnLap, { event: event.label, lap: event.lap })}</li>)}
         </ul>
       )}
     </section>

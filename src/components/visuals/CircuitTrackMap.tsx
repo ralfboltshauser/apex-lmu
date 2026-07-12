@@ -1,4 +1,6 @@
 import { useId, type CSSProperties, type KeyboardEvent } from "react";
+import { formatMessage, useMessages } from "../../i18n";
+import { visualMessages } from "../../i18n/visualMessages";
 import "./visuals.css";
 
 export interface TrackPoint {
@@ -150,13 +152,15 @@ export function CircuitTrackMap({
   points = DEMO_CIRCUIT_PATH,
   cars = [],
   activeSegment,
-  circuitName = "Circuit map",
+  circuitName,
   layoutName,
   currentLap,
   className = "",
   ariaLabel,
   onCarSelect,
 }: CircuitTrackMapProps) {
+  const m = useMessages(visualMessages).circuit;
+  const resolvedCircuitName = circuitName ?? m.defaultTitle;
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const normalized = normalizePath(points);
   const metrics = pathMetrics(normalized);
@@ -174,16 +178,16 @@ export function CircuitTrackMap({
   };
 
   return (
-    <section className={`visual-card circuit-map ${className}`.trim()} aria-label={ariaLabel ?? circuitName}>
+    <section className={`visual-card circuit-map ${className}`.trim()} aria-label={ariaLabel ?? resolvedCircuitName}>
       <header className="visual-header circuit-map-header">
         <div className="visual-title-group">
-          <span className="visual-eyebrow">Track position</span>
-          <h3 className="visual-title">{circuitName}</h3>
+          <span className="visual-eyebrow">{m.trackPosition}</span>
+          <h3 className="visual-title">{resolvedCircuitName}</h3>
           {layoutName && <span className="visual-subtitle">{layoutName}</span>}
         </div>
         {Number.isFinite(currentLap) && (
           <div className="circuit-lap">
-            <span>Lap</span>
+            <span>{m.lap}</span>
             <strong>{currentLap}</strong>
           </div>
         )}
@@ -195,9 +199,9 @@ export function CircuitTrackMap({
           role={onCarSelect ? "group" : "img"}
           aria-labelledby={`${uid}-title ${uid}-desc`}
         >
-          <title id={`${uid}-title`}>{ariaLabel ?? `${circuitName} live track map`}</title>
+          <title id={`${uid}-title`}>{ariaLabel ?? formatMessage(m.liveMap, { circuit: resolvedCircuitName })}</title>
           <desc id={`${uid}-desc`}>
-            {`${cars.length} cars shown${activeSegment?.label ? `, highlighting ${activeSegment.label}` : ""}.`}
+            {formatMessage(m.carsShown, { count: cars.length })}{activeSegment?.label ? formatMessage(m.highlighting, { segment: activeSegment.label }) : ''}.
           </desc>
           <defs>
             <filter id={`${uid}-track-glow`} x="-30%" y="-30%" width="160%" height="160%">
@@ -255,7 +259,7 @@ export function CircuitTrackMap({
                 style={style}
                 role={onCarSelect ? "button" : undefined}
                 tabIndex={onCarSelect ? 0 : undefined}
-                aria-label={`${car.label ?? `Car ${car.number}`}, ${Math.round(wrapProgress(car.progress) * 100)} percent around the lap`}
+                aria-label={formatMessage(m.carPosition, { car: car.label ?? formatMessage(m.car, { number: car.number }), percent: Math.round(wrapProgress(car.progress) * 100) })}
                 onClick={onCarSelect ? () => onCarSelect(car) : undefined}
                 onKeyDown={(event) => onKeyDown(event, car)}
                 filter={`url(#${uid}-car-shadow)`}
@@ -266,7 +270,7 @@ export function CircuitTrackMap({
                   {String(car.number).slice(0, 3)}
                 </text>
                 {car.className && (
-                  <title>{`${car.className}: ${car.label ?? `Car ${car.number}`}`}</title>
+                  <title>{`${car.className}: ${car.label ?? formatMessage(m.car, { number: car.number })}`}</title>
                 )}
               </g>
             );
@@ -281,9 +285,9 @@ export function CircuitTrackMap({
         )}
       </div>
 
-      <ul className="visuals-sr-only" aria-label="Cars on circuit">
+      <ul className="visuals-sr-only" aria-label={m.carsOnCircuit}>
         {cars.map((car) => (
-          <li key={car.id}>{`${car.label ?? `Car ${car.number}`}: ${Math.round(wrapProgress(car.progress) * 100)}% lap progress`}</li>
+          <li key={car.id}>{formatMessage(m.lapProgress, { car: car.label ?? formatMessage(m.car, { number: car.number }), percent: Math.round(wrapProgress(car.progress) * 100) })}</li>
         ))}
       </ul>
     </section>

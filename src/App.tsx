@@ -21,26 +21,42 @@ import { SetupsView } from './views/SetupsView'
 import { OverlaysView } from './views/OverlaysView'
 import { SettingsView } from './views/SettingsView'
 import { DesktopTelemetryAdapter, MockTelemetryAdapter, type TelemetryFrame } from './core'
+import { appMessages } from './i18n/appMessages'
+import { formatMessage, useMessages } from './i18n'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
 
+type DetectionNotice =
+  | { kind: 'searchCommon' | 'desktopOnly' | 'confirmedManually' | 'invalid' | 'inaccessible' }
+  | { kind: 'foundVia'; source: string }
+  | { kind: 'checked'; count: number }
+
 function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: () => void }) {
+  const messages = useMessages(appMessages)
+  const m = messages.onboarding
   const [step, setStep] = useState(0)
   const [checking, setChecking] = useState(false)
   const [found, setFound] = useState(false)
   const [detectedPath, setDetectedPath] = useState('')
-  const [detectionMessage, setDetectionMessage] = useState('Search common Steam library locations')
+  const [detectionNotice, setDetectionNotice] = useState<DetectionNotice>({ kind: 'searchCommon' })
   const [systemReport, setSystemReport] = useState<ApexDiagnosticReport | null>(null)
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
   const [manualPath, setManualPath] = useState('')
+  const detectionMessage = (() => {
+    if (detectionNotice.kind === 'foundVia') return formatMessage(m.connection.discovery.foundVia, { source: detectionNotice.source })
+    if (detectionNotice.kind === 'checked') return detectionNotice.count === 1
+      ? m.connection.discovery.checkedOne
+      : formatMessage(m.connection.discovery.checkedMany, { count: detectionNotice.count })
+    return m.connection.discovery[detectionNotice.kind]
+  })()
 
   const detect = async () => {
     setChecking(true)
     try {
       if (!window.apexDesktop) {
         setFound(false)
-        setDetectionMessage('Automatic detection is available in the desktop app')
+        setDetectionNotice({ kind: 'desktopOnly' })
         return
       }
       const result = await window.apexDesktop.discoverLmu()
@@ -49,14 +65,16 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
       setDetectedPath(result.found?.candidate || '')
       setManualPath(result.found?.candidate || manualPath)
       if (result.found) window.localStorage.setItem(LMU_PATH_KEY, result.found.candidate)
-      setDetectionMessage(result.found ? `Found via ${result.found.source.replaceAll('-', ' ')}` : `Checked ${result.attempts.length} candidate location${result.attempts.length === 1 ? '' : 's'}; LMU was not confirmed`)
+      setDetectionNotice(result.found
+        ? { kind: 'foundVia', source: result.found.source.replaceAll('-', ' ') }
+        : { kind: 'checked', count: result.attempts.length })
     } finally {
       setChecking(false)
     }
   }
 
   const chooseInstallation = async () => {
-    const selected = await window.apexDesktop?.chooseDirectory('Choose the Le Mans Ultimate installation')
+    const selected = await window.apexDesktop?.chooseDirectory(m.connection.chooseDialog)
     if (!selected) return
     setManualPath(selected)
     await inspectManualPath(selected)
@@ -70,8 +88,8 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
       setFound(attempt.status === 'found')
       setDetectedPath(attempt.status === 'found' ? attempt.candidate : '')
       if (attempt.status === 'found') window.localStorage.setItem(LMU_PATH_KEY, attempt.candidate)
-      setDetectionMessage(attempt.status === 'found' ? 'LMU installation confirmed manually' : attempt.status === 'invalid' ? 'Folder exists, but no LMU executable was found' : 'That folder does not exist or is not accessible')
-      setDiscovery((current) => ({ found: attempt.status === 'found' ? attempt : null, attempts: [...(current?.attempts || []), attempt], trace: [...(current?.trace || []), `Manual inspection: ${attempt.candidate} → ${attempt.status}.`], expectations: current?.expectations || { appId: '2399420', manifest: 'steamapps\\appmanifest_2399420.acf', installFolder: 'steamapps\\common\\<installdir>', executables: ['Le Mans Ultimate.exe', 'LMU.exe'] } }))
+      setDetectionNotice({ kind: attempt.status === 'found' ? 'confirmedManually' : attempt.status === 'invalid' ? 'invalid' : 'inaccessible' })
+      setDiscovery((current) => ({ found: attempt.status === 'found' ? attempt : null, attempts: [...(current?.attempts || []), attempt], trace: [...(current?.trace || []), formatMessage(m.connection.discovery.manualInspection, { candidate: attempt.candidate, status: attempt.status })], expectations: current?.expectations || { appId: '2399420', manifest: 'steamapps\\appmanifest_2399420.acf', installFolder: 'steamapps\\common\\<installdir>', executables: ['Le Mans Ultimate.exe', 'LMU.exe'] } }))
     } finally { setChecking(false) }
   }
 
@@ -82,56 +100,56 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
   }
 
   return (
-    <div className="onboarding-backdrop" role="dialog" aria-modal="true" aria-label="Welcome to Apex">
+    <div className="onboarding-backdrop" role="dialog" aria-modal="true" aria-label={m.welcomeAria}>
       <div className="onboarding-modal">
         <div className="onboarding-modal__top">
           <div className="brand brand--onboarding">
             <div className="brand__mark" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M4 20.5 12.5 5h5L24 20.5h-5.2l-1.4-3.4H9.7l-1.8 3.4H4Z" /><path className="brand__cut" d="m11.6 13.4 2.8-5.2 2 5.2h-4.8Z" /></svg></div>
-            <div><strong>Apex</strong><span>for LMU</span></div>
+            <div><strong>{messages.common.productName}</strong><span>{messages.shell.brandSuffix}</span></div>
           </div>
-          <button type="button" className="icon-button" aria-label="Close onboarding" onClick={onComplete}><X size={18} /></button>
+          <button type="button" className="icon-button" aria-label={m.close} onClick={onComplete}><X size={18} /></button>
         </div>
 
-        <div className="onboarding-progress" aria-label={`Onboarding step ${step + 1} of 3`}>
+        <div className="onboarding-progress" aria-label={formatMessage(m.progress, { step: step + 1 })}>
           {[0, 1, 2].map((item) => <span key={item} className={item <= step ? 'is-active' : ''} />)}
         </div>
 
         {step === 0 && <div className="onboarding-step onboarding-step--welcome">
           <div className="onboarding-illustration">
             <div className="onboarding-illustration__rings"><span /><span /><span /><Gauge size={35} /></div>
-            <div className="onboarding-illustration__card onboarding-illustration__card--one"><small>Fuel to finish</small><strong>43.1 L</strong><Badge tone="positive">+1.7 L</Badge></div>
-            <div className="onboarding-illustration__card onboarding-illustration__card--two"><small>Biggest gain</small><strong>Les Combes</strong><span>0.31 s available</span></div>
+            <div className="onboarding-illustration__card onboarding-illustration__card--one"><small>{m.illustration.fuelToFinish}</small><strong>43.1 L</strong><Badge tone="positive">+1.7 L</Badge></div>
+            <div className="onboarding-illustration__card onboarding-illustration__card--two"><small>{m.illustration.biggestGain}</small><strong>{m.illustration.corner}</strong><span>{m.illustration.available}</span></div>
           </div>
-          <Badge tone="accent"><Sparkles size={12} /> Open race engineering</Badge>
-          <h1>See the race more clearly.</h1>
-          <p>Apex turns Le Mans Ultimate telemetry into live strategy, focused coaching, trustworthy setup guidance and a HUD that stays out of your way.</p>
-          <div className="onboarding-principles"><span><ShieldCheck size={15} /> Fully local</span><span><Database size={15} /> Your data</span><span><HardDrive size={15} /> Open source</span></div>
-          <Button onClick={() => setStep(1)}>Set up Apex <ArrowRight size={15} /></Button>
-          <button type="button" className="text-button" onClick={() => { onDemo(); onComplete() }}>Explore the live demo first</button>
+          <Badge tone="accent"><Sparkles size={12} /> {m.welcome.badge}</Badge>
+          <h1>{m.welcome.title}</h1>
+          <p>{m.welcome.summary}</p>
+          <div className="onboarding-principles"><span><ShieldCheck size={15} /> {m.welcome.fullyLocal}</span><span><Database size={15} /> {m.welcome.yourData}</span><span><HardDrive size={15} /> {m.welcome.openSource}</span></div>
+          <Button onClick={() => setStep(1)}>{m.welcome.setup} <ArrowRight size={15} /></Button>
+          <button type="button" className="text-button" onClick={() => { onDemo(); onComplete() }}>{m.welcome.exploreDemo}</button>
         </div>}
 
         {step === 1 && <div className="onboarding-step onboarding-step--connection">
           <div className="onboarding-step__icon"><FolderSearch size={25} /></div>
-          <div className="eyebrow">Step 2 of 3</div><h1>Connect Le Mans Ultimate</h1><p>Apex looks for the Steam installation and verifies the official data interfaces. It does not inject code into the game.</p>
+          <div className="eyebrow">{m.connection.step}</div><h1>{m.connection.title}</h1><p>{m.connection.summary}</p>
           <div className={`detection-card ${found ? 'is-found' : ''}`}>
             <div className="detection-card__icon">{found ? <Check size={20} /> : <Radio size={20} />}</div>
-            <div><strong>{found ? 'Le Mans Ultimate found' : 'Automatic detection'}</strong><span>{found ? detectedPath : detectionMessage}</span></div>
-            {!found && <Button variant="secondary" size="sm" onClick={() => void detect()}>{checking ? 'Searching…' : 'Detect'}</Button>}
-            {found && <Badge tone="positive">Interface found</Badge>}
+            <div><strong>{found ? m.connection.found : m.connection.automaticDetection}</strong><span>{found ? detectedPath : detectionMessage}</span></div>
+            {!found && <Button variant="secondary" size="sm" onClick={() => void detect()}>{checking ? m.connection.searching : m.connection.detect}</Button>}
+            {found && <Badge tone="positive">{m.connection.interfaceFound}</Badge>}
           </div>
-          {!found && discovery && <div className="manual-path"><label htmlFor="lmu-path">LMU installation folder</label><div><input id="lmu-path" value={manualPath} onChange={(event) => setManualPath(event.target.value)} placeholder="C:\\…\\steamapps\\common\\Le Mans Ultimate" onKeyDown={(event) => { if (event.key === 'Enter') void inspectManualPath() }} /><Button variant="secondary" size="sm" onClick={() => void inspectManualPath()} disabled={!manualPath.trim() || checking}>Check</Button><Button variant="secondary" size="sm" onClick={() => void chooseInstallation()}>Browse</Button></div><small>Steam → Library → right-click LMU → Properties → Installed Files → Browse. Paste or choose the folder containing Le Mans Ultimate.exe.</small></div>}
-          {discovery && <details className="discovery-details"><summary>What Apex checked and expected</summary><div><p>Steam app ID <code>{discovery.expectations.appId}</code>. Apex reads Steam’s registry location, every <code>libraryfolders.vdf</code>, then <code>{discovery.expectations.manifest}</code>.</p>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: expected {check.expected}{check.optional ? ' (optional)' : ''}</small>)}{attempt.fixes.map((fix) => <small key={fix}>Fix: {fix}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
-          <div className="connection-facts"><div><i><Check size={12} /></i><span><strong>Live telemetry</strong>Official shared memory</span></div><div><i><Check size={12} /></i><span><strong>Recorded sessions</strong>Native DuckDB files</span></div><div><i><Check size={12} /></i><span><strong>Setup management</strong>Backups before every write</span></div></div>
-          {found && <div className="onboarding-system-check"><Button variant="secondary" size="sm" onClick={() => void verifySystem()} disabled={checking}>{checking ? 'Testing bridge…' : 'Run system check'}</Button>{systemReport && <span className={systemReport.checks.some((item) => item.status === 'fail') ? 'is-warning' : 'is-pass'}>{systemReport.checks.filter((item) => item.status === 'pass').length}/{systemReport.checks.length} checks passed</span>}</div>}
-          {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>Fix: {item.fixes[0]}</small>}</div>)}
-          <div className="onboarding-step__actions"><Button variant="secondary" onClick={() => setStep(0)}>Back</Button><Button disabled={!found || !systemReport || systemReport.checks.some((item) => item.status === 'fail')} onClick={() => setStep(2)}>Continue <ArrowRight size={15} /></Button></div>
+          {!found && discovery && <div className="manual-path"><label htmlFor="lmu-path">{m.connection.installationFolder}</label><div><input id="lmu-path" value={manualPath} onChange={(event) => setManualPath(event.target.value)} placeholder={m.connection.folderPlaceholder} onKeyDown={(event) => { if (event.key === 'Enter') void inspectManualPath() }} /><Button variant="secondary" size="sm" onClick={() => void inspectManualPath()} disabled={!manualPath.trim() || checking}>{m.connection.check}</Button><Button variant="secondary" size="sm" onClick={() => void chooseInstallation()}>{m.connection.browse}</Button></div><small>{m.connection.browseHint}</small></div>}
+          {discovery && <details className="discovery-details"><summary>{m.connection.discoveryDetails}</summary><div><p>{m.connection.discoveryExplanationBefore} <code>{discovery.expectations.appId}</code>. {m.connection.discoveryExplanationAfter} <code>{discovery.expectations.manifest}</code>.</p>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {m.connection.expected} {check.expected}{check.optional ? ` (${m.connection.optional})` : ''}</small>)}{attempt.fixes.map((fix) => <small key={fix}>{m.connection.fix} {fix}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
+          <div className="connection-facts"><div><i><Check size={12} /></i><span><strong>{m.connection.liveTelemetry}</strong>{m.connection.officialSharedMemory}</span></div><div><i><Check size={12} /></i><span><strong>{m.connection.recordedSessions}</strong>{m.connection.nativeDuckDb}</span></div><div><i><Check size={12} /></i><span><strong>{m.connection.setupManagement}</strong>{m.connection.backups}</span></div></div>
+          {found && <div className="onboarding-system-check"><Button variant="secondary" size="sm" onClick={() => void verifySystem()} disabled={checking}>{checking ? m.connection.testingBridge : m.connection.runSystemCheck}</Button>{systemReport && <span className={systemReport.checks.some((item) => item.status === 'fail') ? 'is-warning' : 'is-pass'}>{formatMessage(m.connection.checksPassed, { passed: systemReport.checks.filter((item) => item.status === 'pass').length, total: systemReport.checks.length })}</span>}</div>}
+          {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>{m.connection.fix} {item.fixes[0]}</small>}</div>)}
+          <div className="onboarding-step__actions"><Button variant="secondary" onClick={() => setStep(0)}>{m.connection.back}</Button><Button disabled={!found || !systemReport || systemReport.checks.some((item) => item.status === 'fail')} onClick={() => setStep(2)}>{m.connection.continue} <ArrowRight size={15} /></Button></div>
         </div>}
 
         {step === 2 && <div className="onboarding-step onboarding-step--ready">
-          <div className="ready-check"><Check size={34} /></div><Badge tone="positive">Local checks passed</Badge><h1>Start LMU, then enter the car.</h1><p>Apex waits for a drivable session. If it stays offline, open Settings → Diagnostics: every failure includes a targeted fix, technical details, and a support bundle you can send with a bug report.</p>
-          <div className="ready-summary"><div><span>Data source</span><strong>Official · 50 Hz</strong></div><div><span>Storage</span><strong>Local only</strong></div><div><span>Overlay layout</span><strong>Essential</strong></div></div>
-          <Button onClick={onComplete}>Open command center <ArrowRight size={15} /></Button>
-          <button type="button" className="text-button" onClick={() => { onDemo(); onComplete() }}>Open with demo telemetry</button>
+          <div className="ready-check"><Check size={34} /></div><Badge tone="positive">{m.ready.passed}</Badge><h1>{m.ready.title}</h1><p>{m.ready.summary}</p>
+          <div className="ready-summary"><div><span>{m.ready.dataSource}</span><strong>{m.ready.officialRate}</strong></div><div><span>{m.ready.storage}</span><strong>{m.ready.localOnly}</strong></div><div><span>{m.ready.overlayLayout}</span><strong>{m.ready.essential}</strong></div></div>
+          <Button onClick={onComplete}>{m.ready.openCommandCenter} <ArrowRight size={15} /></Button>
+          <button type="button" className="text-button" onClick={() => { onDemo(); onComplete() }}>{m.ready.openWithDemo}</button>
         </div>}
       </div>
     </div>
@@ -139,6 +157,8 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
 }
 
 export default function App() {
+  const appCopy = useMessages(appMessages)
+  const m = appCopy.app
   const [view, setView] = useState<ViewId>('home')
   const [demoRunning, setDemoRunning] = useState(false)
   const [tick, setTick] = useState(0)
@@ -150,7 +170,7 @@ export default function App() {
   const viewRef = useRef<ViewId>('home')
   const lastUpdateNotice = useRef('')
   const [realConnected, setRealConnected] = useState(false)
-  const [liveConnectionMessage, setLiveConnectionMessage] = useState('Starting the local LMU bridge…')
+  const [liveConnectionMessage, setLiveConnectionMessage] = useState(m.connection.starting)
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
   demoRunningRef.current = demoRunning
   viewRef.current = view
@@ -168,50 +188,50 @@ export default function App() {
 
   const toggleDemo = () => {
     setDemoRunning((current) => {
-      addToast(current ? 'Demo session stopped' : 'Demo telemetry connected', current ? 'Apex is waiting for Le Mans Ultimate.' : 'Spa race data is now streaming locally at 50 Hz.')
+      addToast(current ? m.demo.stopped : m.demo.connected, current ? m.demo.waiting : m.demo.streaming)
       return !current
     })
   }
 
   const importTelemetry = async () => {
     const selected = await window.apexDesktop?.chooseFile({
-      title: 'Import an LMU telemetry recording',
-      filters: [{ name: 'LMU DuckDB telemetry', extensions: ['duckdb', 'db'] }],
+      title: m.telemetry.chooseTitle,
+      filters: [{ name: m.telemetry.filterName, extensions: ['duckdb', 'db'] }],
     })
     if (selected) {
       try {
         const inspection = await window.apexDesktop!.inspectTelemetry(selected)
-        const track = inspection.metadata.TrackName || 'LMU session'
-        addToast('LMU recording inspected', `${track} · ${inspection.lapTimes.length} indexed laps · ${inspection.channels.length} channels. Session ingestion is not enabled yet.`)
+        const track = inspection.metadata.TrackName || m.telemetry.fallbackSession
+        addToast(m.telemetry.inspected, formatMessage(m.telemetry.inspectedBody, { track, laps: inspection.lapTimes.length, channels: inspection.channels.length }))
       } catch (error) {
-        addToast('Unable to inspect recording', error instanceof Error ? error.message : String(error))
+        addToast(m.telemetry.inspectFailed, error instanceof Error ? error.message : String(error))
       }
     }
-    if (!window.apexDesktop) addToast('Desktop import is ready', 'File selection is available in the packaged Apex app.')
+    if (!window.apexDesktop) addToast(m.telemetry.desktopReady, m.telemetry.desktopReadyBody)
   }
 
   const importSetup = async () => {
     if (!window.apexDesktop) {
-      addToast('Desktop setup installer', 'Setup installation is available in the packaged Apex app.')
+      addToast(m.setup.desktopTitle, m.setup.desktopBody)
       return
     }
-    const sourcePath = await window.apexDesktop.chooseFile({ title: 'Choose an LMU setup', filters: [{ name: 'LMU setup', extensions: ['svm'] }] })
+    const sourcePath = await window.apexDesktop.chooseFile({ title: m.setup.chooseTitle, filters: [{ name: m.setup.filterName, extensions: ['svm'] }] })
     if (!sourcePath) return
-    const targetDirectory = await window.apexDesktop.chooseDirectory('Choose the matching track folder inside UserData/player/Settings')
+    const targetDirectory = await window.apexDesktop.chooseDirectory(m.setup.chooseTrackFolder)
     if (!targetDirectory) return
     try {
       const result = await window.apexDesktop.installSetup({ sourcePath, targetDirectory })
-      addToast('Setup installed safely', result.backupPath ? 'The previous file was backed up first.' : result.destination.split(/[\\/]/).pop() ?? result.destination)
+      addToast(m.setup.installed, result.backupPath ? m.setup.backedUp : result.destination.split(/[\\/]/).pop() ?? result.destination)
     } catch (error) {
-      addToast('Setup was not installed', error instanceof Error ? error.message : String(error))
+      addToast(m.setup.failed, error instanceof Error ? error.message : String(error))
     }
   }
 
   const openOverlay = () => {
-    if (!window.apexDesktop) { addToast('Desktop overlay window', 'The transparent overlay opens from the packaged Apex app.'); return }
+    if (!window.apexDesktop) { addToast(m.overlay.desktopTitle, m.overlay.desktopBody); return }
     void window.apexDesktop.openOverlay()
-      .then((result) => addToast(result.ok ? 'Overlay window opened' : 'Overlay did not open', result.ok ? 'It is always-on-top and click-through while you race.' : 'Check desktop diagnostics and try again.'))
-      .catch((error) => addToast('Overlay did not open', error instanceof Error ? error.message : String(error)))
+      .then((result) => addToast(result.ok ? m.overlay.opened : m.overlay.failed, result.ok ? m.overlay.openedBody : m.overlay.failedBody))
+      .catch((error) => addToast(m.overlay.failed, error instanceof Error ? error.message : String(error)))
   }
 
   useEffect(() => {
@@ -225,9 +245,9 @@ export default function App() {
       const key = `${state.status}:${state.availableVersion}`
       if (lastUpdateNotice.current === key) return
       lastUpdateNotice.current = key
-      addToast(state.status === 'downloaded' ? 'Update ready to install' : `Apex ${state.availableVersion} is available`, state.status === 'downloaded' ? 'Open Settings to restart and install when convenient.' : 'Open Settings to review and download it.')
+      addToast(state.status === 'downloaded' ? m.update.ready : formatMessage(m.update.available, { version: state.availableVersion ?? '' }), state.status === 'downloaded' ? m.update.readyBody : m.update.availableBody)
     })
-  }, [])
+  }, [m])
 
   useEffect(() => {
     const report = (event: ErrorEvent | PromiseRejectionEvent) => {
@@ -265,12 +285,12 @@ export default function App() {
       })
       unsubscribeStatus = adapter.subscribeStatus((status) => {
         setRealConnected(status.state === 'connected' && status.framesReceived > 0)
-        setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? 'Waiting for Le Mans Ultimate…' : 'LMU is offline.'))
+        setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? m.connection.waiting : m.connection.offline))
       })
       void adapter.connect()
     })
     return () => { cancelled = true; unsubscribeFrame(); unsubscribeStatus(); void adapter.disconnect() }
-  }, [])
+  }, [m.connection.offline, m.connection.waiting])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -304,7 +324,7 @@ export default function App() {
       </Shell>
       {onboarding && <Onboarding onComplete={completeOnboarding} onDemo={() => setDemoRunning(true)} />}
       <div className="toast-region" aria-live="polite">
-        {toasts.map((toast) => <div className="toast" key={toast.id}><div><Check size={15} /></div><span><strong>{toast.title}</strong><small>{toast.body}</small></span><button type="button" aria-label="Dismiss" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}><X size={14} /></button></div>)}
+        {toasts.map((toast) => <div className="toast" key={toast.id}><div><Check size={15} /></div><span><strong>{toast.title}</strong><small>{toast.body}</small></span><button type="button" aria-label={appCopy.common.dismiss} onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}><X size={14} /></button></div>)}
       </div>
     </>
   )

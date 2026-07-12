@@ -48,6 +48,8 @@ The first-run wizard verifies the LMU installation path and runs the bundled bri
 
 After onboarding, each workspace introduces itself once and keeps a **Learn this view** guide available. These guides explain the recommended flow, define unfamiliar race-engineering terms, and state what a useful outcome looks like. Settings → About can replay onboarding or reset all introductions without deleting user data.
 
+Apex ships with complete English and German interfaces. Use the **EN/DE** control in the top bar for an instant switch, or choose the interface language under **Settings → About**. The preference stays on this PC, German browser/Windows locales default to German, and technical support logs remain unchanged so diagnostics are searchable and shareable.
+
 If connection or setup fails, open **Settings → Diagnostics**:
 
 - Run read-only platform, storage, bridge, and protocol checks.

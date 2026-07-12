@@ -1,0 +1,184 @@
+import { defineMessages } from './index'
+
+export const viewResources = {
+  en: {
+    setups: {
+      heading: { eyebrow: 'Setup workshop', title: 'Make the car work for you.', description: 'Install, compare, explain and evolve every setup without losing the original.', import: 'Import setup', askEngineer: 'Ask setup engineer' },
+      provenance: { badge: 'Example content', copy: 'The community cards, history, and telemetry evidence are generated UX fixtures. Only “Import setup” writes a user-selected .svm file, with a backup.' },
+      tabs: { aria: 'Setup sections', library: 'Example library', history: 'Example history', demo: 'Demo', engineer: 'Setup engineer' },
+      context: { car: 'Car', carValue: 'Porsche 963', track: 'Track', trackValue: 'Spa-Francorchamps', gameVersion: 'Game version', current: 'Current', searchPlaceholder: 'Search setups or creators', searchAria: 'Search setups', filterAria: 'Filter setups' },
+      results: { title: '4 generated setup examples', subtitle: 'No files or compatibility claims are attached', badge: 'Illustrative' },
+      card: { wet: 'Wet', bestMatch: 'Best match', optionsAria: 'Setup options', by: 'by {author}', drivers: '{count} drivers', exampleVersion: 'Example v{version}', generatedMetadata: 'Generated metadata', preview: 'Preview details' },
+      detail: {
+        generated: 'Generated example', selected: 'Selected setup', description: 'Built for predictable rotation and consistent double stints without sacrificing too much straight-line speed.',
+        creatorIdentity: 'Example creator identity', communityPace: 'Community pace', topEight: 'Top 8%', consistency: 'Consistency', drivers: 'Drivers', confidence: 'Recommendation confidence', percent: '%',
+        confidenceNote: 'Matches your pace, control inputs and preferred stable balance.', creatorNotes: 'Creator notes', notes: 'Run brake migration 3 for a stable entry. TC 4 is a safe baseline; use TC 3 once rear temperatures settle.',
+        initials: 'EX', importReal: 'Import a real .svm', compareUnavailable: 'Compare unavailable', safety: 'Real imports use the guarded installer and back up name collisions.',
+      },
+      history: {
+        eyebrow: 'Active setup', title: 'Endurance stable · personal branch', inSync: 'In sync', generated: 'Generated history example', exampleOnly: 'Example only',
+        personalV3: 'Personal v3', personalV3Note: 'Rear stability adjustment · Today, 19:38', current: 'Current', personalV2: 'Personal v2', personalV2Note: 'Lower rear wing test · example',
+        filename: 'APX_P963_SPA_ENDU_R07_personal.svm', original: 'Original community setup', originalNote: 'Example source revision', restore: 'Restore', diffEyebrow: 'Example diff', diffTitle: '4 illustrative values', resetUnavailable: 'Reset unavailable', setting: 'Setting', originalColumn: 'Original', currentColumn: 'Current',
+      },
+      fixtures: {
+        setups: { safeRace: 'Endurance stable', esportRace: 'Low-drag race', wet: 'Wet confidence', quali: 'Qualifying attack' },
+        tags: { race: 'Race', stable: 'Stable', doubleStint: 'Double stint', aggressive: 'Aggressive', wet: 'Wet', qualifying: 'Qualifying' },
+        diff: { aerodynamics: 'Aerodynamics', rearWing: 'Rear wing', mechanicalGrip: 'Mechanical grip', frontAntiRollBar: 'Front anti-roll bar', differential: 'Differential', powerRamp: 'Power ramp', alignment: 'Alignment', rearToe: 'Rear toe' },
+      },
+      engineer: {
+        evidenceAware: 'Evidence-aware', title: 'What is the car doing?', intro: 'I’ll combine your feedback with the last stint’s telemetry, propose a small reversible change, and tell you what trade-off to expect.',
+        exampleMode: 'Example mode', noRealData: 'No real setup or telemetry is loaded', chooseSymptom: 'Choose the main symptom', chooseSymptomHint: 'Start with the issue costing the most confidence.',
+        understeer: 'Understeer', understeerHint: 'Front washes wide', oversteer: 'Oversteer', oversteerHint: 'Rear steps out', traction: 'Poor traction', tractionHint: 'Wheelspin on exit', kerbs: 'Kerb instability', kerbsHint: 'Car unsettles over kerbs',
+        when: 'When does it happen?', whenHint: 'Select the corner phase where it begins.', phaseAria: 'Corner phase', entry: 'Entry / braking', mid: 'Mid-corner', exit: 'Exit / throttle',
+        whichCorners: 'Which corners expose it?', whichCornersHint: 'Speed changes the likely mechanical or aero cause.', speedAria: 'Corner speed', slow: 'Slow', medium: 'Medium', fast: 'Fast',
+        evidencePattern: 'Example evidence pattern', evidenceHint: 'A real proposal will require an ingested stint and parsed setup values.', notMeasured: 'Not measured', build: 'Build a reversible proposal',
+        branchEyebrow: 'Proposed branch', branchTitle: 'More progressive power delivery', twoChanges: '2 changes', summary: 'The loss begins after initial throttle rather than at rotation. That points first to differential locking and rear toe, not springs or aero.',
+        differential: 'Differential', powerRamp: 'Power ramp', lessLocking: 'Less locking', alignment: 'Alignment', rearToe: 'Rear toe', moreStability: 'More stability', expectedTradeoff: 'Expected trade-off', tradeoff: 'Slightly slower initial rotation and approximately 0.3 km/h additional tyre scrub on straights.',
+        validationPlan: 'Validation plan', validationOne: 'Run three clean laps on comparable fuel.', validationTwo: 'Keep TC and brake migration unchanged.', validationThree: 'Apex will compare exit slip, throttle pickup and lap time.',
+        createUnavailable: 'Create unavailable', saveUnavailable: 'Save unavailable', emptyTitle: 'Your proposal will appear here', emptyCopy: 'Apex changes no more than two related values at once so you can measure cause and effect.',
+      },
+    },
+    overlays: {
+      heading: { eyebrow: 'Overlay studio', title: 'Only the information you need.', description: 'Build a glanceable race HUD for your display, session and car.', reset: 'Reset preview', saved: 'Saved locally', save: 'Save widget choices' },
+      provenance: { badge: 'Preview editor', copy: 'Widget visibility and opacity are editable and saved locally. Drag positioning, display targeting, grid snapping, and live widget bindings are not implemented yet.' },
+      toolbar: { layout: 'Layout', layoutName: 'Hypercar · Race', displayUnavailable: 'Display targeting unavailable', gridUnavailable: 'Grid unavailable', snapUnavailable: 'Snap unavailable', previewAria: 'Preview mode', edit: 'Edit', preview: 'Preview' },
+      library: { eyebrow: 'Library', title: 'Widgets', active: '{count} active', find: 'Find a widget', findAria: 'Find a widget', communityUnavailable: 'Community widgets unavailable' },
+      widgets: {
+        relative: { name: 'Relative', description: 'Nearby cars, class and gaps' }, fuel: { name: 'Fuel & VE', description: 'Finish margin and target use' }, delta: { name: 'Delta', description: 'Live delta and prediction' },
+        radar: { name: 'Radar', description: 'Close-car spatial awareness' }, inputs: { name: 'Inputs', description: 'Throttle, brake and steering' }, flags: { name: 'Flags', description: 'High-visibility race control' }, tyres: { name: 'Tyres', description: 'Pressure, temperature and wear' },
+      },
+      canvas: { aria: 'Overlay layout canvas', safeArea: 'Safe area', relative: 'RELATIVE', fuel: 'FUEL & VE', delta: 'DELTA', radar: 'RADAR', you: 'YOU', driverAhead: 'M. Molina', driverBehind: 'B. Hartley', toFinish: 'TO FINISH', liters: 'L', litresPerLap: 'L/LAP', vePerLap: 'VE/LAP', laps: 'LAPS', predicted: '{time} predicted', blueFlag: 'BLUE FLAG', hint: 'Select a widget to edit visibility and opacity · positioning arrives after persistence' },
+      inspector: {
+        eyebrow: 'Inspector', fallbackTitle: 'Widget', hideAria: 'Hide widget', position: 'Position', appearance: 'Appearance', opacity: 'Opacity', theme: 'Theme', graphiteOnly: 'Graphite only', scale: 'Scale', scaleOnly: '100% only',
+        pixels: 'px', percent: '%', behavior: 'Behavior', hidePits: 'Hide in pits', hidePitsHint: 'Reduce clutter while stationary', classFilter: 'Auto class filter', classFilterHint: 'Prioritize your racing class', duplicateUnavailable: 'Duplicate unavailable', advancedUnavailable: 'Advanced unavailable',
+      },
+      footer: { available: 'Desktop overlay available', required: 'Desktop app required', description: 'Transparent, click-through, local window', open: 'Open preview window' },
+    },
+    settings: {
+      units: { percent: '%' },
+      status: { available: 'Available', notChecked: 'Not checked', unavailable: 'Unavailable', found: 'Found', confirmed: 'Confirmed', present: 'Present', folderFound: 'Folder found', ready: 'Ready', actionNeeded: 'Action needed', unchecked: 'Unchecked', included: 'Included' },
+      heading: { eyebrow: 'Settings', title: 'A transparent, local system.', description: 'Connection, storage, privacy and troubleshooting—one focused section at a time.', troubleshoot: 'Troubleshoot' },
+      nav: { aria: 'Settings sections', connection: 'Connection', data: 'Data & storage', about: 'About', diagnostics: 'Diagnostics' },
+      health: {
+        readyTitle: 'LMU integration is ready', attentionTitle: 'LMU needs attention', uncheckedTitle: 'Check this PC before racing', readyCopy: 'Apex can start its local bridge when a driving session appears.',
+        attentionCopy: 'Run diagnostics or choose the LMU installation folder. Nothing is changed by this check.', browserCopy: 'Live integration diagnostics are available in the packaged Windows desktop app.', windows: 'Windows', platform: 'Platform', bridge: 'Bridge', game: 'Game', browser: 'Browser',
+      },
+      updates: {
+        eyebrow: 'Application updates', loading: 'Loading', reading: 'Reading update status…', description: 'Windows installer updates come directly from the public GitHub release. Apex asks before downloading and again before restarting.',
+        checkNow: 'Check now', download: 'Download {version}', restartInstall: 'Restart and install', releases: 'Releases', changed: 'What changed in {version}', errorDetails: 'Update error details',
+        portableCopy: 'The portable ZIP cannot replace itself. Download the latest installer from Releases; it installs per-user without administrator rights and keeps Apex data.',
+        status: { development: 'Development', unsupported: 'Unsupported', idle: 'Idle', checking: 'Checking', available: 'Available', upToDate: 'Up to date', downloading: 'Downloading', downloaded: 'Downloaded', error: 'Error' },
+      },
+      connection: {
+        gameEyebrow: 'Game connection', gameTitle: 'Le Mans Ultimate', installationFolder: 'Installation folder', noneSelected: 'No folder selected', autoDetect: 'Auto-detect', browse: 'Browse',
+        executable: 'LMU executable or Steam manifest', executableHint: 'Steam app 2399420 · secondary libraries supported', sharedMemory: 'Shared-memory support folder', sharedMemoryHint: 'Useful layout signal; absence does not mean LMU is missing',
+        telemetry: 'Native DuckDB recordings', telemetryHint: 'Read-only inspection from UserData\\Telemetry', setupDirectory: 'Setup directory', setupHint: 'Backups before every user-initiated write', discovery: 'Show automatic discovery log ({count} candidate paths)',
+        acquisition: 'Acquisition', profile: 'Known live-data profile', sampleRate: '50 Hz', officialMemory: 'Official shared memory', officialMemoryHint: 'The bridge requests a fixed 50 Hz update loop. Unsupported or absent fields remain unknown instead of being estimated.', recording: 'Continuous live-session recording', alphaDisabled: 'Not enabled in alpha',
+      },
+      diagnostics: {
+        eyebrow: 'Troubleshooting', title: 'Evidence, fixes and full error logs', passed: '{passed}/{total} passed', notChecked: 'Not checked', intro: 'Checks are read-only. The bridge self-test does not need LMU and proves that the bundled executable and local protocol can start. A live connection still requires Windows, LMU running, and a drivable session.',
+        running: 'Running checks…', run: 'Run all checks', openingEmail: 'Opening email…', emailLogs: 'Email debug logs', copying: 'Copying…', copyLogs: 'Copy debug logs', saving: 'Saving…', saveFile: 'Save debug file', openLogs: 'Open logs folder', hideLogs: 'Hide full logs', showLogs: 'Show full logs', logsExcluded: 'Logs exclude telemetry frames and setup contents.', logName: 'apex.log.jsonl', noLogs: 'No logs recorded.', noEvents: 'No diagnostic events have been recorded yet.',
+        savedFeedback: 'Debug file saved. Attach the .txt file anywhere you message the developer.', saveFailed: 'Could not save the debug file: {error}', copiedFeedback: 'Complete redacted debug logs copied. Paste them directly into your message.', copyFailed: 'Could not copy the debug logs: {error}', emailIncluded: 'Email draft opened with the complete redacted logs included.', emailCopied: 'Email draft opened and the complete logs were copied. Press Ctrl+V at the marked line before sending.', emailFailed: 'The logs were prepared, but the email draft could not open: {error}',
+        safe: 'Safe to review before sending', safeCopy: 'The debug file contains app/system metadata, check results and Apex logs. Home paths and common secrets are redacted. It contains no telemetry frames, setup files, passwords, or account data. Apex never sends anything automatically.', statusPass: 'pass', statusBlocked: 'blocked', statusFail: 'fail',
+      },
+      data: {
+        privacy: 'Privacy', privateTitle: 'Nothing leaves this computer', lmu: 'Le Mans Ultimate', localProcess: 'Local process', bridge: 'Apex bridge', localIpc: 'Local process + IPC', yourFiles: 'Your files', localStorage: 'Local storage',
+        noAccount: 'No account required', offline: 'Works fully offline', noTracking: 'No analytics or tracking', folderEyebrow: 'Local storage', folderTitle: 'Apex data folder', localOnly: 'Local only', userData: 'Electron user-data directory', desktopOnly: 'Available in the desktop app', openFolder: 'Open folder',
+      },
+      about: {
+        languageEyebrow: 'Language', languageTitle: 'Interface language', languageDescription: 'Choose the language used throughout Apex. The preference is stored locally.', languageAria: 'Interface language', english: 'English', german: 'Deutsch', productName: 'Apex',
+        learning: 'Learning & setup', guidance: 'Revisit guidance whenever you need it', guidanceCopy: 'Onboarding and contextual tips are local preferences. Resetting them does not touch telemetry, setups, or logs.', restart: 'Restart onboarding', resetIntroductions: 'Reset view introductions', browserPreview: 'browser preview', license: 'GPL-3.0-or-later · Unofficial community software', free: 'Free software',
+      },
+      chooseInstallation: 'Choose the Le Mans Ultimate installation',
+    },
+  },
+  de: {
+    setups: {
+      heading: { eyebrow: 'Setup-Werkstatt', title: 'Passe das Auto an deinen Fahrstil an.', description: 'Installiere, vergleiche, verstehe und entwickle jedes Setup weiter, ohne das Original zu verlieren.', import: 'Setup importieren', askEngineer: 'Setup-Ingenieur fragen' },
+      provenance: { badge: 'Beispielinhalte', copy: 'Die Community-Karten, der Verlauf und die Telemetriehinweise sind generierte UX-Beispiele. Nur „Setup importieren“ schreibt eine vom Benutzer gewählte .svm-Datei – mit Sicherungskopie.' },
+      tabs: { aria: 'Setup-Bereiche', library: 'Beispielbibliothek', history: 'Beispielverlauf', demo: 'Demo', engineer: 'Setup-Ingenieur' },
+      context: { car: 'Auto', carValue: 'Porsche 963', track: 'Strecke', trackValue: 'Spa-Francorchamps', gameVersion: 'Spielversion', current: 'Aktuell', searchPlaceholder: 'Setups oder Ersteller suchen', searchAria: 'Setups suchen', filterAria: 'Setups filtern' },
+      results: { title: '4 generierte Setup-Beispiele', subtitle: 'Es sind keine Dateien oder Kompatibilitätsaussagen verknüpft', badge: 'Beispielhaft' },
+      card: { wet: 'Nass', bestMatch: 'Beste Übereinstimmung', optionsAria: 'Setup-Optionen', by: 'von {author}', drivers: '{count} Fahrer', exampleVersion: 'Beispiel v{version}', generatedMetadata: 'Generierte Metadaten', preview: 'Details ansehen' },
+      detail: {
+        generated: 'Generiertes Beispiel', selected: 'Ausgewähltes Setup', description: 'Ausgelegt auf berechenbares Einlenken und konstante Doppelstints, ohne zu viel Topspeed zu opfern.',
+        creatorIdentity: 'Beispielprofil', communityPace: 'Community-Pace', topEight: 'Top 8 %', consistency: 'Konstanz', drivers: 'Fahrer', confidence: 'Empfehlungssicherheit', percent: '%', confidenceNote: 'Passt zu deiner Pace, deinen Eingaben und deiner Vorliebe für ein stabiles Fahrzeug.',
+        creatorNotes: 'Hinweise des Erstellers', notes: 'Bremsmigration 3 sorgt für einen stabilen Kurveneingang. TC 4 ist eine sichere Basis; wechsle auf TC 3, sobald sich die Hinterreifentemperaturen stabilisiert haben.',
+        initials: 'EX', importReal: 'Echte .svm importieren', compareUnavailable: 'Vergleich nicht verfügbar', safety: 'Echte Importe verwenden die geschützte Installation und sichern vorhandene Dateien bei Namenskonflikten.',
+      },
+      history: {
+        eyebrow: 'Aktives Setup', title: 'Stabiles Endurance-Setup · persönlicher Zweig', inSync: 'Synchron', generated: 'Generiertes Verlaufsbeispiel', exampleOnly: 'Nur Beispiel',
+        personalV3: 'Persönlich v3', personalV3Note: 'Anpassung der Heckstabilität · Heute, 19:38', current: 'Aktuell', personalV2: 'Persönlich v2', personalV2Note: 'Test mit weniger Heckflügel · Beispiel', original: 'Ursprüngliches Community-Setup', originalNote: 'Beispiel-Quellversion', restore: 'Wiederherstellen',
+        filename: 'APX_P963_SPA_ENDU_R07_personal.svm', diffEyebrow: 'Beispielvergleich', diffTitle: '4 beispielhafte Werte', resetUnavailable: 'Zurücksetzen nicht verfügbar', setting: 'Einstellung', originalColumn: 'Original', currentColumn: 'Aktuell',
+      },
+      fixtures: {
+        setups: { safeRace: 'Stabiles Endurance-Setup', esportRace: 'Low-Drag-Rennsetup', wet: 'Sicheres Nass-Setup', quali: 'Qualifying-Angriff' },
+        tags: { race: 'Rennen', stable: 'Stabil', doubleStint: 'Doppelstint', aggressive: 'Aggressiv', wet: 'Nass', qualifying: 'Qualifying' },
+        diff: { aerodynamics: 'Aerodynamik', rearWing: 'Heckflügel', mechanicalGrip: 'Mechanischer Grip', frontAntiRollBar: 'Vorderer Stabilisator', differential: 'Differenzial', powerRamp: 'Sperrrampe unter Last', alignment: 'Achsgeometrie', rearToe: 'Hinterachs-Vorspur' },
+      },
+      engineer: {
+        evidenceAware: 'Evidenzbasiert', title: 'Wie verhält sich das Auto?', intro: 'Ich kombiniere dein Feedback mit der Telemetrie des letzten Stints, schlage eine kleine reversible Änderung vor und erkläre den erwarteten Kompromiss.',
+        exampleMode: 'Beispielmodus', noRealData: 'Kein echtes Setup und keine echte Telemetrie geladen', chooseSymptom: 'Wähle das Hauptproblem', chooseSymptomHint: 'Beginne mit dem Problem, das dich am meisten Vertrauen kostet.',
+        understeer: 'Untersteuern', understeerHint: 'Vorderachse schiebt nach außen', oversteer: 'Übersteuern', oversteerHint: 'Heck bricht aus', traction: 'Schlechte Traktion', tractionHint: 'Radschlupf am Kurvenausgang', kerbs: 'Instabil auf Kerbs', kerbsHint: 'Auto wird auf Kerbs unruhig',
+        when: 'Wann tritt es auf?', whenHint: 'Wähle die Kurvenphase, in der es beginnt.', phaseAria: 'Kurvenphase', entry: 'Eingang / Bremsen', mid: 'Kurvenmitte', exit: 'Ausgang / Gas', whichCorners: 'In welchen Kurven tritt es auf?', whichCornersHint: 'Die Geschwindigkeit beeinflusst die wahrscheinliche mechanische oder aerodynamische Ursache.', speedAria: 'Kurvengeschwindigkeit', slow: 'Langsam', medium: 'Mittel', fast: 'Schnell',
+        evidencePattern: 'Beispielhaftes Evidenzmuster', evidenceHint: 'Ein echter Vorschlag benötigt einen eingelesenen Stint und analysierte Setup-Werte.', notMeasured: 'Nicht gemessen', build: 'Reversiblen Vorschlag erstellen',
+        branchEyebrow: 'Vorgeschlagener Zweig', branchTitle: 'Progressivere Leistungsabgabe', twoChanges: '2 Änderungen', summary: 'Der Gripverlust beginnt nach dem ersten Gasgeben und nicht beim Einlenken. Das deutet zuerst auf Differenzialsperre und Hinterachs-Vorspur hin, nicht auf Federn oder Aerodynamik.',
+        differential: 'Differenzial', powerRamp: 'Sperrrampe unter Last', lessLocking: 'Weniger Sperrwirkung', alignment: 'Achsgeometrie', rearToe: 'Hinterachs-Vorspur', moreStability: 'Mehr Stabilität', expectedTradeoff: 'Erwarteter Kompromiss', tradeoff: 'Etwas langsamere erste Rotation und ungefähr 0,3 km/h zusätzlicher Reifenabrieb auf Geraden.',
+        validationPlan: 'Validierungsplan', validationOne: 'Fahre drei saubere Runden mit vergleichbarer Kraftstoffmenge.', validationTwo: 'Lasse TC und Bremsmigration unverändert.', validationThree: 'Apex vergleicht Schlupf am Ausgang, Gasannahme und Rundenzeit.', createUnavailable: 'Erstellen nicht verfügbar', saveUnavailable: 'Speichern nicht verfügbar', emptyTitle: 'Dein Vorschlag erscheint hier', emptyCopy: 'Apex ändert höchstens zwei zusammenhängende Werte gleichzeitig, damit du Ursache und Wirkung messen kannst.',
+      },
+    },
+    overlays: {
+      heading: { eyebrow: 'Overlay-Studio', title: 'Nur die Informationen, die du brauchst.', description: 'Erstelle ein auf einen Blick erfassbares Renn-HUD für deinen Bildschirm, deine Session und dein Auto.', reset: 'Vorschau zurücksetzen', saved: 'Lokal gespeichert', save: 'Widget-Auswahl speichern' },
+      provenance: { badge: 'Vorschau-Editor', copy: 'Sichtbarkeit und Deckkraft der Widgets sind editierbar und werden lokal gespeichert. Freies Positionieren, Bildschirmwahl, Rasterausrichtung und Live-Datenbindungen sind noch nicht implementiert.' },
+      toolbar: { layout: 'Layout', layoutName: 'Hypercar · Rennen', displayUnavailable: 'Bildschirmwahl nicht verfügbar', gridUnavailable: 'Raster nicht verfügbar', snapUnavailable: 'Ausrichtung nicht verfügbar', previewAria: 'Vorschaumodus', edit: 'Bearbeiten', preview: 'Vorschau' },
+      library: { eyebrow: 'Bibliothek', title: 'Widgets', active: '{count} aktiv', find: 'Widget suchen', findAria: 'Widget suchen', communityUnavailable: 'Community-Widgets nicht verfügbar' },
+      widgets: {
+        relative: { name: 'Abstände', description: 'Nahe Fahrzeuge, Klassen und Abstände' }, fuel: { name: 'Kraftstoff & VE', description: 'Reserve im Ziel und Zielverbrauch' }, delta: { name: 'Delta', description: 'Live-Delta und Prognose' }, radar: { name: 'Radar', description: 'Räumliche Übersicht über nahe Fahrzeuge' },
+        inputs: { name: 'Eingaben', description: 'Gas, Bremse und Lenkung' }, flags: { name: 'Flaggen', description: 'Gut sichtbare Rennleitungssignale' }, tyres: { name: 'Reifen', description: 'Druck, Temperatur und Verschleiß' },
+      },
+      canvas: { aria: 'Arbeitsfläche für das Overlay-Layout', safeArea: 'Sicherer Bereich', relative: 'ABSTÄNDE', fuel: 'KRAFTSTOFF & VE', delta: 'DELTA', radar: 'RADAR', you: 'DU', driverAhead: 'M. Molina', driverBehind: 'B. Hartley', toFinish: 'BIS INS ZIEL', liters: 'L', litresPerLap: 'L/RUNDE', vePerLap: 'VE/RUNDE', laps: 'RUNDEN', predicted: '{time} prognostiziert', blueFlag: 'BLAUE FLAGGE', hint: 'Wähle ein Widget, um Sichtbarkeit und Deckkraft zu bearbeiten · Positionierung folgt mit der Persistenz' },
+      inspector: {
+        eyebrow: 'Inspektor', fallbackTitle: 'Widget', hideAria: 'Widget ausblenden', position: 'Position', appearance: 'Darstellung', opacity: 'Deckkraft', theme: 'Design', graphiteOnly: 'Nur Graphit', scale: 'Skalierung', scaleOnly: 'Nur 100 %', pixels: 'px', percent: '%', behavior: 'Verhalten', hidePits: 'In der Box ausblenden', hidePitsHint: 'Im Stand weniger Ablenkung', classFilter: 'Automatischer Klassenfilter', classFilterHint: 'Priorisiert deine Rennklasse', duplicateUnavailable: 'Duplizieren nicht verfügbar', advancedUnavailable: 'Erweitert nicht verfügbar',
+      },
+      footer: { available: 'Desktop-Overlay verfügbar', required: 'Desktop-App erforderlich', description: 'Transparentes, klickdurchlässiges, lokales Fenster', open: 'Vorschaufenster öffnen' },
+    },
+    settings: {
+      units: { percent: '%' },
+      status: { available: 'Verfügbar', notChecked: 'Nicht geprüft', unavailable: 'Nicht verfügbar', found: 'Gefunden', confirmed: 'Bestätigt', present: 'Vorhanden', folderFound: 'Ordner gefunden', ready: 'Bereit', actionNeeded: 'Aktion erforderlich', unchecked: 'Ungeprüft', included: 'Enthalten' },
+      heading: { eyebrow: 'Einstellungen', title: 'Ein transparentes, lokales System.', description: 'Verbindung, Speicher, Datenschutz und Fehlerbehebung – jeweils in einem fokussierten Bereich.', troubleshoot: 'Fehler beheben' },
+      nav: { aria: 'Einstellungsbereiche', connection: 'Verbindung', data: 'Daten & Speicher', about: 'Über Apex', diagnostics: 'Diagnose' },
+      health: {
+        readyTitle: 'Die LMU-Integration ist bereit', attentionTitle: 'LMU benötigt Aufmerksamkeit', uncheckedTitle: 'Prüfe diesen PC vor dem Rennen', readyCopy: 'Apex kann seine lokale Bridge starten, sobald eine Fahrsession erkannt wird.', attentionCopy: 'Führe die Diagnose aus oder wähle den LMU-Installationsordner. Diese Prüfung verändert nichts.', browserCopy: 'Die Live-Integrationsdiagnose ist in der paketierten Windows-Desktop-App verfügbar.', windows: 'Windows', platform: 'Plattform', bridge: 'Bridge', game: 'Spiel', browser: 'Browser',
+      },
+      updates: {
+        eyebrow: 'Anwendungsupdates', loading: 'Laden', reading: 'Updatestatus wird gelesen …', description: 'Updates des Windows-Installers kommen direkt aus dem öffentlichen GitHub-Release. Apex fragt vor dem Download und erneut vor dem Neustart.', checkNow: 'Jetzt prüfen', download: '{version} herunterladen', restartInstall: 'Neu starten und installieren', releases: 'Releases', changed: 'Änderungen in {version}', errorDetails: 'Details zum Updatefehler', portableCopy: 'Das portable ZIP kann sich nicht selbst ersetzen. Lade den aktuellen Installer über Releases herunter; er installiert ohne Administratorrechte für den aktuellen Benutzer und behält die Apex-Daten.',
+        status: { development: 'Entwicklung', unsupported: 'Nicht unterstützt', idle: 'Bereit', checking: 'Prüfung läuft', available: 'Verfügbar', upToDate: 'Aktuell', downloading: 'Download läuft', downloaded: 'Heruntergeladen', error: 'Fehler' },
+      },
+      connection: {
+        gameEyebrow: 'Spielverbindung', gameTitle: 'Le Mans Ultimate', installationFolder: 'Installationsordner', noneSelected: 'Kein Ordner ausgewählt', autoDetect: 'Automatisch erkennen', browse: 'Durchsuchen', executable: 'LMU-Programmdatei oder Steam-Manifest', executableHint: 'Steam-App 2399420 · weitere Bibliotheken werden unterstützt', sharedMemory: 'Shared-Memory-Supportordner', sharedMemoryHint: 'Nützliches Layout-Signal; ein fehlender Ordner bedeutet nicht, dass LMU fehlt', telemetry: 'Native DuckDB-Aufzeichnungen', telemetryHint: 'Schreibgeschützte Prüfung von UserData\\Telemetry', setupDirectory: 'Setup-Ordner', setupHint: 'Sicherung vor jedem vom Benutzer ausgelösten Schreibvorgang', discovery: 'Protokoll der automatischen Erkennung anzeigen ({count} mögliche Pfade)',
+        acquisition: 'Datenerfassung', profile: 'Bekanntes Live-Datenprofil', sampleRate: '50 Hz', officialMemory: 'Offizieller Shared Memory', officialMemoryHint: 'Die Bridge fordert eine feste Aktualisierungsrate von 50 Hz an. Nicht unterstützte oder fehlende Felder bleiben unbekannt, statt geschätzt zu werden.', recording: 'Fortlaufende Aufzeichnung der Live-Session', alphaDisabled: 'In der Alpha nicht aktiviert',
+      },
+      diagnostics: {
+        eyebrow: 'Fehlerbehebung', title: 'Nachweise, Lösungen und vollständige Fehlerprotokolle', passed: '{passed}/{total} bestanden', notChecked: 'Nicht geprüft', intro: 'Die Prüfungen sind schreibgeschützt. Der Bridge-Selbsttest benötigt LMU nicht und weist nach, dass die mitgelieferte Programmdatei und das lokale Protokoll starten können. Eine Live-Verbindung erfordert weiterhin Windows, ein laufendes LMU und eine fahrbare Session.',
+        running: 'Prüfungen laufen …', run: 'Alle Prüfungen ausführen', openingEmail: 'E-Mail wird geöffnet …', emailLogs: 'Debug-Protokolle mailen', copying: 'Wird kopiert …', copyLogs: 'Debug-Protokolle kopieren', saving: 'Wird gespeichert …', saveFile: 'Debug-Datei speichern', openLogs: 'Protokollordner öffnen', hideLogs: 'Vollständige Protokolle ausblenden', showLogs: 'Vollständige Protokolle anzeigen', logsExcluded: 'Die Protokolle enthalten keine Telemetrieframes oder Setup-Inhalte.', logName: 'apex.log.jsonl', noLogs: 'Keine Protokolle aufgezeichnet.', noEvents: 'Es wurden noch keine Diagnoseereignisse aufgezeichnet.',
+        savedFeedback: 'Debug-Datei gespeichert. Hänge die .txt-Datei an deine Nachricht an den Entwickler an.', saveFailed: 'Debug-Datei konnte nicht gespeichert werden: {error}', copiedFeedback: 'Vollständige bereinigte Debug-Protokolle kopiert. Füge sie direkt in deine Nachricht ein.', copyFailed: 'Debug-Protokolle konnten nicht kopiert werden: {error}', emailIncluded: 'E-Mail-Entwurf mit den vollständigen bereinigten Protokollen geöffnet.', emailCopied: 'E-Mail-Entwurf geöffnet und vollständige Protokolle kopiert. Drücke vor dem Senden an der markierten Stelle Strg+V.', emailFailed: 'Die Protokolle wurden vorbereitet, aber der E-Mail-Entwurf konnte nicht geöffnet werden: {error}',
+        safe: 'Vor dem Senden sicher überprüfbar', safeCopy: 'Die Debug-Datei enthält App-/Systemmetadaten, Prüfergebnisse und Apex-Protokolle. Benutzerpfade und übliche Geheimnisse werden unkenntlich gemacht. Sie enthält keine Telemetrieframes, Setup-Dateien, Passwörter oder Kontodaten. Apex sendet niemals automatisch etwas.', statusPass: 'bestanden', statusBlocked: 'blockiert', statusFail: 'fehlgeschlagen',
+      },
+      data: {
+        privacy: 'Datenschutz', privateTitle: 'Nichts verlässt diesen Computer', lmu: 'Le Mans Ultimate', localProcess: 'Lokaler Prozess', bridge: 'Apex-Bridge', localIpc: 'Lokaler Prozess + IPC', yourFiles: 'Deine Dateien', localStorage: 'Lokaler Speicher', noAccount: 'Kein Konto erforderlich', offline: 'Funktioniert vollständig offline', noTracking: 'Keine Analyse oder Nachverfolgung', folderEyebrow: 'Lokaler Speicher', folderTitle: 'Apex-Datenordner', localOnly: 'Nur lokal', userData: 'Electron-Benutzerdatenordner', desktopOnly: 'In der Desktop-App verfügbar', openFolder: 'Ordner öffnen',
+      },
+      about: {
+        languageEyebrow: 'Sprache', languageTitle: 'Oberflächensprache', languageDescription: 'Wähle die Sprache für Apex. Die Einstellung wird lokal gespeichert.', languageAria: 'Oberflächensprache', english: 'English', german: 'Deutsch', productName: 'Apex', learning: 'Einführung & Hilfe', guidance: 'Öffne die Hinweise jederzeit erneut', guidanceCopy: 'Onboarding und kontextbezogene Hinweise sind lokale Einstellungen. Beim Zurücksetzen werden Telemetrie, Setups und Protokolle nicht verändert.', restart: 'Onboarding neu starten', resetIntroductions: 'Ansichtshinweise zurücksetzen', browserPreview: 'Browser-Vorschau', license: 'GPL-3.0-or-later · Inoffizielle Community-Software', free: 'Freie Software',
+      },
+      chooseInstallation: 'Le-Mans-Ultimate-Installation auswählen',
+    },
+  },
+} as const
+
+export const setupsMessages = defineMessages(viewResources.en.setups, viewResources.de.setups)
+export const overlaysMessages = defineMessages(viewResources.en.overlays, viewResources.de.overlays)
+export const settingsMessages = defineMessages(viewResources.en.settings, viewResources.de.settings)
+
+export function formatMessage(message: string, values: Record<string, string | number>): string {
+  return message.replace(/\{(\w+)\}/g, (token, key: string) => key in values ? String(values[key]) : token)
+}

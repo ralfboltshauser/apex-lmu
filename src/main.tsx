@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import '@fontsource-variable/inter/index.css'
 import '@fontsource-variable/jetbrains-mono/index.css'
+import { I18nProvider } from './i18n'
 
 const overlayMode = new URLSearchParams(window.location.search).get('overlay') === '1'
 const root = ReactDOM.createRoot(document.getElementById('root')!)
@@ -13,5 +14,5 @@ if (overlayMode) {
 } else {
   await import('./styles.css')
   const { default: App } = await import('./App')
-  root.render(<React.StrictMode><App /></React.StrictMode>)
+  root.render(<React.StrictMode><I18nProvider><App /></I18nProvider></React.StrictMode>)
 }

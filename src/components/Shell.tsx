@@ -16,17 +16,20 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { Badge, Button } from './ui'
-import { DiscoveryPrompt, GuideDrawer, viewGuides } from './GuideDrawer'
+import { DiscoveryPrompt, GuideDrawer, useViewGuides } from './GuideDrawer'
+import { appMessages } from '../i18n/appMessages'
+import { useMessages } from '../i18n'
+import { LanguageToggle } from '../i18n/LanguageToggle'
 
 export type ViewId = 'home' | 'live' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'settings'
 
-const primaryNavigation: Array<{ id: ViewId; label: string; icon: typeof Gauge; shortcut?: string }> = [
-  { id: 'home', label: 'Command center', icon: Gauge },
-  { id: 'live', label: 'Live session', icon: Radio, shortcut: 'L' },
-  { id: 'analyze', label: 'Analyze', icon: BarChart3, shortcut: 'A' },
-  { id: 'strategy', label: 'Strategy', icon: Activity, shortcut: 'S' },
-  { id: 'setups', label: 'Setups', icon: SlidersHorizontal },
-  { id: 'overlays', label: 'Overlays', icon: Layers3 },
+const primaryNavigation: Array<{ id: Exclude<ViewId, 'settings'>; icon: typeof Gauge; shortcut?: string }> = [
+  { id: 'home', icon: Gauge },
+  { id: 'live', icon: Radio, shortcut: 'L' },
+  { id: 'analyze', icon: BarChart3, shortcut: 'A' },
+  { id: 'strategy', icon: Activity, shortcut: 'S' },
+  { id: 'setups', icon: SlidersHorizontal },
+  { id: 'overlays', icon: Layers3 },
 ]
 
 export function Shell({
@@ -44,10 +47,12 @@ export function Shell({
   onToggleDemo: () => void
   children: ReactNode
 }) {
-  const current = primaryNavigation.find((item) => item.id === view)
+  const messages = useMessages(appMessages)
+  const m = messages.shell
+  const guides = useViewGuides()
   const [guideOpen, setGuideOpen] = useState(false)
   const [showDiscovery, setShowDiscovery] = useState(false)
-  const guide = viewGuides[view]
+  const guide = guides[view]
   useEffect(() => { setGuideOpen(false); setShowDiscovery(window.localStorage.getItem(`apex:discovered:${view}`) !== 'true') }, [view])
   const dismissDiscovery = () => { window.localStorage.setItem(`apex:discovered:${view}`, 'true'); setShowDiscovery(false) }
   const openGuide = () => { dismissDiscovery(); setGuideOpen(true) }
@@ -60,7 +65,7 @@ export function Shell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand" aria-label="Apex home">
+        <div className="brand" aria-label={m.brandHome}>
           <div className="brand__mark" aria-hidden="true">
             <svg viewBox="0 0 28 28" role="img">
               <path d="M4 20.5 12.5 5h5L24 20.5h-5.2l-1.4-3.4H9.7l-1.8 3.4H4Z" />
@@ -68,14 +73,14 @@ export function Shell({
             </svg>
           </div>
           <div>
-            <strong>Apex</strong>
-            <span>for LMU</span>
+            <strong>{messages.common.productName}</strong>
+            <span>{m.brandSuffix}</span>
           </div>
-          <Badge tone="neutral">alpha</Badge>
+          <Badge tone="neutral">{m.alpha}</Badge>
         </div>
 
-        <nav className="sidebar__nav" aria-label="Main navigation">
-          <div className="nav-section-label">Race engineering</div>
+        <nav className="sidebar__nav" aria-label={m.mainNavigation}>
+          <div className="nav-section-label">{m.raceEngineering}</div>
           {primaryNavigation.map((item) => {
             const Icon = item.icon
             return (
@@ -87,21 +92,21 @@ export function Shell({
                 onClick={() => onViewChange(item.id)}
               >
                 <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
-                <span>{item.label}</span>
-                {item.id === 'live' && connected && <span className="nav-item__live" aria-label="Live" />}
+                <span>{m.navigation[item.id]}</span>
+                {item.id === 'live' && connected && <span className="nav-item__live" aria-label={m.live} />}
                 {item.shortcut && <kbd>{item.shortcut}</kbd>}
               </button>
             )
           })}
 
-          <div className="nav-section-label nav-section-label--secondary">System</div>
+          <div className="nav-section-label nav-section-label--secondary">{m.system}</div>
           <button type="button" className="nav-item" onClick={() => openSettings('connection')}>
             <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
-            <span>Settings</span>
+            <span>{m.navigation.settings}</span>
           </button>
           <button type="button" className="nav-item" onClick={() => openSettings('about')}>
             <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />
-            <span>About & privacy</span>
+            <span>{m.aboutPrivacy}</span>
           </button>
         </nav>
 
@@ -109,13 +114,13 @@ export function Shell({
           <div className="privacy-note">
             <div className="privacy-note__icon"><Boxes size={15} /></div>
             <div>
-              <strong>Local by design</strong>
-              <span>Your telemetry never leaves this PC.</span>
+              <strong>{m.localByDesign}</strong>
+              <span>{m.localPromise}</span>
             </div>
           </div>
           <button type="button" className="sidebar-support" onClick={() => openSettings('diagnostics')}>
             <LifeBuoy size={15} />
-            <span>Diagnostics</span>
+            <span>{m.diagnostics}</span>
             <ChevronRight size={14} />
           </button>
         </div>
@@ -124,17 +129,18 @@ export function Shell({
       <div className="workspace">
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Apex</span>
+            <span>{messages.common.productName}</span>
             <ChevronRight size={13} />
-            <strong>{current?.label ?? 'Settings'}</strong>
+            <strong>{m.navigation[view]}</strong>
           </div>
           <div className="topbar__actions">
-            <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} onClick={openGuide}>Learn this view</Button>
+            <LanguageToggle />
+            <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} onClick={openGuide}>{m.learnView}</Button>
             <div className={`connection-pill ${connected ? 'is-live' : ''}`}>
               <span className="connection-pill__pulse" />
               <div>
-                <strong>{connected ? (demoRunning ? 'Demo connected' : 'LMU connected') : 'LMU offline'}</strong>
-                <span>{connected ? '50 Hz · local' : 'Waiting for session'}</span>
+                <strong>{connected ? (demoRunning ? m.demoConnected : m.lmuConnected) : m.lmuOffline}</strong>
+                <span>{connected ? m.localRate : m.waitingForSession}</span>
               </div>
             </div>
             <Button
@@ -143,7 +149,7 @@ export function Shell({
               icon={demoRunning ? <CircleDot size={15} /> : <Sparkles size={15} />}
               onClick={onToggleDemo}
             >
-              {demoRunning ? 'Stop demo' : 'Run live demo'}
+              {demoRunning ? m.stopDemo : m.runDemo}
             </Button>
           </div>
         </header>
