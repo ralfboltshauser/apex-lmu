@@ -287,6 +287,54 @@ func TestPackagedBridgeStreamsFixtureAndReturnsToWaiting(t *testing.T) {
 		t.Fatalf("unexpected live bridge telemetry: %#v", telemetry)
 	}
 
+	recordingPath := filepath.Join(t.TempDir(), "windows-fixture.apexrec")
+	recorderCommand := exec.Command(bridgePath, "--hz=20", "--record="+recordingPath, "--app-version=windows-ci")
+	recorderInput, err := recorderCommand.StdinPipe()
+	if err != nil {
+		t.Fatalf("open recorder stdin: %v", err)
+	}
+	var recorderOutput, recorderStderr bytes.Buffer
+	recorderCommand.Stdout = &recorderOutput
+	recorderCommand.Stderr = &recorderStderr
+	if err := recorderCommand.Start(); err != nil {
+		t.Fatalf("start recorder: %v", err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	_, _ = io.WriteString(recorderInput, "stop\n")
+	_ = recorderInput.Close()
+	if err := recorderCommand.Wait(); err != nil {
+		t.Fatalf("recorder failed: %v; stderr=%s", err, recorderStderr.String())
+	}
+	reader, recordingFile, err := openRecording(recordingPath)
+	if err != nil {
+		t.Fatalf("open Windows recording: %v", err)
+	}
+	var recordedSnapshots int
+	for {
+		record, readErr := reader.Next()
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			_ = recordingFile.Close()
+			t.Fatalf("read Windows recording: %v", readErr)
+		}
+		if record.Raw != nil {
+			recordedSnapshots++
+		}
+	}
+	_ = recordingFile.Close()
+	if recordedSnapshots == 0 {
+		t.Fatalf("Windows recorder captured no snapshots; stdout=%s", recorderOutput.String())
+	}
+	replayOutput, err := exec.Command(bridgePath, "--replay="+recordingPath, "--replay-speed=0").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Windows replay failed: %v; output=%s", err, replayOutput)
+	}
+	if !bytes.Contains(replayOutput, []byte(`"source":"recording-replay"`)) || !bytes.Contains(replayOutput, []byte(`"type":"telemetry"`)) {
+		t.Fatalf("Windows replay emitted no telemetry: %s", replayOutput)
+	}
+
 	select {
 	case err := <-fixtureDone:
 		fixtureExited = true

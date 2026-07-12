@@ -31,6 +31,11 @@ interface ApexDesktopApi {
   startTelemetry(): Promise<{ ok: boolean; reason?: string }>
   stopTelemetry(): Promise<{ ok: boolean }>
   runTelemetrySelfTest(): Promise<{ ok: boolean; reason?: string; runId: string; path?: string }>
+  getRecordingState(): Promise<ApexRecordingState>
+  startRecording(): Promise<{ ok: boolean; canceled?: boolean; reason?: string; path?: string }>
+  stopRecording(): Promise<{ ok: boolean; reason?: string }>
+  startReplay(): Promise<{ ok: boolean; canceled?: boolean; reason?: string; path?: string }>
+  stopReplay(): Promise<{ ok: boolean; reason?: string }>
   inspectTelemetry(filePath: string): Promise<{
     path: string
     bytes: number
@@ -44,10 +49,12 @@ interface ApexDesktopApi {
   installSetup(input: { sourcePath: string; targetDirectory: string }): Promise<{ destination: string; backupPath: string | null; bytes: number }>
   openOverlay(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
+  onRecordingState(callback: (state: ApexRecordingState) => void): () => void
   onUpdateState(callback: (state: ApexUpdateState) => void): () => void
 }
 
 interface ApexUpdateState { status: 'development' | 'unsupported' | 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'; currentVersion: string; availableVersion: string | null; progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null; message: string; releaseNotes: string; releaseUrl: string; error?: { message: string; stack: string; code: string } }
+interface ApexRecordingState { status: 'idle' | 'starting' | 'recording' | 'stopping' | 'replaying' | 'complete' | 'error'; path: string | null; frames: number; bytes: number; durationSeconds: number; message: string }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
 interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }

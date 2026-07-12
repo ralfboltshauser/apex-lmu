@@ -10,6 +10,7 @@ class FakeChild extends EventEmitter {
     super()
     this.stdout = new PassThrough()
     this.stderr = new PassThrough()
+    this.stdin = new PassThrough()
     this.killed = false
   }
 
@@ -131,4 +132,43 @@ test('records useful live status transitions without logging telemetry frames', 
   assert.equal(status[0], 'warning')
   assert.match(status[3], /maximum lap count/)
   assert.equal(entries.filter((entry) => entry[2] === 'status').length, 1)
+})
+
+test('records raw sessions in a separate stoppable bridge process', async () => {
+  const child = new FakeChild()
+  const states = []
+  let call
+  const manager = new LmuBridgeManager({
+    app: { isPackaged: false }, broadcast: () => {}, broadcastRecording: (state) => states.push(state),
+    runtime: { platform: 'win32', fileExists: () => true, spawn: (binary, args, options) => { call = { binary, args, options }; return child } },
+  })
+  const result = manager.startRecording('C:\\captures\\practice.apexrec', '0.2.0')
+  assert.equal(result.ok, true)
+  assert.deepEqual(call.args, ['--hz=50', `--parent-pid=${process.pid}`, '--record=C:\\captures\\practice.apexrec', '--app-version=0.2.0'])
+  child.stdout.write(`${JSON.stringify({ type: 'recording', state: 'recording', frames: 125, bytes: 2048, durationSeconds: 2.5, message: 'Recording' })}\n`)
+  await waitForImmediate()
+  assert.equal(manager.getRecordingState().frames, 125)
+  let command = ''
+  child.stdin.on('data', (chunk) => { command += String(chunk) })
+  assert.deepEqual(manager.stopRecording(), { ok: true })
+  await waitForImmediate()
+  assert.equal(command, 'stop\n')
+  assert.equal(states.at(-1).status, 'stopping')
+})
+
+test('replay temporarily replaces live telemetry and resumes it afterwards', async () => {
+  const children = []
+  const broadcasts = []
+  const manager = new LmuBridgeManager({
+    app: { isPackaged: false }, broadcast: (message) => broadcasts.push(message),
+    runtime: { platform: 'win32', fileExists: () => true, spawn: () => { const child = new FakeChild(); children.push(child); return child } },
+  })
+  manager.start()
+  assert.equal(manager.startReplay('C:\\captures\\practice.apexrec').ok, true)
+  assert.equal(children[0].killed, true)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  await waitForImmediate()
+  assert.equal(broadcasts.at(-1).source, 'recording-replay')
+  children[1].emit('exit', 0)
+  assert.equal(children.length, 3, 'live bridge restarts after replay')
 })

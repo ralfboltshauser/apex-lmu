@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   startTelemetry: () => ipcRenderer.invoke('apex:start-telemetry'),
   stopTelemetry: () => ipcRenderer.invoke('apex:stop-telemetry'),
   runTelemetrySelfTest: () => ipcRenderer.invoke('apex:run-telemetry-self-test'),
+  getRecordingState: () => ipcRenderer.invoke('apex:get-recording-state'),
+  startRecording: () => ipcRenderer.invoke('apex:start-recording'),
+  stopRecording: () => ipcRenderer.invoke('apex:stop-recording'),
+  startReplay: () => ipcRenderer.invoke('apex:start-replay'),
+  stopReplay: () => ipcRenderer.invoke('apex:stop-replay'),
   inspectTelemetry: (filePath) => ipcRenderer.invoke('apex:inspect-telemetry', filePath),
   installSetup: (input) => ipcRenderer.invoke('apex:install-setup', input),
   openOverlay: () => ipcRenderer.invoke('apex:open-overlay'),
@@ -30,6 +35,11 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, message) => callback(message)
     ipcRenderer.on('apex:telemetry-message', listener)
     return () => ipcRenderer.removeListener('apex:telemetry-message', listener)
+  },
+  onRecordingState: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:recording-state', listener)
+    return () => ipcRenderer.removeListener('apex:recording-state', listener)
   },
   onUpdateState: (callback) => {
     const listener = (_event, state) => callback(state)

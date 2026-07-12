@@ -21,6 +21,13 @@ func main() {
 		}
 		return
 	}
+	if options.replayPath != "" {
+		if err := runReplay(os.Stdout, options); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	_ = emit(json.NewEncoder(os.Stdout), message{
 		Type: "status", State: "unsupported", Message: "LMU live shared memory is available on Windows only",
 	})

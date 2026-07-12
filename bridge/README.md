@@ -17,8 +17,25 @@ Build from any Go host:
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o bin/apex-lmu-bridge.exe .
 ```
 
-Every message has a `type` of either `status` or `telemetry`. The TypeScript
-desktop adapter treats unknown fields as forward-compatible additions.
+Messages use `status`, `telemetry`, or recorder-only `recording` types. The
+TypeScript desktop adapter treats unknown fields as forward-compatible additions.
+
+## Raw record and replay
+
+The bridge can record the complete shared-memory payload before decoding and
+replay it later through the current decoder. The desktop app owns the normal
+workflow; direct bridge usage is useful for automated debugging:
+
+```sh
+apex-lmu-bridge.exe --record=C:\captures\session.apexrec --app-version=dev
+# write "stop" plus a newline to stdin to finalize
+apex-lmu-bridge.exe --replay=C:\captures\session.apexrec --replay-speed=0
+```
+
+The append-safe, checksummed and delta-compressed format is documented in
+[`docs/RECORDINGS.md`](../docs/RECORDINGS.md). A recorder is a separate bridge
+process, so capture does not interrupt the live UI. Replay temporarily replaces
+the live source and then hands control back to it.
 
 ## Bounded transport self-test
 

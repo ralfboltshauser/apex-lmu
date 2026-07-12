@@ -74,6 +74,7 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Area | Current behavior |
 | --- | --- |
 | Live session | Reads the `LMU_Data` mapping out of process; shows car/session/weather/standings before the race, then measured position, laps, speed, controls, fuel, hybrid state, tyres and brakes when player telemetry becomes available. |
+| Session recorder | One-click raw `.apexrec` capture starts before LMU, records every official shared-memory snapshot at 50 Hz, and replays through the current decoder without the game. Files remain local and are explicitly user-shared. See [recording format and workflow](docs/RECORDINGS.md). |
 | Fuel calculator | Manual timed/lap planning plus automatic clean-lap consumption capture. Excludes pit/refuel laps, retains car/track samples locally, protects timed extra-lap boundaries, and reports total fuel, starting load, stops, final stint, reserve and confidence. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
@@ -82,9 +83,8 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Setups | Imports `.svm` files only into LMU settings folders, creates durable collision backups, handles read-only files and rolls back a failed replacement. |
 | Demo | Seeded multiclass telemetry makes every workflow explorable without LMU or a network connection. |
 
-Continuous live recording, recording-to-analysis ingestion, real community
-content and freeform overlay positioning are deliberately still marked
-unavailable.
+Recording-to-analysis ingestion, real community content and freeform overlay
+positioning are deliberately still marked unavailable.
 
 ## Designed to be useful at 280 km/h
 
@@ -137,6 +137,8 @@ LMU_Data mapping ──> Go bridge.exe ──NDJSON──> Electron main/preload
                           ┌─────────────────────────┼──────────────────────┐
                           ▼                         ▼                      ▼
                     measured UI              overlay window       local engines
+
+LMU_Data mapping ──raw snapshots──> .apexrec ──current decoder──> same NDJSON path
 
 LMU DuckDB recording ──read only──> schema/lap/channel inspector
 User-selected .svm ──validate + backup + atomic replace──> LMU settings

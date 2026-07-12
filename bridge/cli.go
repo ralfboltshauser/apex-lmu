@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
 	"time"
 )
@@ -14,11 +15,15 @@ const maxSelfTestFrames = 256
 var validRunID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 type cliOptions struct {
-	hz       int
-	selfTest bool
-	frames   int
-	runID    string
-	parentID int
+	hz          int
+	selfTest    bool
+	frames      int
+	runID       string
+	parentID    int
+	recordPath  string
+	replayPath  string
+	replaySpeed float64
+	appVersion  string
 }
 
 func parseCLIOptions(arguments []string) (cliOptions, error) {
@@ -29,6 +34,10 @@ func parseCLIOptions(arguments []string) (cliOptions, error) {
 	frames := flags.Int("frames", 8, "number of telemetry frames emitted in self-test mode")
 	runID := flags.String("run-id", "bridge-self-test", "correlation identifier for self-test messages")
 	parentID := flags.Int("parent-pid", 0, "exit when this parent process is no longer running")
+	recordPath := flags.String("record", "", "write raw LMU snapshots to an Apex recording")
+	replayPath := flags.String("replay", "", "replay an Apex raw LMU recording")
+	replaySpeed := flags.Float64("replay-speed", 1, "replay speed; zero runs without timing delays")
+	appVersion := flags.String("app-version", "unknown", "Apex application version stored in recording metadata")
 	if err := flags.Parse(arguments); err != nil {
 		return cliOptions{}, err
 	}
@@ -52,7 +61,32 @@ func parseCLIOptions(arguments []string) (cliOptions, error) {
 	if *parentID < 0 {
 		return cliOptions{}, fmt.Errorf("parent-pid must be zero or a positive process identifier")
 	}
-	return cliOptions{hz: *hz, selfTest: *selfTest, frames: *frames, runID: *runID, parentID: *parentID}, nil
+	modes := 0
+	if *selfTest {
+		modes++
+	}
+	if *recordPath != "" {
+		modes++
+	}
+	if *replayPath != "" {
+		modes++
+	}
+	if modes > 1 {
+		return cliOptions{}, fmt.Errorf("self-test, record, and replay modes are mutually exclusive")
+	}
+	if *recordPath != "" && !filepath.IsAbs(*recordPath) {
+		return cliOptions{}, fmt.Errorf("record path must be absolute")
+	}
+	if *replayPath != "" && !filepath.IsAbs(*replayPath) {
+		return cliOptions{}, fmt.Errorf("replay path must be absolute")
+	}
+	if *replaySpeed < 0 || *replaySpeed > 16 {
+		return cliOptions{}, fmt.Errorf("replay-speed must be between 0 and 16")
+	}
+	if len(*appVersion) == 0 || len(*appVersion) > 64 {
+		return cliOptions{}, fmt.Errorf("app-version must be 1-64 characters")
+	}
+	return cliOptions{hz: *hz, selfTest: *selfTest, frames: *frames, runID: *runID, parentID: *parentID, recordPath: *recordPath, replayPath: *replayPath, replaySpeed: *replaySpeed, appVersion: *appVersion}, nil
 }
 
 func runSelfTest(writer io.Writer, options cliOptions) error {

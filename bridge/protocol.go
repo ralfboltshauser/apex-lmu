@@ -3,10 +3,12 @@ package main
 import "encoding/json"
 
 const (
-	protocolVersion   = 1
-	liveSource        = "lmu-shared-memory"
-	selfTestSource    = "self-test"
-	selfTestFixtureID = "bridge-contract-v1"
+	protocolVersion       = 1
+	liveSource            = "lmu-shared-memory"
+	selfTestSource        = "self-test"
+	recordingSource       = "session-recorder"
+	recordingReplaySource = "recording-replay"
+	selfTestFixtureID     = "bridge-contract-v1"
 )
 
 type message struct {
@@ -18,6 +20,8 @@ type message struct {
 	State                    string     `json:"state,omitempty"`
 	Message                  string     `json:"message,omitempty"`
 	Frames                   int        `json:"frames,omitempty"`
+	Bytes                    int64      `json:"bytes,omitempty"`
+	DurationSeconds          float64    `json:"durationSeconds,omitempty"`
 	GameVersion              int32      `json:"gameVersion,omitempty"`
 	CapturedAt               string     `json:"capturedAt,omitempty"`
 	Sequence                 uint64     `json:"sequence,omitempty"`

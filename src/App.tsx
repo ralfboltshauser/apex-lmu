@@ -337,6 +337,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    const openReplay = () => { setDemoRunning(false); setView('live') }
+    window.addEventListener('apex:open-replay', openReplay)
+    return () => window.removeEventListener('apex:open-replay', openReplay)
+  }, [])
+
   const renderView = () => {
     const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
     switch (view) {

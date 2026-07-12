@@ -5,6 +5,7 @@ import {
   Database,
   FileCode2,
   Clipboard,
+  Circle,
   Download,
   ExternalLink,
   FolderOpen,
@@ -16,8 +17,10 @@ import {
   Mail,
   Languages,
   Monitor,
+  Play,
   RefreshCw,
   ShieldCheck,
+  Square,
   WifiOff,
   X,
 } from 'lucide-react'
@@ -27,6 +30,17 @@ import { useI18n, useMessages } from '../i18n'
 import { formatMessage, settingsMessages } from '../i18n/view-resources'
 
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
+
+function recordingSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function recordingTime(seconds: number) {
+  const whole = Math.max(0, Math.floor(seconds))
+  return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`
+}
 
 type DiagnosticResult = {
   installation: boolean
@@ -63,6 +77,7 @@ export function SettingsView() {
   })
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
   const [updateState, setUpdateState] = useState<ApexUpdateState | null>(null)
+  const [recording, setRecording] = useState<ApexRecordingState>({ status: 'idle', path: null, frames: 0, bytes: 0, durationSeconds: 0, message: '' })
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
@@ -105,6 +120,12 @@ export function SettingsView() {
     if (!window.apexDesktop) return
     void window.apexDesktop.getUpdateState().then(setUpdateState)
     return window.apexDesktop.onUpdateState(setUpdateState)
+  }, [])
+
+  useEffect(() => {
+    if (!window.apexDesktop) return
+    void window.apexDesktop.getRecordingState().then(setRecording)
+    return window.apexDesktop.onRecordingState(setRecording)
   }, [])
 
   const autoDetectLmu = async () => {
@@ -179,6 +200,21 @@ export function SettingsView() {
     window.localStorage.setItem('apex:settings-section', section)
     window.scrollTo({ top: 0 })
     document.querySelector('.workspace__content')?.scrollTo({ top: 0 })
+  }
+
+  const startRecording = async () => {
+    try {
+      const result = await window.apexDesktop?.startRecording()
+      if (result && !result.ok && !result.canceled) setRecording((current) => ({ ...current, status: 'error', message: result.reason || m.data.recorder.failed }))
+    } catch (error) { setRecording((current) => ({ ...current, status: 'error', message: error instanceof Error ? error.message : m.data.recorder.failed })) }
+  }
+
+  const startReplay = async () => {
+    try {
+      const result = await window.apexDesktop?.startReplay()
+      if (result && !result.ok && !result.canceled) setRecording((current) => ({ ...current, status: 'error', message: result.reason || m.data.recorder.failed }))
+      if (result?.ok) window.dispatchEvent(new Event('apex:open-replay'))
+    } catch (error) { setRecording((current) => ({ ...current, status: 'error', message: error instanceof Error ? error.message : m.data.recorder.failed })) }
   }
 
   const ready = Boolean(environment?.platform === 'win32' && environment.bridgeAvailable && diagnostics?.installation)
@@ -288,6 +324,19 @@ export function SettingsView() {
               <div><Monitor size={18} /><span><strong>{m.data.lmu}</strong><small>{m.data.localProcess}</small></span></div><ChevronRight size={14} /><div><FileCode2 size={18} /><span><strong>{m.data.bridge}</strong><small>{m.data.localIpc}</small></span></div><ChevronRight size={14} /><div><Database size={18} /><span><strong>{m.data.yourFiles}</strong><small>{m.data.localStorage}</small></span></div>
             </div>
             <div className="privacy-facts"><span><ShieldCheck size={14} /> {m.data.noAccount}</span><span><WifiOff size={14} /> {m.data.offline}</span><span><LockKeyhole size={14} /> {m.data.noTracking}</span></div>
+          </Card>
+
+          <Card className="recording-card">
+            <CardHeader eyebrow={m.data.recorder.eyebrow} title={m.data.recorder.title} description={m.data.recorder.description} action={<Badge tone={recording.status === 'recording' ? 'accent' : recording.status === 'error' ? 'warning' : recording.status === 'replaying' ? 'positive' : 'neutral'} dot={recording.status === 'recording'}>{m.data.recorder.status[recording.status]}</Badge>} />
+            <div className="recording-stats"><span><small>{m.data.recorder.elapsed}</small><strong>{recordingTime(recording.durationSeconds)}</strong></span><span><small>{m.data.recorder.snapshots}</small><strong>{recording.frames.toLocaleString(language)}</strong></span><span><small>{m.data.recorder.size}</small><strong>{recordingSize(recording.bytes)}</strong></span></div>
+            <div className="diagnostic-actions recording-actions">
+              {!['recording', 'starting', 'stopping', 'replaying'].includes(recording.status) && <Button icon={<Circle size={13} fill="currentColor" />} onClick={() => void startRecording()} disabled={!window.apexDesktop}>{m.data.recorder.record}</Button>}
+              {['recording', 'starting', 'stopping'].includes(recording.status) && <Button variant="secondary" icon={<Square size={13} fill="currentColor" />} onClick={() => void window.apexDesktop?.stopRecording()} disabled={recording.status === 'stopping'}>{recording.status === 'stopping' ? m.data.recorder.finishing : m.data.recorder.stop}</Button>}
+              {recording.status !== 'replaying' && <Button variant="secondary" icon={<Play size={14} />} onClick={() => void startReplay()} disabled={!window.apexDesktop || ['recording', 'starting', 'stopping'].includes(recording.status)}>{m.data.recorder.replay}</Button>}
+              {recording.status === 'replaying' && <Button variant="secondary" icon={<Square size={13} />} onClick={() => void window.apexDesktop?.stopReplay()}>{m.data.recorder.stopReplay}</Button>}
+            </div>
+            <div className="recording-detail"><strong>{recording.message || m.data.recorder.ready}</strong>{recording.path && <span title={recording.path}>{recording.path}</span>}</div>
+            <div className="support-privacy"><ShieldCheck size={15} /><span><strong>{m.data.recorder.privateTitle}</strong>{m.data.recorder.privateCopy}</span></div>
           </Card>
 
           <Card id="settings-data">

@@ -181,6 +181,24 @@ ipcMain.handle('apex:export-support-bundle', async () => {
 ipcMain.handle('apex:start-telemetry', () => bridgeManager.start())
 ipcMain.handle('apex:stop-telemetry', () => bridgeManager.stop())
 ipcMain.handle('apex:run-telemetry-self-test', () => bridgeManager.runSelfTest())
+ipcMain.handle('apex:get-recording-state', () => bridgeManager.getRecordingState())
+ipcMain.handle('apex:start-recording', async () => {
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
+  const selected = await dialog.showSaveDialog({ title: 'Record an LMU session', defaultPath: `apex-lmu-session-${stamp}.apexrec`, filters: [{ name: 'Apex LMU recording', extensions: ['apexrec'] }] })
+  if (selected.canceled || !selected.filePath) return { ok: false, canceled: true }
+  const filePath = selected.filePath.toLowerCase().endsWith('.apexrec') ? selected.filePath : `${selected.filePath}.apexrec`
+  await fs.rm(filePath, { force: true })
+  const result = bridgeManager.startRecording(filePath, app.getVersion())
+  await diagnostics.record(result.ok ? 'info' : 'error', 'recording', result.ok ? 'started' : 'start-failed', result.ok ? 'Raw LMU session recording started.' : 'Raw LMU session recording could not start.', { path: filePath, reason: result.reason })
+  return result
+})
+ipcMain.handle('apex:stop-recording', () => bridgeManager.stopRecording())
+ipcMain.handle('apex:start-replay', async () => {
+  const selected = await dialog.showOpenDialog({ title: 'Replay an Apex LMU recording', properties: ['openFile'], filters: [{ name: 'Apex LMU recording', extensions: ['apexrec'] }] })
+  if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true }
+  return bridgeManager.startReplay(selected.filePaths[0])
+})
+ipcMain.handle('apex:stop-replay', () => bridgeManager.stopReplay())
 ipcMain.handle('apex:inspect-telemetry', (_event, filePath) => inspectTelemetryDatabase(filePath))
 ipcMain.handle('apex:install-setup', (_event, input) => safeInstallSetup({ ...input, backupRoot: app.getPath('userData') }))
 ipcMain.handle('apex:open-overlay', () => { createOverlayWindow(); return { ok: true } })
@@ -202,6 +220,9 @@ app.whenReady().then(() => {
     broadcast: (message) => {
       if (message.runId && (message.state === 'self-test-complete' || message.state === 'error')) selfTestWaiters.get(message.runId)?.(message)
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:telemetry-message', message)
+    },
+    broadcastRecording: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:recording-state', state)
     },
   })
   updateManager = new UpdateManager({
