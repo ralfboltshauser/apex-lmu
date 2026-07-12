@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "recording": {
+    "file": "apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.apexrec",
+    "format": "apex-lmu-raw-v1",
+    "bytes": 27407993,
+    "sha256": "de981c660456f1cf006f39f35a654ac19496d60bd43357bf203349755e3af6ff",
+    "writerVersion": "0.1.13",
+    "privacy": "private-raw-lmu-memory"
+  },
+  "expected": {
+    "statusSequence": ["replay-starting", "waiting-for-vehicle", "replay-complete"],
+    "telemetryFrames": 18039,
+    "scoringOnlyFrames": 4,
+    "firstVehicleTelemetryFrame": 5,
+    "track": "Autódromo José Carlos Pace",
+    "layout": "",
+    "car": "Lexus Custom Team 2025 #397",
+    "carClass": "GT3",
+    "normalizedClass": "LMGT3",
+    "opponents": 0,
+    "weather": {
+      "airTempC": [18, 20.1],
+      "trackTempC": [19.9, 24.2],
+      "rain": [0, 0],
+      "wetness": [0, 0]
+    },
+    "minimumControlMaximums": {
+      "throttle": 0.99,
+      "brake": 0.99,
+      "absoluteSteering": 0.8
+    },
+    "lastLapSeconds": [99.5, 99.7],
+    "minimumDistinctLastLaps": 2,
+    "pitSequence": ["pit", "driving", "pit"],
+    "fuelLiters": [48.5, 56.8],
+    "minimumFuelDecreaseFrames": 100,
+    "minimumRefuelIncreaseLiters": 7.9,
+    "minimumWheelMaximums": {
+      "pressurePsi": 25,
+      "surfaceTempC": 100,
+      "carcassTempC": 81,
+      "brakeTempC": 990,
+      "wearUsedFraction": 0.02,
+      "absoluteRotationRadSec": 200
+    },
+    "truthfulUnknowns": ["layout", "opponents"]
+  }
+}

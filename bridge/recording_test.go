@@ -104,7 +104,7 @@ func TestReplayRunsSnapshotsThroughCurrentDecoder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	if err := runReplay(&output, cliOptions{replayPath: path, replaySpeed: 0}); err != nil {
+	if err := runReplay(&output, cliOptions{replayPath: path, replaySpeed: 0, runID: "recording-test"}); err != nil {
 		t.Fatal(err)
 	}
 	var messages []message
@@ -118,5 +118,60 @@ func TestReplayRunsSnapshotsThroughCurrentDecoder(t *testing.T) {
 	}
 	if len(messages) != 3 || messages[1].Type != "telemetry" || messages[1].Player.Name != "Porsche 963" || messages[2].State != "replay-complete" {
 		t.Fatalf("replay messages: %#v", messages)
+	}
+	for _, current := range messages {
+		if current.RunID != "recording-test" {
+			t.Fatalf("uncorrelated replay message: %#v", current)
+		}
+	}
+}
+
+func TestTelemetryProtocolEncodesNoOpponentsAsArray(t *testing.T) {
+	var output bytes.Buffer
+	if err := emit(json.NewEncoder(&output), message{Type: "telemetry", Session: &session{}, Player: &vehicle{}}); err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(output.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	opponents, ok := raw["opponents"].([]any)
+	if !ok || len(opponents) != 0 {
+		t.Fatalf("opponents = %#v, want []", raw["opponents"])
+	}
+}
+
+func TestStrictReplayRejectsTruncatedTailWithoutCompletion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "truncated.apexrec")
+	writer, err := createRecording(path, recordingMetadata{Format: recordingFormat, CreatedAt: "2026-07-12T12:00:00Z", PayloadBytes: lmuSharedMemoryPayloadSize})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteSnapshot(0, makeContractFixture()); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data[:len(data)-1], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	err = runReplay(&output, cliOptions{replayPath: path, replaySpeed: 0, replayStrict: true, runID: "strict-test"})
+	if !errors.Is(err, errRecordingTruncated) {
+		t.Fatalf("error = %v", err)
+	}
+	messages := decodeMessages(t, output.Bytes())
+	if messages[len(messages)-1].State != "replay-partial" {
+		t.Fatalf("messages = %#v", messages)
+	}
+	for _, current := range messages {
+		if current.State == "replay-complete" {
+			t.Fatal("strict truncated replay emitted completion")
+		}
 	}
 }

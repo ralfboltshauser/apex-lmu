@@ -164,11 +164,29 @@ test('replay temporarily replaces live telemetry and resumes it afterwards', asy
     runtime: { platform: 'win32', fileExists: () => true, spawn: () => { const child = new FakeChild(); children.push(child); return child } },
   })
   manager.start()
-  assert.equal(manager.startReplay('C:\\captures\\practice.apexrec').ok, true)
+  const replay = manager.startReplay('C:\\captures\\practice.apexrec', { speed: 0, strict: true, runId: 'replay-test' })
+  assert.equal(replay.ok, true)
   assert.equal(children[0].killed, true)
-  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'status', state: 'replay-starting' })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'status', state: 'replay-complete' })}\n`)
   await waitForImmediate()
   assert.equal(broadcasts.at(-1).source, 'recording-replay')
   children[1].emit('exit', 0)
   assert.equal(children.length, 3, 'live bridge restarts after replay')
+})
+
+test('replay rejects stale output and exit zero without correlated completion', async () => {
+  const children = []
+  const states = []
+  const manager = new LmuBridgeManager({
+    app: { isPackaged: false }, broadcast: () => {}, broadcastRecording: (state) => states.push(state),
+    runtime: { platform: 'win32', fileExists: () => true, spawn: () => { const child = new FakeChild(); children.push(child); return child } },
+  })
+  assert.equal(manager.startReplay('C:\\capture.apexrec', { speed: 0, strict: true, runId: 'current-run' }).ok, true)
+  children[0].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'old-run', type: 'status', state: 'replay-complete' })}\n`)
+  await waitForImmediate()
+  children[0].emit('exit', 0)
+  assert.equal(states.at(-1).status, 'error')
+  assert.match(states.at(-1).message, /without correlated completion/)
 })

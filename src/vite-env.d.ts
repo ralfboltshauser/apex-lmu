@@ -67,6 +67,7 @@ interface ApexDesktopApi {
   startRecording(): Promise<{ ok: boolean; canceled?: boolean; reason?: string; path?: string }>
   stopRecording(): Promise<{ ok: boolean; reason?: string }>
   startReplay(): Promise<{ ok: boolean; canceled?: boolean; reason?: string; path?: string }>
+  startReplayForTest(): Promise<{ ok: boolean; reason?: string; path?: string; runId?: string }>
   stopReplay(): Promise<{ ok: boolean; reason?: string }>
   inspectTelemetry(filePath: string): Promise<{
     path: string

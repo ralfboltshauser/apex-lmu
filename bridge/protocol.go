@@ -27,7 +27,7 @@ type message struct {
 	Sequence                 uint64     `json:"sequence,omitempty"`
 	Session                  *session   `json:"session,omitempty"`
 	Player                   *vehicle   `json:"player,omitempty"`
-	Opponents                []opponent `json:"opponents,omitempty"`
+	Opponents                []opponent `json:"opponents"`
 	PlayerTelemetryAvailable bool       `json:"playerTelemetryAvailable"`
 }
 
@@ -118,6 +118,9 @@ func emit(encoder *json.Encoder, value message) error {
 	}
 	if value.Source == "" {
 		value.Source = liveSource
+	}
+	if value.Type == "telemetry" && value.Opponents == nil {
+		value.Opponents = []opponent{}
 	}
 	return encoder.Encode(value)
 }

@@ -10,8 +10,11 @@ const { UpdateManager } = require('./updater.cjs')
 const { buildSupportMailto } = require('./support-mail.cjs')
 const { OverlayManager } = require('./overlay-manager.cjs')
 const { WhatsNewService } = require('./whats-new.cjs')
+const { readE2EConfig } = require('./e2e-config.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
+const e2eConfig = readE2EConfig()
+if (e2eConfig) app.setPath('userData', e2eConfig.userDataPath)
 let bridgeManager
 let overlayManager
 let mainWindow
@@ -184,6 +187,7 @@ ipcMain.handle('apex:start-replay', async () => {
   if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true }
   return bridgeManager.startReplay(selected.filePaths[0])
 })
+ipcMain.handle('apex:start-e2e-replay', () => e2eConfig ? bridgeManager.startReplay(e2eConfig.replayPath, e2eConfig) : { ok: false, reason: 'e2e-disabled' })
 ipcMain.handle('apex:stop-replay', () => bridgeManager.stopReplay())
 ipcMain.handle('apex:inspect-telemetry', (_event, filePath) => inspectTelemetryDatabase(filePath))
 ipcMain.handle('apex:install-setup', (_event, input) => safeInstallSetup({ ...input, backupRoot: app.getPath('userData') }))
@@ -242,7 +246,7 @@ app.whenReady().then(async () => {
   })
   await overlayManager.initialize()
   createWindow()
-  updateManager.start()
+  if (!e2eConfig) updateManager.start()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

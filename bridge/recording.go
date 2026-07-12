@@ -299,7 +299,7 @@ func runReplay(output io.Writer, options cliOptions) error {
 	defer file.Close()
 	encoder := json.NewEncoder(output)
 	startTime, _ := time.Parse(time.RFC3339Nano, reader.Metadata.CreatedAt)
-	_ = emit(encoder, message{Source: recordingReplaySource, Type: "status", State: "replay-starting", Message: "Replaying raw LMU shared-memory recording"})
+	_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-starting", Message: "Replaying raw LMU shared-memory recording"})
 	wallStart := time.Now()
 	var sequence uint64
 	lastIssue := ""
@@ -309,7 +309,10 @@ func runReplay(output io.Writer, options cliOptions) error {
 			break
 		}
 		if errors.Is(readErr, errRecordingTruncated) {
-			_ = emit(encoder, message{Source: recordingReplaySource, Type: "status", State: "replay-partial", Message: readErr.Error()})
+			_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-partial", Message: readErr.Error()})
+			if options.replayStrict {
+				return readErr
+			}
 			break
 		}
 		if readErr != nil {
@@ -331,7 +334,7 @@ func runReplay(output io.Writer, options cliOptions) error {
 				state = "waiting-for-vehicle"
 			}
 			if state != lastIssue {
-				_ = emit(encoder, message{Source: recordingReplaySource, Type: "status", State: state, Message: decodeErr.Error()})
+				_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: state, Message: decodeErr.Error()})
 				lastIssue = state
 			}
 			continue
@@ -340,10 +343,10 @@ func runReplay(output io.Writer, options cliOptions) error {
 		sequence++
 		capturedAt := startTime.Add(record.Elapsed)
 		_ = emit(encoder, message{
-			Source: recordingReplaySource, Type: "telemetry", CapturedAt: capturedAt.Format(time.RFC3339Nano), Sequence: sequence,
+			Source: recordingReplaySource, RunID: options.runID, Type: "telemetry", CapturedAt: capturedAt.Format(time.RFC3339Nano), Sequence: sequence,
 			GameVersion: decoded.GameVersion, Session: &decoded.Session, Player: &decoded.Player, Opponents: decoded.Opponents,
 			PlayerTelemetryAvailable: decoded.PlayerTelemetryAvailable,
 		})
 	}
-	return emit(encoder, message{Source: recordingReplaySource, Type: "status", State: "replay-complete", Message: "Recording replay complete", Frames: int(sequence)})
+	return emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-complete", Message: "Recording replay complete", Frames: int(sequence)})
 }

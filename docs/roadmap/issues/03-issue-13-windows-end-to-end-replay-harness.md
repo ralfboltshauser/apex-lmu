@@ -4,7 +4,7 @@ issue: 13
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/13"
 issue_state: "open"
 labels: ["documentation", "enhancement"]
-implementation_status: "not-started; fixture PR pending"
+implementation_status: "implemented locally; Linux and Windows-binary replay pass; hosted Windows Electron E2E pending"
 plan_order: 3
 phase: 0
 workstream: "windows-end-to-end-validation"
@@ -25,6 +25,37 @@ last_verified: "2026-07-12"
 ---
 
 # Issue #13 — reusable Windows end-to-end replay harness
+
+## Implementation progress — 2026-07-12
+
+Implemented on `codex/complete-open-issues` with PR #11's original fixture commit
+merged into the branch. The fixture byte count and SHA-256 match the issue.
+
+- Added a reviewed allowlisted expectation manifest covering all 18,039 decoded
+  telemetry frames, four scoring-only frames, first vehicle frame, dry weather,
+  controls, two ~99.6-second laps, pit→driving→pit, fuel consumption/refuel,
+  tyre/wheel/brake evidence, and zero opponents.
+- Added strict correlated replay IDs across Go and Electron. Truncated strict
+  replay cannot emit completion; stale/mismatched frames and exit zero without
+  correlated start/completion cannot pass.
+- Fixed a real defect found by the fixture: Go omitted `opponents` for an empty
+  slice while the desktop adapter requires an array, causing every zero-opponent
+  replay frame to be rejected. Telemetry now always encodes `opponents: []`.
+- Added reusable manifest/hash validation and privacy-safe aggregate assertions,
+  malformed/stale/incorrect-expectation controls, validated isolated Electron
+  E2E configuration, source-desktop Playwright orchestration, and bounded
+  teardown.
+- Added the real replay and source Electron jobs to the existing Windows lane
+  without replacing its independent named-mapping/lock/liveness fixture.
+- Documented the commands, privacy boundary, fixture replacement process, and
+  what the test does and does not prove.
+
+The complete real fixture passes through the current Linux bridge and the
+compiled Windows bridge under Wine with the exact expected aggregates. Go,
+Electron service, script, TypeScript, and build checks pass locally. The GitHub
+issue stays open until the branch is published and the new source-desktop E2E
+job passes on a hosted Windows runner; Wine is not claimed as proof of Electron
+or native Win32 desktop behavior.
 
 ## Outcome
 

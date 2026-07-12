@@ -30,6 +30,7 @@ jobs:
 
   windows-bridge-self-test:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -39,6 +40,8 @@ jobs:
         with:
           go-version: '1.24.x'
           cache-dependency-path: bridge/go.mod
+      - run: npm ci
+      - run: npm run build
       - run: go build -buildvcs=false -trimpath -o bin/apex-lmu-bridge.exe .
         working-directory: bridge
       - run: go build -buildvcs=false -trimpath -o "bin/Le Mans Ultimate.exe" ./cmd/lmu-fixture
@@ -51,6 +54,10 @@ jobs:
       - run: bridge\bin\apex-lmu-bridge.exe --self-test --frames=8 --run-id=windows-ci > bridge-self-test.ndjson
         shell: cmd
       - run: node scripts/assert-bridge-self-test.cjs bridge-self-test.ndjson 8 windows-ci
+      - run: npm run test:recording-replay
+        env:
+          APEX_LMU_BRIDGE_EXE: bridge/bin/apex-lmu-bridge.exe
+      - run: npm run test:e2e:windows:replay
 
   windows-installer:
     if: github.event_name == 'workflow_dispatch'

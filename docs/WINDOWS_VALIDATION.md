@@ -75,3 +75,18 @@ Before any LMU version is declared compatible, contributors must diff the
 header shipped in `Support/SharedMemoryInterface`, capture licensed fixtures,
 run offline practice, run an EAC-protected online session without privilege,
 and complete the soak and strategy-audit gates in [ROADMAP.md](ROADMAP.md).
+
+## Automated real-recording boundary
+
+The reusable Windows replay job complements rather than replaces the separate
+named-mapping fixture above. It verifies a checked real `LMU_Data` recording
+from raw reader through the current decoder, correlated NDJSON, Electron
+orchestration, preload/IPC, desktop adapter, and visible UI without LMU,
+administrator rights, an injected DLL, or a cloud service. The source test uses
+strict accelerated replay, stage deadlines, isolated user data, safe aggregate
+assertions, and deterministic teardown.
+
+This proves that the recorded session's known facts survive the current Apex
+pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,
+multi-monitor/fullscreen behavior, a long-race soak, or any car/session absent
+from that recording. Those remain independent gates.

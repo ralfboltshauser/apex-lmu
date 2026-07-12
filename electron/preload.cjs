@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   startRecording: () => ipcRenderer.invoke('apex:start-recording'),
   stopRecording: () => ipcRenderer.invoke('apex:stop-recording'),
   startReplay: () => ipcRenderer.invoke('apex:start-replay'),
+  startReplayForTest: () => ipcRenderer.invoke('apex:start-e2e-replay'),
   stopReplay: () => ipcRenderer.invoke('apex:stop-replay'),
   inspectTelemetry: (filePath) => ipcRenderer.invoke('apex:inspect-telemetry', filePath),
   installSetup: (input) => ipcRenderer.invoke('apex:install-setup', input),

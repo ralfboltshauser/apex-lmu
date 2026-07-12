@@ -88,7 +88,7 @@ interface RawBridgeOpponent {
 
 interface RawBridgeFrame {
   protocolVersion?: number
-  source?: 'lmu-shared-memory' | 'self-test'
+  source?: 'lmu-shared-memory' | 'self-test' | 'recording-replay'
   runId?: string
   type: 'telemetry'
   capturedAt: string
