@@ -2,6 +2,42 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.0 — 2026-07-13
+
+### English — Measured tracks, durable history, and trustworthy plans
+
+Apex now reconstructs your driven route and braking from official LMU data, keeps durable lifetime distance, and builds one internally consistent fuel strategy.
+
+- **See where the car actually braked** — Official world position, game time, speed, and brake pressure reconstruct a local driven line with distance-linked brake zones in Live and Analysis.
+- **Every strategy number belongs to the selected plan** — Integer-lap candidates couple pit and refuelling time back into timed-race distance; fixed illustrative stops, traffic, tyres, drivers, weather, and Virtual Energy claims were removed.
+- **Keep durable lifetime driving distance** — A recoverable local SQLite ledger tracks only eligible live local-player driving, with idempotent checkpoints, bounded crash loss, verified backups, and replay or AI exclusion.
+- **Replay real LMU data through the Windows desktop** — The strict native harness carries all 18,039 checked frames through the current bridge, Electron, renderer, measured route, overlay, and packaged application boundaries.
+- **Edit numbers without losing the last valid result** — Localized numeric drafts accept English and German decimal input, explain invalid values, and prevent empty or malformed fields from crashing calculations.
+- **Review a trusted bilingual release history** — Structured English and German notes now drive the in-app update reveal, Settings history, generated changelog, and release publication body.
+
+**Known limitations**
+
+- **Current LMU and physical display checks still matter** — The release has strict fixtures and native package gates, but each game header update and physical multi-display or exclusive-fullscreen setup still needs its own validation.
+- **Strategy is a manual fuel-only baseline** — Live calibration, Virtual Energy, tyre, weather, driver, and traffic models remain unavailable until their exact inputs and event rules are verified.
+- **Historical DuckDB analysis is not claimed** — Current-session measured braking works, while normalized DuckDB session ingestion and setup-schema optimization require approved real fixtures before implementation.
+
+### Deutsch — Gemessene Strecken, dauerhafter Verlauf und verlässliche Pläne
+
+Apex rekonstruiert jetzt deine Fahrlinie und Bremsvorgänge aus offiziellen LMU-Daten, speichert die Gesamtfahrstrecke dauerhaft und erstellt eine in sich stimmige Kraftstoffstrategie.
+
+- **Sieh, wo das Auto tatsächlich gebremst hat** — Offizielle Weltposition, Spielzeit, Geschwindigkeit und Bremsdruck rekonstruieren lokal eine Fahrlinie mit distanzbasierten Bremszonen in Live und Analyse.
+- **Jede Strategieangabe gehört zum ausgewählten Plan** — Kandidaten mit ganzzahligen Stints berücksichtigen Boxen- und Tankzeit bei der Distanz eines Zeitrennens. Feste Beispielstopps und unbelegte Aussagen zu Verkehr, Reifen, Fahrern, Wetter und virtueller Energie wurden entfernt.
+- **Speichere deine Gesamtfahrstrecke dauerhaft** — Ein wiederherstellbares lokales SQLite-Kassenbuch erfasst nur geeignete Live-Fahrten des lokalen Spielers – mit idempotenten Checkpoints, begrenztem Verlust bei Abstürzen, geprüften Sicherungen und Ausschluss von Wiedergabe oder KI.
+- **Gib echte LMU-Daten in der Windows-Desktop-App wieder** — Die strenge native Teststrecke führt alle 18.039 geprüften Frames durch Bridge, Electron, Renderer, gemessene Strecke, Overlay und die paketierte Anwendung.
+- **Bearbeite Zahlen, ohne das letzte gültige Ergebnis zu verlieren** — Lokalisierte Zahlenentwürfe akzeptieren englische und deutsche Dezimaleingaben, erklären ungültige Werte und verhindern Abstürze durch leere oder fehlerhafte Felder.
+- **Prüfe einen vertrauenswürdigen zweisprachigen Versionsverlauf** — Strukturierte englische und deutsche Hinweise steuern jetzt die Update-Anzeige in der App, den Verlauf in den Einstellungen, das generierte Änderungsprotokoll und den Veröffentlichungstext.
+
+**Bekannte Einschränkungen**
+
+- **Aktuelles LMU und reale Bildschirme müssen weiterhin geprüft werden** — Die Version besitzt strenge Fixtures und native Paketprüfungen. Jedes neue Spiel-Header-Update sowie reale Mehrbildschirm- oder Exklusiv-Vollbild-Konfigurationen benötigen dennoch eine eigene Prüfung.
+- **Die Strategie ist eine manuelle reine Kraftstoffbasis** — Live-Kalibrierung sowie Modelle für virtuelle Energie, Reifen, Wetter, Fahrer und Verkehr bleiben nicht verfügbar, bis ihre genauen Eingaben und Eventregeln bestätigt sind.
+- **Historische DuckDB-Analyse wird nicht behauptet** — Gemessene Bremsanalyse der aktuellen Sitzung funktioniert. Normalisierte DuckDB-Sessionaufnahme und Setup-Schema-Optimierung benötigen vor der Umsetzung freigegebene reale Fixtures.
+
 ## 0.1.14 — 2026-07-12
 
 ### English — Working multi-display overlays

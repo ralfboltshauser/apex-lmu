@@ -2,6 +2,44 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.2.0",
+      "releasedAt": "2026-07-13",
+      "en": {
+        "title": "Measured tracks, durable history, and trustworthy plans",
+        "summary": "Apex now reconstructs your driven route and braking from official LMU data, keeps durable lifetime distance, and builds one internally consistent fuel strategy.",
+        "highlights": [
+          { "id": "measured-route", "title": "See where the car actually braked", "body": "Official world position, game time, speed, and brake pressure reconstruct a local driven line with distance-linked brake zones in Live and Analysis." },
+          { "id": "trustworthy-strategy", "title": "Every strategy number belongs to the selected plan", "body": "Integer-lap candidates couple pit and refuelling time back into timed-race distance; fixed illustrative stops, traffic, tyres, drivers, weather, and Virtual Energy claims were removed." },
+          { "id": "lifetime-distance", "title": "Keep durable lifetime driving distance", "body": "A recoverable local SQLite ledger tracks only eligible live local-player driving, with idempotent checkpoints, bounded crash loss, verified backups, and replay or AI exclusion." },
+          { "id": "windows-replay", "title": "Replay real LMU data through the Windows desktop", "body": "The strict native harness carries all 18,039 checked frames through the current bridge, Electron, renderer, measured route, overlay, and packaged application boundaries." },
+          { "id": "safer-inputs", "title": "Edit numbers without losing the last valid result", "body": "Localized numeric drafts accept English and German decimal input, explain invalid values, and prevent empty or malformed fields from crashing calculations." },
+          { "id": "release-history", "title": "Review a trusted bilingual release history", "body": "Structured English and German notes now drive the in-app update reveal, Settings history, generated changelog, and release publication body." }
+        ],
+        "knownLimitations": [
+          { "id": "native-hardware", "title": "Current LMU and physical display checks still matter", "body": "The release has strict fixtures and native package gates, but each game header update and physical multi-display or exclusive-fullscreen setup still needs its own validation." },
+          { "id": "manual-strategy", "title": "Strategy is a manual fuel-only baseline", "body": "Live calibration, Virtual Energy, tyre, weather, driver, and traffic models remain unavailable until their exact inputs and event rules are verified." },
+          { "id": "historical-ingestion", "title": "Historical DuckDB analysis is not claimed", "body": "Current-session measured braking works, while normalized DuckDB session ingestion and setup-schema optimization require approved real fixtures before implementation." }
+        ]
+      },
+      "de": {
+        "title": "Gemessene Strecken, dauerhafter Verlauf und verlässliche Pläne",
+        "summary": "Apex rekonstruiert jetzt deine Fahrlinie und Bremsvorgänge aus offiziellen LMU-Daten, speichert die Gesamtfahrstrecke dauerhaft und erstellt eine in sich stimmige Kraftstoffstrategie.",
+        "highlights": [
+          { "id": "measured-route", "title": "Sieh, wo das Auto tatsächlich gebremst hat", "body": "Offizielle Weltposition, Spielzeit, Geschwindigkeit und Bremsdruck rekonstruieren lokal eine Fahrlinie mit distanzbasierten Bremszonen in Live und Analyse." },
+          { "id": "trustworthy-strategy", "title": "Jede Strategieangabe gehört zum ausgewählten Plan", "body": "Kandidaten mit ganzzahligen Stints berücksichtigen Boxen- und Tankzeit bei der Distanz eines Zeitrennens. Feste Beispielstopps und unbelegte Aussagen zu Verkehr, Reifen, Fahrern, Wetter und virtueller Energie wurden entfernt." },
+          { "id": "lifetime-distance", "title": "Speichere deine Gesamtfahrstrecke dauerhaft", "body": "Ein wiederherstellbares lokales SQLite-Kassenbuch erfasst nur geeignete Live-Fahrten des lokalen Spielers – mit idempotenten Checkpoints, begrenztem Verlust bei Abstürzen, geprüften Sicherungen und Ausschluss von Wiedergabe oder KI." },
+          { "id": "windows-replay", "title": "Gib echte LMU-Daten in der Windows-Desktop-App wieder", "body": "Die strenge native Teststrecke führt alle 18.039 geprüften Frames durch Bridge, Electron, Renderer, gemessene Strecke, Overlay und die paketierte Anwendung." },
+          { "id": "safer-inputs", "title": "Bearbeite Zahlen, ohne das letzte gültige Ergebnis zu verlieren", "body": "Lokalisierte Zahlenentwürfe akzeptieren englische und deutsche Dezimaleingaben, erklären ungültige Werte und verhindern Abstürze durch leere oder fehlerhafte Felder." },
+          { "id": "release-history", "title": "Prüfe einen vertrauenswürdigen zweisprachigen Versionsverlauf", "body": "Strukturierte englische und deutsche Hinweise steuern jetzt die Update-Anzeige in der App, den Verlauf in den Einstellungen, das generierte Änderungsprotokoll und den Veröffentlichungstext." }
+        ],
+        "knownLimitations": [
+          { "id": "native-hardware", "title": "Aktuelles LMU und reale Bildschirme müssen weiterhin geprüft werden", "body": "Die Version besitzt strenge Fixtures und native Paketprüfungen. Jedes neue Spiel-Header-Update sowie reale Mehrbildschirm- oder Exklusiv-Vollbild-Konfigurationen benötigen dennoch eine eigene Prüfung." },
+          { "id": "manual-strategy", "title": "Die Strategie ist eine manuelle reine Kraftstoffbasis", "body": "Live-Kalibrierung sowie Modelle für virtuelle Energie, Reifen, Wetter, Fahrer und Verkehr bleiben nicht verfügbar, bis ihre genauen Eingaben und Eventregeln bestätigt sind." },
+          { "id": "historical-ingestion", "title": "Historische DuckDB-Analyse wird nicht behauptet", "body": "Gemessene Bremsanalyse der aktuellen Sitzung funktioniert. Normalisierte DuckDB-Sessionaufnahme und Setup-Schema-Optimierung benötigen vor der Umsetzung freigegebene reale Fixtures." }
+        ]
+      }
+    },
+    {
       "version": "0.1.14",
       "releasedAt": "2026-07-12",
       "en": {
