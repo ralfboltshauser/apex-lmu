@@ -8,6 +8,36 @@ interface ApexEnvironment {
   defaultLmuPath: string
 }
 
+type ApexOverlayWidgetId = 'relative' | 'delta' | 'inputs' | 'fuel'
+interface ApexDisplay {
+  id: string
+  label: string
+  bounds: { x: number; y: number; width: number; height: number }
+  workArea: { x: number; y: number; width: number; height: number }
+  scaleFactor: number
+  rotation: 0 | 90 | 180 | 270
+  primary: boolean
+}
+interface ApexOverlayWidgetConfig {
+  id: ApexOverlayWidgetId
+  enabled: boolean
+  bounds: { x: number; y: number; width: number; height: number }
+}
+interface ApexOverlayConfig {
+  version: 1
+  displayId: string | null
+  displayFingerprint: string | null
+  opacity: number
+  clickThrough: boolean
+  widgets: ApexOverlayWidgetConfig[]
+}
+interface ApexOverlayState {
+  status: 'closed' | 'opening' | 'ready' | 'error'
+  displayId: string | null
+  message: string
+  fallbackFrom: string | null
+}
+
 interface ApexDesktopApi {
   getEnvironment(): Promise<ApexEnvironment>
   chooseDirectory(title: string): Promise<string | null>
@@ -47,10 +77,19 @@ interface ApexDesktopApi {
     lapTimes: Array<{ timestampSeconds: number; durationSeconds: number }>
   }>
   installSetup(input: { sourcePath: string; targetDirectory: string }): Promise<{ destination: string; backupPath: string | null; bytes: number }>
-  openOverlay(): Promise<{ ok: boolean }>
+  openOverlay(): Promise<{ ok: boolean; reason?: string; state: ApexOverlayState }>
+  closeOverlay(): Promise<{ ok: boolean; state: ApexOverlayState }>
+  getDisplays(): Promise<ApexDisplay[]>
+  getOverlayState(): Promise<ApexOverlayState>
+  getOverlayConfig(): Promise<ApexOverlayConfig>
+  setOverlayConfig(patch: Partial<Pick<ApexOverlayConfig, 'displayId' | 'opacity' | 'clickThrough' | 'widgets'>>): Promise<ApexOverlayConfig>
+  overlayRendererReady(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
   onRecordingState(callback: (state: ApexRecordingState) => void): () => void
   onUpdateState(callback: (state: ApexUpdateState) => void): () => void
+  onDisplaysChanged(callback: (displays: ApexDisplay[]) => void): () => void
+  onOverlayState(callback: (state: ApexOverlayState) => void): () => void
+  onOverlayConfig(callback: (config: ApexOverlayConfig) => void): () => void
 }
 
 interface ApexUpdateState { status: 'development' | 'unsupported' | 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'; currentVersion: string; availableVersion: string | null; progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null; message: string; releaseNotes: string; releaseUrl: string; error?: { message: string; stack: string; code: string } }

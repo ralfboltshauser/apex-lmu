@@ -20,8 +20,11 @@ files and native services behind a small preload API.
 ### Electron main
 
 The main process owns file dialogs, DuckDB read-only inspection, guarded setup
-copying, bridge lifecycle and the transparent overlay window. External links
-open in the operating-system browser; renderer-created windows are denied.
+copying, bridge lifecycle and the transparent overlay window. `OverlayManager`
+owns display enumeration, validated configuration persistence, hot-plug
+fallback, renderer readiness and window lifecycle. External links open in the
+operating-system browser; renderer-created windows are denied and unexpected
+Chromium permission requests are denied by default.
 
 ### LMU bridge
 

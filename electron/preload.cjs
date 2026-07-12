@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   inspectTelemetry: (filePath) => ipcRenderer.invoke('apex:inspect-telemetry', filePath),
   installSetup: (input) => ipcRenderer.invoke('apex:install-setup', input),
   openOverlay: () => ipcRenderer.invoke('apex:open-overlay'),
+  closeOverlay: () => ipcRenderer.invoke('apex:close-overlay'),
+  getDisplays: () => ipcRenderer.invoke('apex:get-displays'),
+  getOverlayState: () => ipcRenderer.invoke('apex:get-overlay-state'),
+  getOverlayConfig: () => ipcRenderer.invoke('apex:get-overlay-config'),
+  setOverlayConfig: (patch) => ipcRenderer.invoke('apex:set-overlay-config', patch),
+  overlayRendererReady: () => ipcRenderer.invoke('apex:overlay-renderer-ready'),
   onTelemetryMessage: (callback) => {
     const listener = (_event, message) => callback(message)
     ipcRenderer.on('apex:telemetry-message', listener)
@@ -45,5 +51,20 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, state) => callback(state)
     ipcRenderer.on('apex:update-state', listener)
     return () => ipcRenderer.removeListener('apex:update-state', listener)
+  },
+  onDisplaysChanged: (callback) => {
+    const listener = (_event, displays) => callback(displays)
+    ipcRenderer.on('apex:displays-changed', listener)
+    return () => ipcRenderer.removeListener('apex:displays-changed', listener)
+  },
+  onOverlayState: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:overlay-state', listener)
+    return () => ipcRenderer.removeListener('apex:overlay-state', listener)
+  },
+  onOverlayConfig: (callback) => {
+    const listener = (_event, config) => callback(config)
+    ipcRenderer.on('apex:overlay-config', listener)
+    return () => ipcRenderer.removeListener('apex:overlay-config', listener)
   },
 })

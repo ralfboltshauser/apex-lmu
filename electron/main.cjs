@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, session, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs/promises')
 const { LmuBridgeManager } = require('./lmu-bridge.cjs')
@@ -8,10 +8,11 @@ const { DiagnosticsService, serializeError } = require('./diagnostics.cjs')
 const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
 const { UpdateManager } = require('./updater.cjs')
 const { buildSupportMailto } = require('./support-mail.cjs')
+const { OverlayManager } = require('./overlay-manager.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
-let overlayWindow
+let overlayManager
 let mainWindow
 let diagnostics
 let updateManager
@@ -39,7 +40,11 @@ function createWindow() {
 
   window.once('ready-to-show', () => window.show())
   mainWindow = window
-  window.on('closed', () => { if (mainWindow === window) mainWindow = null })
+  window.on('closed', () => {
+    if (mainWindow !== window) return
+    mainWindow = null
+    void overlayManager?.close()
+  })
   window.webContents.on('render-process-gone', (_event, details) => void diagnostics?.record('error', 'renderer', 'process-gone', 'Renderer process stopped.', details))
   window.webContents.on('did-fail-load', (_event, code, description, url) => void diagnostics?.record('error', 'renderer', 'load-failed', description, { code, url }))
 
@@ -53,29 +58,6 @@ function createWindow() {
     if (url.startsWith('https://')) shell.openExternal(url)
     return { action: 'deny' }
   })
-}
-
-function createOverlayWindow() {
-  if (overlayWindow && !overlayWindow.isDestroyed()) { overlayWindow.show(); overlayWindow.focus(); return overlayWindow }
-  overlayWindow = new BrowserWindow({
-    width: 1280,
-    height: 720,
-    minWidth: 640,
-    minHeight: 360,
-    transparent: true,
-    frame: false,
-    alwaysOnTop: true,
-    skipTaskbar: false,
-    hasShadow: false,
-    backgroundColor: '#00000000',
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-  })
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true })
-  if (isDevelopment) overlayWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}/?overlay=1`)
-  else overlayWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { query: { overlay: '1' } })
-  overlayWindow.on('closed', () => { overlayWindow = null })
-  return overlayWindow
 }
 
 ipcMain.handle('apex:get-environment', async () => {
@@ -201,7 +183,13 @@ ipcMain.handle('apex:start-replay', async () => {
 ipcMain.handle('apex:stop-replay', () => bridgeManager.stopReplay())
 ipcMain.handle('apex:inspect-telemetry', (_event, filePath) => inspectTelemetryDatabase(filePath))
 ipcMain.handle('apex:install-setup', (_event, input) => safeInstallSetup({ ...input, backupRoot: app.getPath('userData') }))
-ipcMain.handle('apex:open-overlay', () => { createOverlayWindow(); return { ok: true } })
+ipcMain.handle('apex:get-displays', () => overlayManager.getDisplays())
+ipcMain.handle('apex:get-overlay-state', () => overlayManager.getState())
+ipcMain.handle('apex:get-overlay-config', () => overlayManager.getConfig())
+ipcMain.handle('apex:set-overlay-config', (_event, patch) => overlayManager.setConfig(patch))
+ipcMain.handle('apex:open-overlay', () => overlayManager.open())
+ipcMain.handle('apex:close-overlay', () => overlayManager.close())
+ipcMain.handle('apex:overlay-renderer-ready', (event) => overlayManager.markRendererReady(event.sender.id))
 
 app.on('second-instance', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -210,7 +198,7 @@ app.on('second-instance', () => {
   mainWindow.focus()
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
   void diagnostics.record('info', 'app', 'started', 'Apex started.', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged })
@@ -232,6 +220,22 @@ app.whenReady().then(() => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:update-state', state)
     },
   })
+  session.defaultSession.setPermissionCheckHandler(() => false)
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  overlayManager = new OverlayManager({
+    app,
+    BrowserWindow,
+    screen,
+    fs,
+    diagnostics,
+    developmentUrl: isDevelopment ? process.env.VITE_DEV_SERVER_URL : '',
+    preloadPath: path.join(__dirname, 'preload.cjs'),
+    rendererPath: path.join(__dirname, '..', 'dist', 'index.html'),
+    broadcast: (channel, payload) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload)
+    },
+  })
+  await overlayManager.initialize()
   createWindow()
   updateManager.start()
   app.on('activate', () => {
@@ -244,5 +248,8 @@ process.on('unhandledRejection', (reason) => void diagnostics?.record('error', '
 
 app.on('window-all-closed', () => {
   bridgeManager?.stop()
+  void overlayManager?.shutdown()
   if (process.platform !== 'darwin') app.quit()
 })
+
+app.on('before-quit', () => void overlayManager?.shutdown())

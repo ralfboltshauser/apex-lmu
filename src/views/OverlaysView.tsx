@@ -6,7 +6,6 @@ import {
   Copy,
   Crosshair,
   Eye,
-  EyeOff,
   Flag,
   Fuel,
   Gauge,
@@ -35,6 +34,7 @@ import { useMessages } from '../i18n'
 import { formatMessage, overlaysMessages } from '../i18n/view-resources'
 
 type WidgetId = 'relative' | 'fuel' | 'delta' | 'radar' | 'inputs' | 'flags' | 'tyres'
+type SupportedWidgetId = ApexOverlayWidgetId
 
 const widgetDefinitions: Array<{ id: WidgetId; icon: typeof Gauge }> = [
   { id: 'relative', icon: Users },
@@ -49,30 +49,55 @@ const widgetDefinitions: Array<{ id: WidgetId; icon: typeof Gauge }> = [
 export function OverlaysView({ onOpenOverlay }: { onOpenOverlay?: () => void }) {
   const m = useMessages(overlaysMessages)
   const widgets = widgetDefinitions.map((widget) => ({ ...widget, ...m.widgets[widget.id] }))
-  const [enabled, setEnabled] = useState<WidgetId[]>(['relative', 'fuel', 'delta', 'radar'])
+  const [enabled, setEnabled] = useState<WidgetId[]>(['relative', 'fuel', 'delta', 'inputs'])
   const [selected, setSelected] = useState<WidgetId>('relative')
   const [previewMode, setPreviewMode] = useState<'editor' | 'clean'>('editor')
   const [opacity, setOpacity] = useState(92)
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState(false)
+  const [displays, setDisplays] = useState<ApexDisplay[]>([])
+  const [displayId, setDisplayId] = useState('')
+  const [overlayState, setOverlayState] = useState<ApexOverlayState>({ status: 'closed', displayId: null, message: '', fallbackFrom: null })
+  const [configError, setConfigError] = useState('')
   useEffect(() => {
-    try {
-      const stored = JSON.parse(window.localStorage.getItem('apex:overlay-layout') ?? 'null') as { enabled?: WidgetId[]; selected?: WidgetId; opacity?: number } | null
-      if (!stored) return
-      if (Array.isArray(stored.enabled)) setEnabled(stored.enabled.filter((id) => widgets.some((widget) => widget.id === id)))
-      if (stored.selected && widgets.some((widget) => widget.id === stored.selected)) setSelected(stored.selected)
-      if (typeof stored.opacity === 'number') setOpacity(Math.max(35, Math.min(100, stored.opacity)))
+    if (!window.apexDesktop) return
+    void Promise.all([window.apexDesktop.getDisplays(), window.apexDesktop.getOverlayConfig(), window.apexDesktop.getOverlayState()]).then(([availableDisplays, config, state]) => {
+      setDisplays(availableDisplays)
+      setDisplayId(config.displayId ?? '')
+      setEnabled(config.widgets.filter((widget) => widget.enabled).map((widget) => widget.id))
+      setOpacity(Math.round(config.opacity * 100))
+      setOverlayState(state)
       setSaved(true)
-    } catch {
-      window.localStorage.removeItem('apex:overlay-layout')
-    }
+    }).catch((error) => setConfigError(error instanceof Error ? error.message : String(error)))
+    const stopDisplays = window.apexDesktop.onDisplaysChanged(setDisplays)
+    const stopState = window.apexDesktop.onOverlayState(setOverlayState)
+    const stopConfig = window.apexDesktop.onOverlayConfig((config) => {
+      setDisplayId(config.displayId ?? '')
+      setEnabled(config.widgets.filter((widget) => widget.enabled).map((widget) => widget.id))
+      setOpacity(Math.round(config.opacity * 100))
+      setSaved(true)
+    })
+    return () => { stopDisplays(); stopState(); stopConfig() }
   }, [])
-  const toggle = (id: WidgetId) => { setEnabled((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]); setSaved(false) }
-  const reset = () => { setEnabled(['relative', 'fuel', 'delta', 'radar']); setSelected('relative'); setOpacity(92); setSaved(false) }
-  const save = () => {
-    window.localStorage.setItem('apex:overlay-layout', JSON.stringify({ enabled, selected, opacity }))
-    setSaved(true)
+  const isSupported = (id: WidgetId): id is SupportedWidgetId => ['relative', 'fuel', 'delta', 'inputs'].includes(id)
+  const persist = async (patch: Parameters<NonNullable<typeof window.apexDesktop>['setOverlayConfig']>[0]) => {
+    if (!window.apexDesktop) return
+    setSaved(false); setConfigError('')
+    try { await window.apexDesktop.setOverlayConfig(patch); setSaved(true) }
+    catch (error) { setConfigError(error instanceof Error ? error.message : String(error)) }
   }
+  const toggle = (id: WidgetId) => {
+    if (!isSupported(id)) return
+    const next = enabled.includes(id) ? enabled.filter((item) => item !== id) : [...enabled, id]
+    setEnabled(next)
+    void persist({ widgets: (['relative', 'fuel', 'delta', 'inputs'] as SupportedWidgetId[]).map((widgetId) => ({ id: widgetId, enabled: next.includes(widgetId), bounds: defaultBounds(widgetId) })) })
+  }
+  const reset = () => {
+    const next: SupportedWidgetId[] = ['relative', 'fuel', 'delta', 'inputs']
+    setEnabled(next); setSelected('relative'); setOpacity(92)
+    void persist({ opacity: 0.92, widgets: next.map((id) => ({ id, enabled: true, bounds: defaultBounds(id) })) })
+  }
+  const save = () => void persist({ opacity: opacity / 100 })
   const visibleWidgets = widgets.filter((widget) => `${widget.name} ${widget.description}`.toLowerCase().includes(query.toLowerCase()))
 
   return (
@@ -87,7 +112,7 @@ export function OverlaysView({ onOpenOverlay }: { onOpenOverlay?: () => void }) 
       <div className="overlay-toolbar">
         <div className="overlay-layout-select"><Layers3 size={15} /><span><small>{m.toolbar.layout}</small><strong>{m.toolbar.layoutName}</strong></span><ChevronDown size={14} /></div>
         <div className="overlay-toolbar__separator" />
-        <button type="button" disabled><Monitor size={15} /><span>{m.toolbar.displayUnavailable}</span></button>
+        <label className="overlay-display-select"><Monitor size={15} /><span className="sr-only">{m.toolbar.display}</span><select value={displayId} onChange={(event) => { setDisplayId(event.target.value); void persist({ displayId: event.target.value }) }} disabled={!displays.length}>{displays.length ? displays.map((display) => <option key={display.id} value={display.id}>{display.label} · {display.bounds.width}×{display.bounds.height} · {Math.round(display.scaleFactor * 100)}%{display.primary ? ` · ${m.toolbar.primary}` : ''}</option>) : <option>{m.toolbar.noDisplays}</option>}</select></label>
         <button type="button" disabled><Grid3X3 size={15} /><span>{m.toolbar.gridUnavailable}</span></button>
         <button type="button" disabled><AlignCenter size={15} /><span>{m.toolbar.snapUnavailable}</span></button>
         <div className="overlay-toolbar__spacer" />
@@ -102,9 +127,10 @@ export function OverlaysView({ onOpenOverlay }: { onOpenOverlay?: () => void }) 
             {visibleWidgets.map((widget) => {
               const Icon = widget.icon
               const isEnabled = enabled.includes(widget.id)
+              const supported = isSupported(widget.id)
               return <button key={widget.id} type="button" className={`${selected === widget.id ? 'is-selected' : ''}`} onClick={() => setSelected(widget.id)}>
-                <span className="widget-list__icon"><Icon size={16} /></span><span><strong>{widget.name}</strong><small>{widget.description}</small></span>
-                <i role="switch" aria-checked={isEnabled} tabIndex={0} className={`switch ${isEnabled ? 'is-on' : ''}`} onClick={(event) => { event.stopPropagation(); toggle(widget.id) }}><b /></i>
+                <span className="widget-list__icon"><Icon size={16} /></span><span><strong>{widget.name}</strong><small>{supported ? widget.description : m.library.unavailable}</small></span>
+                <i role="switch" aria-checked={isEnabled} aria-disabled={!supported} tabIndex={supported ? 0 : -1} className={`switch ${isEnabled ? 'is-on' : ''}`} onClick={(event) => { event.stopPropagation(); toggle(widget.id) }} onKeyDown={(event) => { if (supported && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopPropagation(); toggle(widget.id) } }}><b /></i>
               </button>
             })}
           </div>
@@ -137,14 +163,23 @@ export function OverlaysView({ onOpenOverlay }: { onOpenOverlay?: () => void }) 
 
         <Card className="widget-inspector">
           <CardHeader eyebrow={m.inspector.eyebrow} title={widgets.find((widget) => widget.id === selected)?.name ?? m.inspector.fallbackTitle} action={<button className="icon-button" type="button" aria-label={m.inspector.hideAria} onClick={() => toggle(selected)}><Trash2 size={15} /></button>} />
-          <div className="inspector-section"><strong>{m.inspector.position}</strong><div className="inspector-grid"><label><span>X</span><input value="24" readOnly /><em>{m.inspector.pixels}</em></label><label><span>Y</span><input value="394" readOnly /><em>{m.inspector.pixels}</em></label><label><span>W</span><input value="268" readOnly /><em>{m.inspector.pixels}</em></label><label><span>H</span><input value="112" readOnly /><em>{m.inspector.pixels}</em></label></div></div>
-          <div className="inspector-section"><strong>{m.inspector.appearance}</strong><label className="range-control"><span>{m.inspector.opacity} <b>{opacity}{m.inspector.percent}</b></span><input type="range" min="35" max="100" value={opacity} onChange={(event) => { setOpacity(Number(event.target.value)); setSaved(false) }} /></label><label className="field-label"><span>{m.inspector.theme}</span><button type="button" disabled>{m.inspector.graphiteOnly}</button></label><label className="field-label"><span>{m.inspector.scale}</span><button type="button" disabled>{m.inspector.scaleOnly}</button></label></div>
-          <div className="inspector-section"><strong>{m.inspector.behavior}</strong><label className="toggle-row"><span><b>{m.inspector.hidePits}</b><small>{m.inspector.hidePitsHint}</small></span><i className="switch is-on"><b /></i></label><label className="toggle-row"><span><b>{m.inspector.classFilter}</b><small>{m.inspector.classFilterHint}</small></span><i className="switch is-on"><b /></i></label></div>
+          <div className="inspector-section"><strong>{m.inspector.position}</strong><p className="overlay-unavailable-copy">{m.inspector.positionUnavailable}</p></div>
+          <div className="inspector-section"><strong>{m.inspector.appearance}</strong><label className="range-control"><span>{m.inspector.opacity} <b>{opacity}{m.inspector.percent}</b></span><input type="range" min="35" max="100" value={opacity} onChange={(event) => { const value = Number(event.target.value); setOpacity(value); void persist({ opacity: value / 100 }) }} /></label><label className="field-label"><span>{m.inspector.theme}</span><button type="button" disabled>{m.inspector.graphiteOnly}</button></label><label className="field-label"><span>{m.inspector.scale}</span><button type="button" disabled>{m.inspector.scaleOnly}</button></label></div>
+          <div className="inspector-section"><strong>{m.inspector.behavior}</strong><p className="overlay-unavailable-copy">{m.inspector.behaviorUnavailable}</p></div>
           <div className="inspector-actions"><Button variant="secondary" size="sm" icon={<Copy size={13} />} disabled>{m.inspector.duplicateUnavailable}</Button><Button variant="quiet" size="sm" icon={<Settings2 size={13} />} disabled>{m.inspector.advancedUnavailable}</Button></div>
         </Card>
       </div>
 
-      <div className="overlay-footer"><div><span className={`status-dot ${window.apexDesktop ? 'status-dot--positive' : ''}`} /><span><strong>{window.apexDesktop ? m.footer.available : m.footer.required}</strong>{m.footer.description}</span></div><Button variant="secondary" icon={<Eye size={15} />} onClick={onOpenOverlay} disabled={!window.apexDesktop}>{m.footer.open}</Button></div>
+      <div className="overlay-guidance"><Monitor size={16} /><span><strong>{m.guidance.title}</strong>{m.guidance.copy}</span></div>
+      {configError && <div className="data-provenance-banner is-error"><Badge tone="critical">{m.footer.error}</Badge><span>{configError}</span></div>}
+      <div className="overlay-footer"><div><span className={`status-dot ${overlayState.status === 'ready' ? 'status-dot--positive' : ''}`} /><span><strong>{window.apexDesktop ? m.footer.state[overlayState.status] : m.footer.required}</strong>{overlayState.message || m.footer.description}</span></div><div className="overlay-footer__actions">{overlayState.status === 'ready' && <Button variant="quiet" onClick={() => void window.apexDesktop?.closeOverlay()}>{m.footer.close}</Button>}<Button variant="secondary" icon={<Eye size={15} />} onClick={onOpenOverlay} disabled={!window.apexDesktop || !displays.length || overlayState.status === 'opening'}>{overlayState.status === 'opening' ? m.footer.opening : m.footer.open}</Button></div></div>
     </div>
   )
+}
+
+function defaultBounds(id: SupportedWidgetId) {
+  if (id === 'relative') return { x: 0.014, y: 0.025, width: 0.168, height: 0.23 }
+  if (id === 'delta') return { x: 0.436, y: 0.025, width: 0.128, height: 0.105 }
+  if (id === 'inputs') return { x: 0.826, y: 0.855, width: 0.16, height: 0.12 }
+  return { x: 0.826, y: 0.025, width: 0.16, height: 0.13 }
 }
