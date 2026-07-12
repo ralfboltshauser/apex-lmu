@@ -102,4 +102,23 @@ describe('desktop LMU bridge mapping', () => {
       window.apexDesktop = originalDesktop
     }
   })
+
+  it('preserves the bridge waiting reason for the live-session UI', async () => {
+    const originalDesktop = window.apexDesktop
+    let bridgeListener: ((message: unknown) => void) | undefined
+    window.apexDesktop = {
+      onTelemetryMessage: (listener: (message: unknown) => void) => { bridgeListener = listener; return () => {} },
+      startTelemetry: vi.fn().mockResolvedValue({ ok: true }),
+      stopTelemetry: vi.fn().mockResolvedValue({ ok: true }),
+    } as unknown as ApexDesktopApi
+    const adapter = new DesktopTelemetryAdapter()
+    try {
+      await adapter.connect()
+      bridgeListener?.({ source: 'lmu-shared-memory', type: 'status', state: 'mapping-open', message: 'LMU shared memory opened; waiting for a drivable car' })
+      expect(adapter.getStatus()).toMatchObject({ state: 'connecting', detail: 'LMU shared memory opened; waiting for a drivable car', error: null })
+    } finally {
+      await adapter.disconnect()
+      window.apexDesktop = originalDesktop
+    }
+  })
 })

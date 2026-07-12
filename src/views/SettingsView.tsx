@@ -22,6 +22,8 @@ import {
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, CardHeader } from '../components/ui'
 
+const LMU_PATH_KEY = 'apex:lmu-installation-path'
+
 type DiagnosticResult = {
   installation: boolean
   executable: boolean
@@ -41,7 +43,7 @@ function StatusIcon({ value }: { value: boolean | null }) {
 
 export function SettingsView() {
   const [environment, setEnvironment] = useState<ApexEnvironment | null>(null)
-  const [lmuPath, setLmuPath] = useState('')
+  const [lmuPath, setLmuPath] = useState(() => window.localStorage.getItem(LMU_PATH_KEY) || '')
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult | null>(null)
   const [diagnosing, setDiagnosing] = useState(false)
   const [report, setReport] = useState<ApexDiagnosticReport | null>(null)
@@ -70,10 +72,13 @@ export function SettingsView() {
   useEffect(() => {
     void window.apexDesktop?.getEnvironment().then((data) => {
       setEnvironment(data)
-      if (data.defaultLmuPath) {
-        setLmuPath(data.defaultLmuPath)
-        void inspectPath(data.defaultLmuPath)
-      }
+      const savedPath = window.localStorage.getItem(LMU_PATH_KEY)
+      if (savedPath) { setLmuPath(savedPath); void inspectPath(savedPath); return }
+      void window.apexDesktop?.discoverLmu().then((result) => {
+        setDiscovery(result)
+        if (result.found) { window.localStorage.setItem(LMU_PATH_KEY, result.found.candidate); setLmuPath(result.found.candidate); void inspectPath(result.found.candidate) }
+        else if (data.defaultLmuPath) { setLmuPath(data.defaultLmuPath); void inspectPath(data.defaultLmuPath) }
+      })
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
   }, [])
@@ -99,7 +104,7 @@ export function SettingsView() {
     try {
       const result = await window.apexDesktop.discoverLmu()
       setDiscovery(result)
-      if (result.found) { setLmuPath(result.found.candidate); await inspectPath(result.found.candidate) }
+      if (result.found) { window.localStorage.setItem(LMU_PATH_KEY, result.found.candidate); setLmuPath(result.found.candidate); await inspectPath(result.found.candidate) }
     } finally { setDiagnosing(false) }
   }
 
@@ -108,6 +113,8 @@ export function SettingsView() {
     if (!selected) return
     setLmuPath(selected)
     await inspectPath(selected)
+    const inspection = await window.apexDesktop?.inspectLmuPath(selected)
+    if (inspection?.status === 'found') window.localStorage.setItem(LMU_PATH_KEY, inspection.candidate)
   }
 
   const runDiagnostics = async () => {

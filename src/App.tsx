@@ -23,6 +23,7 @@ import { SettingsView } from './views/SettingsView'
 import { DesktopTelemetryAdapter, MockTelemetryAdapter, type TelemetryFrame } from './core'
 
 type Toast = { id: number; title: string; body: string }
+const LMU_PATH_KEY = 'apex:lmu-installation-path'
 
 function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: () => void }) {
   const [step, setStep] = useState(0)
@@ -47,6 +48,7 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
       setFound(Boolean(result.found))
       setDetectedPath(result.found?.candidate || '')
       setManualPath(result.found?.candidate || manualPath)
+      if (result.found) window.localStorage.setItem(LMU_PATH_KEY, result.found.candidate)
       setDetectionMessage(result.found ? `Found via ${result.found.source.replaceAll('-', ' ')}` : `Checked ${result.attempts.length} candidate location${result.attempts.length === 1 ? '' : 's'}; LMU was not confirmed`)
     } finally {
       setChecking(false)
@@ -67,6 +69,7 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
       const attempt = await window.apexDesktop.inspectLmuPath(value)
       setFound(attempt.status === 'found')
       setDetectedPath(attempt.status === 'found' ? attempt.candidate : '')
+      if (attempt.status === 'found') window.localStorage.setItem(LMU_PATH_KEY, attempt.candidate)
       setDetectionMessage(attempt.status === 'found' ? 'LMU installation confirmed manually' : attempt.status === 'invalid' ? 'Folder exists, but no LMU executable was found' : 'That folder does not exist or is not accessible')
       setDiscovery((current) => ({ found: attempt.status === 'found' ? attempt : null, attempts: [...(current?.attempts || []), attempt], trace: [...(current?.trace || []), `Manual inspection: ${attempt.candidate} → ${attempt.status}.`], expectations: current?.expectations || { appId: '2399420', manifest: 'steamapps\\appmanifest_2399420.acf', installFolder: 'steamapps\\common\\<installdir>', executables: ['Le Mans Ultimate.exe', 'LMU.exe'] } }))
     } finally { setChecking(false) }
@@ -147,6 +150,7 @@ export default function App() {
   const viewRef = useRef<ViewId>('home')
   const lastUpdateNotice = useRef('')
   const [realConnected, setRealConnected] = useState(false)
+  const [liveConnectionMessage, setLiveConnectionMessage] = useState('Starting the local LMU bridge…')
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
   demoRunningRef.current = demoRunning
   viewRef.current = view
@@ -259,7 +263,10 @@ export default function App() {
       unsubscribeFrame = adapter.subscribe((frame) => {
         if (!demoRunningRef.current && (viewRef.current === 'home' || viewRef.current === 'live')) { setLiveFrame(frame); setTick(frame.sequence) }
       })
-      unsubscribeStatus = adapter.subscribeStatus((status) => setRealConnected(status.state === 'connected' && status.framesReceived > 0))
+      unsubscribeStatus = adapter.subscribeStatus((status) => {
+        setRealConnected(status.state === 'connected' && status.framesReceived > 0)
+        setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? 'Waiting for Le Mans Ultimate…' : 'LMU is offline.'))
+      })
       void adapter.connect()
     })
     return () => { cancelled = true; unsubscribeFrame(); unsubscribeStatus(); void adapter.disconnect() }
@@ -280,7 +287,7 @@ export default function App() {
   const renderView = () => {
     const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
     switch (view) {
-      case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} onStartDemo={() => setDemoRunning(true)} />
+      case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
       case 'analyze': return <AnalyzeView />
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />

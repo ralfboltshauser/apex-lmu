@@ -290,7 +290,7 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
   async connect(): Promise<void> {
     if (!window.apexDesktop) throw new Error('The LMU bridge requires the desktop application.')
     if (this.status.state === 'connected' || this.status.state === 'connecting') return
-    this.setStatus({ state: 'connecting', error: null })
+    this.setStatus({ state: 'connecting', error: null, detail: 'Starting the local LMU bridge…' })
     this.unsubscribeDesktop = window.apexDesktop.onTelemetryMessage((message) => this.handleMessage(message))
     const result = await window.apexDesktop.startTelemetry()
     if (!result.ok && result.reason !== 'unsupported-platform') this.setStatus({ state: 'error', error: result.reason ?? 'Unable to start LMU bridge' })
@@ -324,13 +324,13 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
     }
     if (isRecord(message) && message.type === 'status') {
       const status = message as unknown as RawBridgeStatus
-      if (status.state === 'connected') this.setStatus({ state: 'connected', connectedAt: this.status.connectedAt ?? new Date().toISOString(), error: null })
+      if (status.state === 'connected') this.setStatus({ state: 'connected', connectedAt: this.status.connectedAt ?? new Date().toISOString(), error: null, detail: status.message ?? 'LMU shared memory connected.' })
       else if (status.state === 'error' || status.state === 'missing') {
         this.latestFrame = null
-        this.setStatus({ state: 'error', connectedAt: null, lastFrameAt: null, error: status.message ?? status.state })
+        this.setStatus({ state: 'error', connectedAt: null, lastFrameAt: null, error: status.message ?? status.state, detail: status.message ?? status.state })
       } else {
         this.latestFrame = null
-        this.setStatus({ state: 'connecting', connectedAt: null, lastFrameAt: null, error: null })
+        this.setStatus({ state: 'connecting', connectedAt: null, lastFrameAt: null, error: null, detail: status.message ?? status.state })
       }
     }
   }

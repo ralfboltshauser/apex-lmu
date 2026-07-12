@@ -141,7 +141,7 @@ function PedalBars({ throttle, brake }: { throttle: number; brake: number }) {
   )
 }
 
-export function LiveView({ source, tick, frame, onStartDemo }: { source: LiveSource; tick: number; frame?: TelemetryFrame | null; onStartDemo: () => void }) {
+export function LiveView({ source, tick, frame, connectionMessage, onStartDemo, onTroubleshoot }: { source: LiveSource; tick: number; frame?: TelemetryFrame | null; connectionMessage?: string; onStartDemo: () => void; onTroubleshoot: () => void }) {
   const [tableMode, setTableMode] = useState<'overall' | 'class'>('overall')
   const [paused, setPaused] = useState(false)
   const phase = tick / 7
@@ -156,10 +156,11 @@ export function LiveView({ source, tick, frame, onStartDemo }: { source: LiveSou
     return (
       <div className="view live-empty-view">
         <div className="live-empty-view__visual"><Radio size={40} /><span /><span /><span /></div>
-        <Badge tone="neutral" dot>LMU offline</Badge>
+        <Badge tone="neutral" dot>Bridge active · waiting</Badge>
         <h1>Your pit wall wakes up with the car.</h1>
-        <p>Start Le Mans Ultimate and enter any session. Apex will detect the car, track, and conditions automatically.</p>
-        <Button icon={<Play size={16} />} onClick={onStartDemo}>Explore with demo telemetry</Button>
+        <p>{connectionMessage || 'Start Le Mans Ultimate and enter a drivable session. Apex will detect the car, track, and conditions automatically.'}</p>
+        <div className="live-empty-view__actions"><Button icon={<Play size={16} />} onClick={onStartDemo}>Explore with demo telemetry</Button><Button variant="secondary" icon={<AlertTriangle size={15} />} onClick={onTroubleshoot}>Why isn’t it connecting?</Button></div>
+        <div className="live-waiting-steps"><strong>Connection checklist</strong><span><i>1</i> Keep Apex open</span><span><i>2</i> Start LMU</span><span><i>3</i> Enter the car in a drivable session</span></div>
         <div className="live-empty-view__checks">
           <span><ShieldCheck size={15} /> Official shared-memory adapter</span>
           <span><ShieldCheck size={15} /> No in-game DLL required</span>

@@ -21,6 +21,8 @@ export interface TelemetryAdapterStatus {
   readonly lastFrameAt: string | null
   readonly framesReceived: number
   readonly error: string | null
+  /** Human-readable transport state, e.g. waiting for LMU shared memory. */
+  readonly detail?: string
 }
 
 export type TelemetryFrameListener = (frame: TelemetryFrame) => void
