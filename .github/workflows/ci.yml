@@ -64,12 +64,12 @@ jobs:
           go-version: '1.24.x'
           cache-dependency-path: bridge/go.mod
       - run: npm ci
-      - run: npm run build:desktop:win
+      - run: npm run build:desktop:win:all
       - uses: actions/upload-artifact@v4
         with:
           name: apex-for-lmu-windows
           path: |
-            release/*.exe
-            release/*.yml
-            release/*.blockmap
+            release/Apex-for-LMU-Setup-*.exe
+            release/Apex-for-LMU-*-win.zip
+            release/SHA256SUMS.txt
           if-no-files-found: error

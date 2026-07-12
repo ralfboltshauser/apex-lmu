@@ -30,12 +30,12 @@
 Windows 11 x64 is the currently tested target. Neither build requires
 administrator privileges.
 
-1. Download the **[v0.1.0 Windows installer](https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex%20for%20LMU%20Setup%200.1.0.exe)**.
+1. Download the **[v0.1.0 Windows installer](https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex-for-LMU-Setup-0.1.0.exe)**.
 2. Run it and open **Apex for LMU**.
 3. Start LMU and enter a session. Apex waits locally for LMU's shared-memory
    interface; it does not inject anything into the game.
 
-A **[portable ZIP](https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex%20for%20LMU-0.1.0-win.zip)** and
+A **[portable ZIP](https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/Apex-for-LMU-0.1.0-win.zip)** and
 **[SHA-256 checksums](https://github.com/ralfboltshauser/apex-lmu/releases/download/v0.1.0/SHA256SUMS.txt)**
 are attached to every release.
 

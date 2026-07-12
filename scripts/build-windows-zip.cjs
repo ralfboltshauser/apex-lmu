@@ -1,13 +1,16 @@
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
 
 const root = path.join(__dirname, '..')
+const releaseRoot = path.join(root, 'release')
 const duckdbRoot = path.join(root, 'node_modules', '@duckdb')
 const parkingRoot = path.join(root, '.packaging-cache')
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const windowsBinding = path.join(duckdbRoot, 'node-bindings-win32-x64')
+const { version } = require(path.join(root, 'package.json'))
 const targets = process.argv.slice(2)
 const requestedTargets = targets.length > 0 ? targets : ['zip']
 for (const target of requestedTargets) {
@@ -62,6 +65,36 @@ function restoreBindings(parked) {
   if (fs.existsSync(parkingRoot) && fs.readdirSync(parkingRoot).length === 0) fs.rmdirSync(parkingRoot)
 }
 
+const publicArtifacts = {
+  nsis: {
+    source: `Apex for LMU Setup ${version}.exe`,
+    destination: `Apex-for-LMU-Setup-${version}.exe`,
+  },
+  zip: {
+    source: `Apex for LMU-${version}-win.zip`,
+    destination: `Apex-for-LMU-${version}-win.zip`,
+  },
+}
+
+function stagePublicArtifacts() {
+  for (const target of requestedTargets) {
+    const artifact = publicArtifacts[target]
+    const source = path.join(releaseRoot, artifact.source)
+    const destination = path.join(releaseRoot, artifact.destination)
+    if (!fs.existsSync(source)) throw new Error(`Expected ${target} artifact was not produced: ${source}`)
+    fs.copyFileSync(source, destination)
+  }
+
+  const available = requestedTargets
+    .map((target) => publicArtifacts[target].destination)
+    .sort()
+  const checksums = available.map((filename) => {
+    const contents = fs.readFileSync(path.join(releaseRoot, filename))
+    return `${crypto.createHash('sha256').update(contents).digest('hex')}  ${filename}`
+  })
+  fs.writeFileSync(path.join(releaseRoot, 'SHA256SUMS.txt'), `${checksums.join('\n')}\n`)
+}
+
 ensureWindowsBinding()
 run(npm, ['run', 'build:bridge:win'])
 run(npm, ['run', 'build'])
@@ -69,6 +102,7 @@ run(npm, ['run', 'build'])
 const parked = parkNonWindowsBindings()
 try {
   run(npx, ['electron-builder', '--win', ...requestedTargets])
+  stagePublicArtifacts()
 } finally {
   restoreBindings(parked)
 }
