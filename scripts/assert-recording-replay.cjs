@@ -19,7 +19,7 @@ async function sha256(file) {
 }
 
 function emptySummary() {
-  return { statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: new Set(), layouts: new Set(), cars: new Set(), classes: new Set(), opponentMaximum: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], controlMaximums: { throttle: 0, brake: 0, absoluteSteering: 0 }, fuel: [Infinity, -Infinity], decreaseFrames: 0, maximumIncrease: 0, lastLaps: new Set(), pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null }
+  return { statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: new Set(), layouts: new Set(), cars: new Set(), classes: new Set(), controlOwners: new Set(), controlOwnerFrames: {}, controlOwnerTransitions: [], previousControlOwner: null, opponentMaximum: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], controlMaximums: { throttle: 0, brake: 0, absoluteSteering: 0 }, fuel: [Infinity, -Infinity], decreaseFrames: 0, maximumIncrease: 0, lastLaps: new Set(), pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null }
 }
 
 function range(summary, key, value) { if (Number.isFinite(value)) { summary[key][0] = Math.min(summary[key][0], value); summary[key][1] = Math.max(summary[key][1], value) } }
@@ -41,6 +41,13 @@ function accept(summary, message, runId) {
   summary.layouts.add(message.session?.layout ?? '')
   summary.cars.add(message.player?.name ?? '')
   summary.classes.add(message.player?.class ?? '')
+  const controlOwner = message.player?.controlOwner ?? 'unknown'
+  summary.controlOwners.add(controlOwner)
+  summary.controlOwnerFrames[controlOwner] = (summary.controlOwnerFrames[controlOwner] || 0) + 1
+  if (summary.previousControlOwner !== controlOwner) {
+    summary.controlOwnerTransitions.push({ sequence: message.sequence, owner: controlOwner, playerTelemetryAvailable: message.playerTelemetryAvailable })
+    summary.previousControlOwner = controlOwner
+  }
   range(summary, 'air', message.session?.airTempC); range(summary, 'trackTemp', message.session?.trackTempC); range(summary, 'rain', message.session?.rain); range(summary, 'wetness', message.session?.wetness)
   if (message.playerTelemetryAvailable === false) return
   summary.controlMaximums.throttle = Math.max(summary.controlMaximums.throttle, Math.abs(message.player?.throttle ?? 0))
@@ -81,6 +88,9 @@ function assertSummary(summary, expected) {
   exact([...summary.layouts], [expected.layout], 'layout')
   exact([...summary.cars], [expected.car], 'car')
   exact([...summary.classes], [expected.carClass], 'car class')
+  exact([...summary.controlOwners], expected.controlOwners, 'control owners')
+  exact(summary.controlOwnerFrames, expected.controlOwnerFrames, 'control owner frame counts')
+  exact(summary.controlOwnerTransitions, expected.controlOwnerTransitions, 'control owner transitions')
   exact(summary.opponentMaximum, expected.opponents, 'opponent count')
   between(summary.air[0], expected.weather.airTempC, 'minimum air temperature'); between(summary.air[1], expected.weather.airTempC, 'maximum air temperature')
   between(summary.trackTemp[0], expected.weather.trackTempC, 'minimum track temperature'); between(summary.trackTemp[1], expected.weather.trackTempC, 'maximum track temperature')

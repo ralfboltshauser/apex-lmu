@@ -19,9 +19,11 @@ blocks: [4]
 soft_dependencies_for: [6, 8, 3]
 parallel_with: [7, "#3 research and decomposition", "#6 schema design"]
 source_created_at: "2026-07-12T20:05:04Z"
-source_updated_at: "2026-07-12T20:05:04Z"
+source_updated_at: "2026-07-12T21:58:12Z"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+implementation_branch: "codex/complete-open-issues"
+implementation_commit: "dbecf80"
+last_verified: "2026-07-13"
 ---
 
 # Issue #13 — reusable Windows end-to-end replay harness
@@ -33,8 +35,9 @@ merged into the branch. The fixture byte count and SHA-256 match the issue.
 
 - Added a reviewed allowlisted expectation manifest covering all 18,039 decoded
   telemetry frames, four scoring-only frames, first vehicle frame, dry weather,
-  controls, two ~99.6-second laps, pit→driving→pit, fuel consumption/refuel,
-  tyre/wheel/brake evidence, and zero opponents.
+  controls, the measured AI→local-player→AI ownership transitions, two
+  ~99.6-second laps, pit→driving→pit, fuel consumption/refuel, tyre/wheel/brake
+  evidence, and zero opponents.
 - Added strict correlated replay IDs across Go and Electron. Truncated strict
   replay cannot emit completion; stale/mismatched frames and exit zero without
   correlated start/completion cannot pass.

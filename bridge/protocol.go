@@ -67,6 +67,7 @@ type vehicle struct {
 	Driver              string   `json:"driver"`
 	Name                string   `json:"name"`
 	Class               string   `json:"class"`
+	ControlOwner        string   `json:"controlOwner"`
 	Position            uint8    `json:"position"`
 	Lap                 int32    `json:"lap"`
 	Sector              int32    `json:"sector"`

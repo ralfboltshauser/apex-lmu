@@ -42,6 +42,7 @@ jobs:
           cache-dependency-path: bridge/go.mod
       - run: npm ci
       - run: npm run build
+      - run: npm run test:electron:sqlite
       - run: go build -buildvcs=false -trimpath -o bin/apex-lmu-bridge.exe .
         working-directory: bridge
       - run: go build -buildvcs=false -trimpath -o "bin/Le Mans Ultimate.exe" ./cmd/lmu-fixture

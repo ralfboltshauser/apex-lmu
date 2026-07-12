@@ -3,7 +3,7 @@ title: "Durable lifetime driving statistics"
 issue: 6
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/6"
 issue_state: "open"
-implementation_status: "not-started"
+implementation_status: "implemented locally; native packaged-Windows upgrade and lifecycle acceptance pending"
 plan_order: 4
 phase: 1
 workstream: "local-data-platform"
@@ -18,15 +18,47 @@ blocks: [4, 3]
 parallel_with: [13, 8, "#4 SDK feasibility spike"]
 source_updated_at: "2026-07-12T12:33:13Z"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+implementation_branch: "codex/complete-open-issues"
+last_verified: "2026-07-13"
 ---
 
 # Issue #6 — durable lifetime driving statistics
 
+## Implementation progress — 2026-07-13
+
+Implemented locally on `codex/complete-open-issues`:
+
+- decoded the SDK's signed `VehicleScoringInfoV01::mControl` byte at packed
+  offset 197 and mapped every documented value, while retaining unknown as
+  ineligible;
+- assigned every live bridge process a UUID and admitted only correlated live
+  official shared-memory frames with local-player control;
+- added one Electron-main `node:sqlite` owner with an immutable millimetre
+  ledger, a 250 ms durable crash accumulator, compact 60-second audit chunks,
+  deterministic run/chunk identities, durable rounding carry, strict
+  source/session/car/control/gap boundaries, and narrow read/backup IPC;
+- added WAL + `synchronous=FULL`, a 250 ms/12-interval commit bound, clean and
+  updater-grade flushes, fail-closed storage errors, migration checksums,
+  transactional rollback, pre-migration SQLite snapshots with SHA-256
+  manifests, and exact preservation/refusal of corrupt or future schemas;
+- added bilingual Settings totals, per-model sessions, tracked-since, coverage,
+  database health/path, recovery states, and verified backup evidence;
+- made raw replay explicitly prove it leaves a fresh lifetime ledger at zero;
+- added focused database, bridge, updater, UI, Electron-runtime and soak tests.
+
+Local evidence is green for 16 database fault/accuracy tests, all 51 Electron
+service tests, the exact 1 km Electron runtime restart/backup smoke, and a
+two-hour 360,001-frame soak that retained exactly 200 km in 120 immutable chunks
+and a 135,168-byte database. The issue remains open until the branch runs
+natively on hosted Windows and a seeded prior package survives upgrade, forced
+termination, and packaged
+main-plus-overlay lifecycle validation. Wine or host-Node results are not being
+claimed as that final evidence.
+
 ## Outcome
 
 Apex records locally tracked physical distance driven by the local player,
-groups it by stable car model, and shows total/per-car statistics with a clear
+groups it by stable raw LMU vehicle identity, and shows total/per-car statistics with a clear
 “tracked since” date and data-coverage status. Exactly one main-process owner
 ingests live frames. Committed history survives restart, crash recovery,
 installer/portable updates, and every schema migration. Updates never replace a
@@ -48,10 +80,11 @@ turns it into testable guarantees:
   and document the final bound before release.
 - **Recovery guarantee:** corrupt/future schemas are opened read-only or refused
   with recovery instructions, never reset.
-- **Auditability:** totals are derived from immutable chunks plus explicit signed
-  corrections, not one mutable lifetime number.
+- **Auditability:** totals are derived from a database-guarded monotonic crash
+  accumulator, immutable chunks, and explicit signed corrections—not one
+  mutable lifetime number.
 
-## Current implementation truth
+## Baseline implementation truth at `9660be5`
 
 Apex has useful scaffolding but no production session persistence:
 
@@ -87,7 +120,7 @@ ledger and must not replace, rewrite, or upload recordings.
 Display this definition in product/help copy:
 
 > Physical distance locally tracked while the local player controlled a car,
-> grouped by LMU car model, since Apex enabled durable tracking.
+> grouped by LMU vehicle name and class, since Apex enabled durable tracking.
 
 Accept an interval only when:
 
@@ -154,21 +187,21 @@ Add:
 - uniqueness constraints that make a retried chunk idempotent.
 
 The shared mapping does not currently expose a proven globally unique session
-ID. Generate a local session UUID when the state machine observes a new session
-boundary and preserve the evidence used to create it.
+ID. Generate a deterministic local session key from the source-run ID and the
+observed boundary sequence, and preserve that evidence.
 
-## Car-model identity
+## Vehicle identity
 
-Default grouping should be model-level, not participant slot, driver, team, car
-number, or livery:
+Default grouping must not use the transient participant slot or driver:
 
 ```text
 identity-v1 | normalized vehicle class | normalized raw LMU vehicle name
 ```
 
-Store the raw name/class alongside the normalized key. If a game update renames
-a model, create a new identity by default and preserve an alias table for an
-explicit future merge. A false split is visible and recoverable; silently
+Store the raw name/class alongside the normalized key. LMU can include team,
+number, year, or livery in the vehicle name. Do not heuristically strip those
+tokens: create separate identities by default and preserve an alias table for
+an explicit future merge. A false split is visible and recoverable; silently
 merging two distinct cars corrupts history.
 
 Do not derive manufacturer/model truth by blindly taking the first word of a
@@ -195,14 +228,15 @@ Recommended tables:
 | --- | --- |
 | `schema_migrations` | Version, name, checksum, source/target app version, applied time |
 | `app_metadata` | Installation UUID, schema version, tracking start, algorithm version |
-| `vehicle_models` | Immutable UUID, normalized source key, raw/display metadata, first/last seen |
+| `vehicle_models` | Deterministic ID, normalized source key, raw/display metadata, first/last seen |
 | `vehicle_aliases` | Non-destructive mapping of renamed identities |
-| `drive_runs` | Source run, local session UUID, LMU/game version, timestamps, final state |
+| `drive_runs` | Source run, deterministic local session key, LMU/game version, timestamps, final state |
 | `distance_chunks` | Immutable vehicle/run/sequence range, integer mm, counts, algorithm, unique key |
-| `live_accumulator` | Small crash-recovery checkpoint finalized at boundaries |
+| `distance_accumulators` | Small crash-recovery checkpoint sealed at 60 seconds and boundaries |
 | `distance_corrections` | Append-only signed corrections with reason and timestamp |
 
-Query totals from chunks plus corrections. High-rate raw telemetry remains in
+Query totals from durable accumulators, chunks, and corrections. High-rate raw
+telemetry remains in
 `.apexrec`/session storage; the odometer commits small batches at the validated
 crash-RPO cadence.
 
@@ -273,7 +307,7 @@ manual installer upgrades must exercise the same next-start migration path.
   the installed official header.
 - Carry source/time/control through `bridge/protocol.go` and renderer types as
   optional additive data with version compatibility.
-- Replace transient participant-slot grouping with canonical model identity.
+- Replace transient participant-slot grouping with class + raw-name identity.
 
 ### 4. Odometer and exactly-once ledger — 4–6 days
 

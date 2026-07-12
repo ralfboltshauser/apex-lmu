@@ -49,15 +49,16 @@ class LmuBridgeManager {
       return { ok: false, reason: 'missing-bridge', path: binary }
     }
     let child
+    const runId = this.makeRunId()
     try { child = this.spawnProcess(binary, ['--hz=50', `--parent-pid=${process.pid}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) }
     catch (error) { this.log('error', 'spawn-failed', error.message, { stack: error.stack, code: error.code, binary }); this.broadcast(this.statusMessage('live', null, 'error', error.message)); return { ok: false, reason: 'spawn-failed' } }
     this.process = child
     this.attachProcess(child, {
       mode: 'live',
-      runId: null,
+      runId,
       onExit: (code) => {
         if (this.process === child) this.process = null
-        if (!this.replayProcess) this.broadcast(this.statusMessage('live', null, 'stopped', `LMU bridge exited (${code ?? 'signal'}).`))
+        if (!this.replayProcess) this.broadcast(this.statusMessage('live', runId, 'stopped', `LMU bridge exited (${code ?? 'signal'}).`))
         if (this.requested) this.restartTimer = this.schedule(() => this.start(), 1500)
       },
     })
@@ -233,7 +234,8 @@ class LmuBridgeManager {
     const lines = this.makeLineReader({ input: child.stdout, crlfDelay: Infinity })
     lines.on('line', (line) => {
       try {
-        const parsed = JSON.parse(line)
+        let parsed = JSON.parse(line)
+        if (mode === 'live') parsed = { ...parsed, runId }
         if (mode === 'self-test' && (parsed.source !== 'self-test' || parsed.runId !== runId)) {
           this.broadcast(this.statusMessage('self-test', runId, 'error', 'Bridge self-test emitted an uncorrelated frame.'))
           return

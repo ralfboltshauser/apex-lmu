@@ -90,3 +90,14 @@ This proves that the recorded session's known facts survive the current Apex
 pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,
 multi-monitor/fullscreen behavior, a long-race soak, or any car/session absent
 from that recording. Those remain independent gates.
+
+## Lifetime-statistics runtime gate
+
+The Windows CI lane also executes the durable-distance acceptance smoke inside
+Electron's bundled Node runtime. It creates the SQLite ledger in isolated user
+data, integrates 100 km/h for 36 game seconds, closes durably, reopens, verifies
+exactly 1,000,000 mm, and validates a SHA-256 backup. This specifically detects
+an Electron upgrade or Windows build that lacks a working `node:sqlite` runtime.
+
+It does not replace seeded installer upgrade, forced-process, real LMU, or
+main-plus-overlay soak evidence. Those remain release gates for issue #6.

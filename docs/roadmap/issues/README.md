@@ -1,24 +1,26 @@
 ---
 title: "Open-issue implementation roadmap"
 type: "implementation-roadmap"
-status: "proposed"
+status: "in-progress"
 repository: "ralfboltshauser/apex-lmu"
 scope: "all open GitHub issues"
 open_issue_count: 8
 total_effort_engineer_days_from_scratch: "147-241"
 total_effort_engineer_days_remaining: "139-231"
-source_commit: "9660be5"
-last_verified: "2026-07-12"
+baseline_commit: "9660be5"
+implementation_branch: "codex/complete-open-issues"
+last_verified: "2026-07-13"
 ---
 
 # Open-issue implementation roadmap
 
 This roadmap covers every issue open in
 [`ralfboltshauser/apex-lmu`](https://github.com/ralfboltshauser/apex-lmu/issues)
-on 2026-07-12: #3–#9 and the newly added #13. The inventory and complete comment
-threads were checked through the connected GitHub repository. All eight issues
-had zero comments, assignees, and milestones. Issue #13 has `documentation` and
-`enhancement` labels; #3–#9 were unlabeled at their verification point.
+on 2026-07-13: #3–#9 and the newly added #13. The inventory and complete comment
+threads were refreshed from GitHub. All eight remain open and unassigned with no
+milestone. Issue #13 has `documentation` and `enhancement` labels; #3–#9 were
+unlabeled at their initial verification point. Issues #7, #9, and #13 now have
+implementation-evidence comments; the other issue threads have no comments.
 
 The plans combine the issue requests, code at commit `9660be5`, repository
 invariants, and current primary sources where external behavior matters. An
@@ -26,7 +28,9 @@ issue statement is evidence to investigate, not a replacement for code truth.
 Two state changes matter for this update:
 
 - issue #13's required 27,407,993-byte real recording is absent from `main` and
-  exists only in open draft PR #11, so canonical CI is prerequisite-bound;
+  exists only in open draft PR #11. Its exact original commit is merged into the
+  local implementation branch, but canonical hosted CI remains
+  prerequisite-bound;
 - issue #5 remains open, but PR #12 landed its overlay implementation at
   `9660be5` and released it as `v0.1.14`; its remaining roadmap slot is packaged
   Windows validation, gap capture, and issue closure.
@@ -41,10 +45,10 @@ it is not an instruction to reimplement the feature.
 
 | Order | Issue | Deliverable | Status | Complexity | Effort | Risk | Hard dependency |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1 | [#9](01-issue-09-multilingual-post-update-changelog.md) | Bundled EN/DE changelog, post-update reveal, release gate | Not started | M | 6–10 days | Medium | None |
-| 2 | [#7](02-issue-07-resilient-numeric-inputs.md) | Reusable numeric-field state machine and crash-proof migrations | Not started | S | 2–4 days | Low | None |
-| 3 | [#13](03-issue-13-windows-end-to-end-replay-harness.md) | Correlated real-recording replay through bridge, Electron, adapter, and UI | Fixture PR pending | XL | 17–27 days | High | PR #11 fixture; merge after #9 |
-| 4 | [#6](04-issue-06-durable-lifetime-driving-statistics.md) | Durable, recoverable lifetime activity ledger and statistics UI | Not started | XL | 20–30 days | High | Merge after #9; #13 is a release-quality soft gate |
+| 1 | [#9](01-issue-09-multilingual-post-update-changelog.md) | Bundled EN/DE changelog, post-update reveal, release gate | Implemented locally; packaged N→N+1 acceptance pending | M | 6–10 days | Medium | None |
+| 2 | [#7](02-issue-07-resilient-numeric-inputs.md) | Reusable numeric-field state machine and crash-proof migrations | Implemented locally; release pending | S | 2–4 days | Low | None |
+| 3 | [#13](03-issue-13-windows-end-to-end-replay-harness.md) | Correlated real-recording replay through bridge, Electron, adapter, and UI | Implemented locally; hosted native-Windows Electron gate pending | XL | 17–27 days | High | PR #11 fixture; merge after #9 |
+| 4 | [#6](04-issue-06-durable-lifetime-driving-statistics.md) | Durable, recoverable lifetime activity ledger and statistics UI | Implemented locally; native packaged-Windows acceptance pending | XL | 20–30 days | High | Merge after #9; #13 is a release-quality soft gate |
 | 5 | [#5](05-issue-05-working-multi-display-hud-overlays.md) | Validate landed display-targeted overlay and close or file gaps | Landed in v0.1.14 | XL implementation; bounded closure | 10–15-day implementation already landed | High | Packaged Windows/hardware evidence |
 | 6 | [#8](06-issue-08-trustworthy-strategy-planner.md) | One coherent calculated strategy model and explainable UX | Not started | XL | 25–40 days | High | #7; use #13 for replay-integrated acceptance |
 | 7 | [#4](07-issue-04-track-map-telemetry-context.md) | Measured track geometry, braking context, and chart cross-linking | Not started | XL | 12–20 days after #6 | High | #6 and #13 |

@@ -17,6 +17,9 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	if decoded.GameVersion != 130 || decoded.Session.Track != "Circuit de la Sarthe" || decoded.Session.ElapsedSeconds != 901.25 {
 		t.Fatalf("unexpected session: %#v", decoded.Session)
 	}
+	if decoded.Player.ControlOwner != "local-player" {
+		t.Fatalf("control owner = %q", decoded.Player.ControlOwner)
+	}
 	if decoded.Session.Rain != 0.2 || decoded.Session.Wetness != 0.35 || decoded.Session.WindSpeedMps != 5 {
 		t.Fatalf("weather offsets decoded incorrectly: %#v", decoded.Session)
 	}
@@ -43,6 +46,25 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	}
 	if len(decoded.Opponents) != 2 || decoded.Opponents[0].Position != 1 || decoded.Opponents[1].Position != 3 {
 		t.Fatalf("opponents were not sorted: %#v", decoded.Opponents)
+	}
+}
+
+func TestControlOwnerMapsEveryDocumentedSDKValue(t *testing.T) {
+	cases := []struct {
+		value int8
+		want  string
+	}{
+		{-1, "unknown"},
+		{0, "local-player"},
+		{1, "ai"},
+		{2, "remote"},
+		{3, "replay"},
+		{4, "unknown"},
+	}
+	for _, tc := range cases {
+		if got := controlOwner(tc.value); got != tc.want {
+			t.Fatalf("controlOwner(%d) = %q, want %q", tc.value, got, tc.want)
+		}
 	}
 }
 

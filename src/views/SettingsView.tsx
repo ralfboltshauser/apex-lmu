@@ -79,6 +79,10 @@ export function SettingsView() {
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
   const [updateState, setUpdateState] = useState<ApexUpdateState | null>(null)
   const [recording, setRecording] = useState<ApexRecordingState>({ status: 'idle', path: null, frames: 0, bytes: 0, durationSeconds: 0, message: '' })
+  const [lifetime, setLifetime] = useState<ApexLifetimeStats | null>(null)
+  const [lifetimeHealth, setLifetimeHealth] = useState<ApexLifetimeStatsHealth | null>(null)
+  const [lifetimeBackup, setLifetimeBackup] = useState<'idle' | 'working' | 'done' | 'error'>('idle')
+  const [lifetimeBackupMessage, setLifetimeBackupMessage] = useState('')
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
@@ -106,7 +110,22 @@ export function SettingsView() {
       })
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
+    void window.apexDesktop?.getLifetimeStats().then(setLifetime)
+    void window.apexDesktop?.getLifetimeStatsHealth().then(setLifetimeHealth)
   }, [])
+
+  const backupLifetime = async () => {
+    if (!window.apexDesktop) return
+    setLifetimeBackup('working'); setLifetimeBackupMessage('')
+    try {
+      const result = await window.apexDesktop.backupLifetimeStats()
+      if (result.ok && result.backup) { setLifetimeBackup('done'); setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupCreated, { file: result.backup.file })); setLifetimeHealth(await window.apexDesktop.getLifetimeStatsHealth()) }
+      else { setLifetimeBackup('error'); setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupFailed, { error: result.reason || m.data.lifetime.unknown })) }
+    } catch (error) {
+      setLifetimeBackup('error')
+      setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupFailed, { error: error instanceof Error ? error.message : m.data.lifetime.unknown }))
+    }
+  }
 
   useEffect(() => {
     const navigate = (event: Event) => {
@@ -343,6 +362,21 @@ export function SettingsView() {
             </div>
             <div className="recording-detail"><strong>{recording.message || m.data.recorder.ready}</strong>{recording.path && <span title={recording.path}>{recording.path}</span>}</div>
             <div className="support-privacy"><ShieldCheck size={15} /><span><strong>{m.data.recorder.privateTitle}</strong>{m.data.recorder.privateCopy}</span></div>
+          </Card>
+
+          <Card className="lifetime-card">
+            <CardHeader eyebrow={m.data.lifetime.eyebrow} title={m.data.lifetime.title} description={m.data.lifetime.description} action={<Badge tone={lifetimeHealth?.status === 'ready' ? 'positive' : lifetimeHealth?.status === 'future-schema' || lifetimeHealth?.status === 'error' ? 'warning' : 'neutral'}>{lifetimeHealth ? m.data.lifetime.health[lifetimeHealth.status === 'future-schema' ? 'futureSchema' : lifetimeHealth.status === 'read-only' ? 'readOnly' : lifetimeHealth.status] : m.status.notChecked}</Badge>} />
+            <div className="lifetime-summary"><div><small>{m.data.lifetime.total}</small><strong>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format((lifetime?.totalDistanceMm || 0) / 1_000_000)} {m.data.lifetime.kilometers}</strong></div><div><small>{m.data.lifetime.trackedSince}</small><strong>{lifetime?.trackedSince ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(lifetime.trackedSince)) : '—'}</strong></div></div>
+            {lifetime?.vehicles.length ? <div className="lifetime-vehicles">{lifetime.vehicles.map((vehicle) => <div key={vehicle.id}><span><strong>{vehicle.name}</strong><small>{vehicle.className} · {formatMessage(m.data.lifetime.sessions, { count: vehicle.sessions })} · {formatMessage(m.data.lifetime.lastDriven, { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(vehicle.lastSeenAt)) })}</small></span><b>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(vehicle.distanceMm / 1_000_000)} {m.data.lifetime.kilometers}</b></div>)}</div> : <p className="diagnostics-intro">{lifetime?.status === 'error' ? lifetime.message : m.data.lifetime.noDistance}</p>}
+            {lifetimeHealth?.status === 'future-schema' && <p className="diagnostics-intro">{m.data.lifetime.futureSchema}</p>}
+            {lifetimeHealth?.status === 'error' && <p className="diagnostics-intro">{m.data.lifetime.recovery}{lifetimeHealth.message ? ` ${lifetimeHealth.message}` : ''}</p>}
+            <dl className="lifetime-ledger-details">
+              <div><dt>{m.data.lifetime.database}</dt><dd title={lifetimeHealth?.path}>{lifetimeHealth?.path || '—'}</dd></div>
+              <div><dt>{m.data.lifetime.lastBackup}</dt><dd>{lifetimeHealth?.lastBackup ? <><span>{lifetimeHealth.lastBackup.file}</span><code title={lifetimeHealth.lastBackup.sha256}>{lifetimeHealth.lastBackup.sha256.slice(0, 12)}…</code></> : m.data.lifetime.noBackup}</dd></div>
+            </dl>
+            <div className="support-privacy"><ShieldCheck size={15} /><span>{m.data.lifetime.coverage}</span></div>
+            <div className="diagnostic-actions"><Button variant="secondary" icon={<HardDrive size={14} />} onClick={() => void backupLifetime()} disabled={!window.apexDesktop || lifetimeBackup === 'working' || !lifetimeHealth?.path || lifetimeHealth.status === 'closed' || lifetimeHealth.status === 'read-only'}>{lifetimeBackup === 'working' ? m.data.lifetime.backingUp : m.data.lifetime.backup}</Button></div>
+            {lifetimeBackupMessage && <p className="diagnostics-intro" role="status">{lifetimeBackupMessage}</p>}
           </Card>
 
           <Card id="settings-data">

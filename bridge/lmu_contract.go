@@ -525,12 +525,13 @@ func decodeWheel(view packedView, base int, position string) (wheel, error) {
 }
 
 type decodedVehicleScoring struct {
-	ID       int32
-	IsPlayer bool
-	Opponent opponent
-	Driver   string
-	Name     string
-	Class    string
+	ID           int32
+	IsPlayer     bool
+	ControlOwner string
+	Opponent     opponent
+	Driver       string
+	Name         string
+	Class        string
 }
 
 func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, error) {
@@ -563,6 +564,10 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 		return decodedVehicleScoring{}, err
 	}
 	isPlayer, err := view.boolean(base + 196)
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
+	control, err := view.i8(base + 197)
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
@@ -604,7 +609,7 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	}
 
 	return decodedVehicleScoring{
-		ID: id, IsPlayer: isPlayer, Driver: driver, Name: name, Class: class,
+		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), Driver: driver, Name: name, Class: class,
 		Opponent: opponent{
 			ID: id, Driver: driver, Name: name, Class: class, Position: place, Laps: laps,
 			LapDistanceM: lapDistance, BestLapSeconds: bestLap, LastLapSeconds: lastLap,
@@ -618,6 +623,7 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.Driver = score.Driver
 	player.Name = firstNonempty(score.Name, player.Name)
 	player.Class = score.Class
+	player.ControlOwner = score.ControlOwner
 	player.Position = score.Opponent.Position
 	player.LapDistanceM = score.Opponent.LapDistanceM
 	player.BestLapSeconds = score.Opponent.BestLapSeconds
@@ -626,6 +632,23 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.TimeBehindNextSec = score.Opponent.BehindNextSec
 	player.InPits = score.Opponent.InPits
 	player.PitState = score.Opponent.PitState
+}
+
+func controlOwner(value int8) string {
+	// VehicleScoringInfoV01::mControl is a signed byte in the SDK contract:
+	// -1 nobody, 0 local player, 1 local AI, 2 remote, 3 replay.
+	switch value {
+	case 0:
+		return "local-player"
+	case 1:
+		return "ai"
+	case 2:
+		return "remote"
+	case 3:
+		return "replay"
+	default:
+		return "unknown"
+	}
 }
 
 func firstNonempty(values ...string) string {

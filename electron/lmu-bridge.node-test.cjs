@@ -115,11 +115,12 @@ test('runSelfTest reports synchronous process launch failures', () => {
 test('records useful live status transitions without logging telemetry frames', async () => {
   const child = new FakeChild()
   const entries = []
+  const broadcasts = []
   const manager = new LmuBridgeManager({
     app: { isPackaged: false },
-    broadcast: () => {},
+    broadcast: (message) => broadcasts.push(message),
     logger: { record: (...entry) => { entries.push(entry) } },
-    runtime: { platform: 'win32', fileExists: () => true, spawn: () => child },
+    runtime: { platform: 'win32', fileExists: () => true, randomUUID: () => 'live-run-1', spawn: () => child },
   })
 
   manager.start()
@@ -132,6 +133,8 @@ test('records useful live status transitions without logging telemetry frames', 
   assert.equal(status[0], 'warning')
   assert.match(status[3], /maximum lap count/)
   assert.equal(entries.filter((entry) => entry[2] === 'status').length, 1)
+  assert.equal(broadcasts.length, 2)
+  assert.equal(broadcasts.every((message) => message.runId === 'live-run-1'), true)
 })
 
 test('records raw sessions in a separate stoppable bridge process', async () => {

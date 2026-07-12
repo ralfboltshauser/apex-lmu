@@ -17,6 +17,13 @@
     "layout": "",
     "car": "Lexus Custom Team 2025 #397",
     "carClass": "GT3",
+    "controlOwners": ["ai", "local-player"],
+    "controlOwnerFrames": { "ai": 1532, "local-player": 16507 },
+    "controlOwnerTransitions": [
+      { "sequence": 1, "owner": "ai", "playerTelemetryAvailable": false },
+      { "sequence": 1029, "owner": "local-player", "playerTelemetryAvailable": true },
+      { "sequence": 17536, "owner": "ai", "playerTelemetryAvailable": true }
+    ],
     "normalizedClass": "LMGT3",
     "opponents": 0,
     "weather": {

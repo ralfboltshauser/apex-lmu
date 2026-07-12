@@ -40,9 +40,11 @@ async function main() {
       await window.apexDesktop.acknowledgeWhatsNew(state.currentVersion)
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
+    const lifetimeBefore = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
+    exact(lifetimeBefore.totalDistanceMm, 0, 'lifetime distance before replay')
     await page.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
     await page.evaluate((expectedRunId) => {
-      const summary = { runId: expectedRunId, statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: [], layouts: [], cars: [], classes: [], opponents: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], throttle: 0, brake: 0, steering: 0, fuel: [Infinity, -Infinity], previousFuel: null, decreaseFrames: 0, maximumIncrease: 0, lastLaps: [], pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null, recordingStatus: 'idle' }
+      const summary = { runId: expectedRunId, statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: [], layouts: [], cars: [], classes: [], controlOwners: [], controlOwnerFrames: {}, controlOwnerTransitions: [], previousControlOwner: null, opponents: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], throttle: 0, brake: 0, steering: 0, fuel: [Infinity, -Infinity], previousFuel: null, decreaseFrames: 0, maximumIncrease: 0, lastLaps: [], pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null, recordingStatus: 'idle' }
       const add = (key, value) => { if (!summary[key].includes(value)) summary[key].push(value) }
       const range = (key, value) => { if (Number.isFinite(value)) { summary[key][0] = Math.min(summary[key][0], value); summary[key][1] = Math.max(summary[key][1], value) } }
       window.apexDesktop.onRecordingState((state) => { summary.recordingStatus = state.status })
@@ -56,6 +58,8 @@ async function main() {
         if (message.playerTelemetryAvailable === false) summary.scoringOnly += 1
         else if (summary.firstVehicle === null) summary.firstVehicle = summary.frames
         add('tracks', message.session?.track ?? ''); add('layouts', message.session?.layout ?? ''); add('cars', message.player?.name ?? ''); add('classes', message.player?.class ?? '')
+        const controlOwner = message.player?.controlOwner ?? 'unknown'; add('controlOwners', controlOwner); summary.controlOwnerFrames[controlOwner] = (summary.controlOwnerFrames[controlOwner] || 0) + 1
+        if (summary.previousControlOwner !== controlOwner) { summary.controlOwnerTransitions.push({ sequence: message.sequence, owner: controlOwner, playerTelemetryAvailable: message.playerTelemetryAvailable }); summary.previousControlOwner = controlOwner }
         range('air', message.session?.airTempC); range('trackTemp', message.session?.trackTempC); range('rain', message.session?.rain); range('wetness', message.session?.wetness)
         if (message.playerTelemetryAvailable === false) return
         summary.throttle = Math.max(summary.throttle, Math.abs(message.player?.throttle ?? 0)); summary.brake = Math.max(summary.brake, Math.abs(message.player?.brake ?? 0)); summary.steering = Math.max(summary.steering, Math.abs(message.player?.steering ?? 0))
@@ -76,10 +80,12 @@ async function main() {
     const summary = await page.evaluate(() => window.__apexReplaySummary)
     if (summary.recordingStatus !== 'complete') fail(`recording state ended as ${summary.recordingStatus}`)
     exact(summary.statuses, manifest.expected.statusSequence, 'status sequence'); exact(summary.frames, manifest.expected.telemetryFrames, 'frames'); exact(summary.completionFrames, manifest.expected.telemetryFrames, 'completion frames'); exact(summary.scoringOnly, manifest.expected.scoringOnlyFrames, 'scoring-only frames'); exact(summary.firstVehicle, manifest.expected.firstVehicleTelemetryFrame, 'first vehicle frame')
-    exact(summary.tracks, [manifest.expected.track], 'track'); exact(summary.layouts, [manifest.expected.layout], 'layout'); exact(summary.cars, [manifest.expected.car], 'car'); exact(summary.classes, [manifest.expected.carClass], 'class'); exact(summary.opponents, 0, 'opponents'); exact(summary.missingOpponentArrays, 0, 'opponent arrays')
+    exact(summary.tracks, [manifest.expected.track], 'track'); exact(summary.layouts, [manifest.expected.layout], 'layout'); exact(summary.cars, [manifest.expected.car], 'car'); exact(summary.classes, [manifest.expected.carClass], 'class'); exact(summary.controlOwners, manifest.expected.controlOwners, 'control owners'); exact(summary.controlOwnerFrames, manifest.expected.controlOwnerFrames, 'control owner frame counts'); exact(summary.controlOwnerTransitions, manifest.expected.controlOwnerTransitions, 'control owner transitions'); exact(summary.opponents, 0, 'opponents'); exact(summary.missingOpponentArrays, 0, 'opponent arrays')
     between(summary.air[0], manifest.expected.weather.airTempC, 'air min'); between(summary.air[1], manifest.expected.weather.airTempC, 'air max'); between(summary.trackTemp[0], manifest.expected.weather.trackTempC, 'track min'); between(summary.trackTemp[1], manifest.expected.weather.trackTempC, 'track max'); exact(summary.rain, [0, 0], 'rain'); exact(summary.wetness, [0, 0], 'wetness')
     atLeast(summary.throttle, manifest.expected.minimumControlMaximums.throttle, 'throttle'); atLeast(summary.brake, manifest.expected.minimumControlMaximums.brake, 'brake'); atLeast(summary.steering, manifest.expected.minimumControlMaximums.absoluteSteering, 'steering'); for (const lap of summary.lastLaps) between(lap, manifest.expected.lastLapSeconds, 'last lap'); atLeast(summary.lastLaps.length, manifest.expected.minimumDistinctLastLaps, 'last laps'); exact(summary.pits, manifest.expected.pitSequence, 'pit sequence'); between(summary.fuel[0], manifest.expected.fuelLiters, 'fuel min'); between(summary.fuel[1], manifest.expected.fuelLiters, 'fuel max'); atLeast(summary.decreaseFrames, manifest.expected.minimumFuelDecreaseFrames, 'fuel decreases'); atLeast(summary.maximumIncrease, manifest.expected.minimumRefuelIncreaseLiters, 'refuel')
     for (const [key, value] of Object.entries(manifest.expected.minimumWheelMaximums)) atLeast(summary.wheelMaximums[key], value, key)
+    const lifetimeAfter = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
+    exact(lifetimeAfter.totalDistanceMm, 0, 'lifetime distance after replay')
     await page.locator('button.nav-item').filter({ hasText: 'System' }).click()
     await page.getByText('Settings', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 })
     if (errors.length) fail(errors.join('; '))
