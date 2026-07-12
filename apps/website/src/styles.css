@@ -3142,7 +3142,7 @@ html[data-scrolled="true"] .nav-shell {
   }
 
   .site-header {
-    padding: 9px 10px 0;
+    padding: max(9px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
   }
 
   .nav-shell {
@@ -3153,6 +3153,22 @@ html[data-scrolled="true"] .nav-shell {
   .brand img {
     width: 28px;
     height: 28px;
+  }
+
+  .brand,
+  .menu-button {
+    min-height: 44px;
+  }
+
+  .menu-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-menu {
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    padding-left: max(20px, env(safe-area-inset-left));
   }
 
   .brand span {
@@ -3286,6 +3302,15 @@ html[data-scrolled="true"] .nav-shell {
     width: calc(100% - 16px);
     margin-top: 62px;
     border-radius: 11px;
+  }
+
+  .signal-visual[data-reveal] {
+    clip-path: inset(0 12% 0 12% round 11px);
+    transition-duration: 650ms;
+  }
+
+  .signal-visual[data-visible="true"] {
+    clip-path: inset(0 0 0 0 round 11px);
   }
 
   .signal-visual img {
@@ -3577,6 +3602,18 @@ html[data-scrolled="true"] .nav-shell {
     padding: 18px;
   }
 
+  .roadmap-note a,
+  .footer-links a,
+  .footer-bottom a,
+  .scroll-cue {
+    min-height: 44px;
+  }
+
+  .footer-links a {
+    margin-inline: -8px;
+    padding-inline: 8px;
+  }
+
   .install-section {
     padding: 20px 8px;
   }
@@ -3663,6 +3700,29 @@ html[data-scrolled="true"] .nav-shell {
 
   .footer-bottom a {
     justify-self: auto;
+  }
+}
+
+@media (max-width: 1000px) and (max-height: 600px) {
+  .hero {
+    height: 640px;
+  }
+
+  .hero-sticky {
+    min-height: 640px;
+  }
+
+  .hero-topline {
+    top: 82px;
+  }
+
+  .hero h1 {
+    top: 122px;
+    font-size: clamp(50px, 8vw, 72px);
+  }
+
+  .hero-bottom {
+    bottom: 68px;
   }
 }
 
