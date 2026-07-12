@@ -110,7 +110,7 @@ runNpm(['run', 'build'])
 
 const parked = parkNonWindowsBindings()
 try {
-  runNpm(['exec', '--', 'electron-builder', '--win', ...requestedTargets])
+  runNpm(['exec', '--', 'electron-builder', '--win', ...requestedTargets, '--publish', 'never'])
   stagePublicArtifacts()
 } finally {
   restoreBindings(parked)
