@@ -81,10 +81,17 @@ and complete the soak and strategy-audit gates in [ROADMAP.md](ROADMAP.md).
 The reusable Windows replay job complements rather than replaces the separate
 named-mapping fixture above. It verifies a checked real `LMU_Data` recording
 from raw reader through the current decoder, correlated NDJSON, Electron
-orchestration, preload/IPC, desktop adapter, and visible UI without LMU,
-administrator rights, an injected DLL, or a cloud service. The source test uses
-strict accelerated replay, stage deadlines, isolated user data, safe aggregate
-assertions, and deterministic teardown.
+orchestration, preload/IPC, desktop adapter, main UI, and transparent overlay
+without LMU, administrator rights, an injected DLL, or a cloud service. The
+source test uses strict accelerated replay, stage deadlines, isolated user
+data, safe aggregate assertions, and deterministic teardown. The manual
+installer lane repeats it against `release/win-unpacked/Apex for LMU.exe` after
+building the NSIS and portable artifacts.
+
+The overlay portion checks display enumeration and selection, exact display
+bounds, non-focusable/topmost state, live opacity and supported-widget updates,
+measured replay content, unavailable-to-waiting cleanup, deterministic close,
+and a single remaining main window.
 
 This proves that the recorded session's known facts survive the current Apex
 pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,

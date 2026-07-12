@@ -26,8 +26,11 @@ async function main() {
   const errors = []
   let application
   try {
+    const packagedExecutable = process.env.APEX_E2E_EXECUTABLE ? path.resolve(root, process.env.APEX_E2E_EXECUTABLE) : null
+    if (packagedExecutable) await fs.access(packagedExecutable)
     application = await electron.launch({
-      args: ['.'], cwd: root, timeout: 30000,
+      ...(packagedExecutable ? { executablePath: packagedExecutable } : {}),
+      args: packagedExecutable ? [] : ['.'], cwd: root, timeout: 30000,
       env: { ...process.env, APEX_E2E: '1', APEX_E2E_REPLAY: fixturePath, APEX_E2E_USER_DATA: temporary, APEX_E2E_RUN_ID: runId, APEX_E2E_REPLAY_SPEED: '0' },
     })
     application.on('console', (message) => { if (message.type() === 'error') errors.push(`main-console: ${message.text()}`) })
@@ -71,12 +74,34 @@ async function main() {
       })
       window.__apexReplaySummary = summary
     }, runId)
+    const displays = await page.evaluate(() => window.apexDesktop.getDisplays())
+    atLeast(displays.length, 1, 'connected displays')
+    const selectedDisplay = displays[0]
+    await page.evaluate(async (displayId) => {
+      const config = await window.apexDesktop.getOverlayConfig()
+      await window.apexDesktop.setOverlayConfig({ displayId, opacity: 0.61, widgets: config.widgets.map((widget) => ({ ...widget, enabled: widget.id !== 'delta' })) })
+    }, selectedDisplay.id)
+    const overlayOpen = await page.evaluate(() => window.apexDesktop.openOverlay())
+    if (!overlayOpen.ok || overlayOpen.state.status !== 'ready') fail(`overlay did not open: ${JSON.stringify(overlayOpen)}`)
+    const overlayPage = application.windows().find((window) => window.url().includes('overlay=1'))
+    if (!overlayPage) fail('overlay BrowserWindow was not observable')
+    overlayPage.on('pageerror', (error) => errors.push(`overlay-renderer: ${error.message}`))
+    const overlayRuntime = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((window) => !window.isFocusable()).map((window) => ({ bounds: window.getBounds(), visible: window.isVisible(), alwaysOnTop: window.isAlwaysOnTop() })))
+    exact(overlayRuntime.length, 1, 'overlay window count')
+    exact(overlayRuntime[0].bounds, selectedDisplay.bounds, 'overlay display bounds')
+    exact(overlayRuntime[0].visible, true, 'overlay visibility')
+    exact(overlayRuntime[0].alwaysOnTop, true, 'overlay always-on-top state')
     const started = await page.evaluate(() => window.apexDesktop.startReplayForTest())
     if (!started.ok || started.runId !== runId) fail(`replay did not start: ${JSON.stringify(started)}`)
     const trackVisible = page.getByText(manifest.expected.track, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })
     const carVisible = page.getByText(manifest.expected.car, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })
+    const overlayReplayVisible = overlayPage.getByText('REPLAY', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
+    const overlayMeasuredFuel = overlayPage.waitForFunction(() => document.querySelector('.race-overlay__fuel strong')?.textContent?.includes('L'), null, { timeout: 90000 })
     await page.waitForFunction(() => ['complete', 'error'].includes(window.__apexReplaySummary.recordingStatus), null, { timeout: 120000 })
-    await Promise.all([trackVisible, carVisible])
+    await Promise.all([trackVisible, carVisible, overlayReplayVisible, overlayMeasuredFuel])
+    exact(await overlayPage.locator('.race-overlay').evaluate((element) => getComputedStyle(element).opacity), '0.61', 'live overlay opacity')
+    exact(await overlayPage.locator('.overlay-slot--delta').count(), 0, 'disabled overlay widget count')
+    exact(await overlayPage.locator('.overlay-slot--fuel').count(), 1, 'enabled overlay widget count')
     const summary = await page.evaluate(() => window.__apexReplaySummary)
     if (summary.recordingStatus !== 'complete') fail(`recording state ended as ${summary.recordingStatus}`)
     exact(summary.statuses, manifest.expected.statusSequence, 'status sequence'); exact(summary.frames, manifest.expected.telemetryFrames, 'frames'); exact(summary.completionFrames, manifest.expected.telemetryFrames, 'completion frames'); exact(summary.scoringOnly, manifest.expected.scoringOnlyFrames, 'scoring-only frames'); exact(summary.firstVehicle, manifest.expected.firstVehicleTelemetryFrame, 'first vehicle frame')
@@ -86,10 +111,14 @@ async function main() {
     for (const [key, value] of Object.entries(manifest.expected.minimumWheelMaximums)) atLeast(summary.wheelMaximums[key], value, key)
     const lifetimeAfter = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
     exact(lifetimeAfter.totalDistanceMm, 0, 'lifetime distance after replay')
+    await overlayPage.locator('.overlay-waiting').waitFor({ state: 'visible', timeout: 10000 })
+    const overlayClosed = await page.evaluate(() => window.apexDesktop.closeOverlay())
+    exact(overlayClosed.state.status, 'closed', 'overlay close state')
+    exact(application.windows().length, 1, 'remaining window count')
     await page.locator('button.nav-item').filter({ hasText: 'System' }).click()
     await page.getByText('Settings', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 })
     if (errors.length) fail(errors.join('; '))
-    console.log(JSON.stringify({ ok: true, runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, ui: ['track', 'car', 'settings-responsive'] }))
+    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, ui: ['track', 'car', 'overlay-window', 'overlay-replay', 'settings-responsive'] }))
   } finally {
     await application?.close().catch(() => {})
     await fs.rm(temporary, { recursive: true, force: true })

@@ -75,9 +75,9 @@ through the packaged bridge.
 The repository also contains one explicitly approved private test recording and
 an allowlisted expectation manifest under `data/recordings/`. The manifest pins
 the exact byte count and SHA-256 before any replay starts. It contains only
-reviewable aggregate expectations—track/car/class, capability timing, ranges,
-lap time, pit sequence, fuel movement, wheel evidence, and opponent count—not
-driver, Steam, server, or local-path data.
+reviewable aggregate expectations—track/car/class, capability timing, control
+ownership transitions, ranges, lap time, pit sequence, fuel movement, wheel
+evidence, and opponent count—not driver, Steam, server, or local-path data.
 
 Run the current decoder and bridge protocol check on Linux or Windows:
 
@@ -100,12 +100,23 @@ npm run build:bridge:win
 npm run test:e2e:windows:replay
 ```
 
+After building Windows artifacts, run the same boundary against the packaged
+application instead of source Electron:
+
+```powershell
+$env:APEX_E2E_EXECUTABLE = 'release/win-unpacked/Apex for LMU.exe'
+npm run test:e2e:windows:replay
+```
+
 It launches Electron with isolated temporary user data, starts the same replay
 through validated test-only orchestration, observes the production preload/IPC
-stream while the normal desktop adapter and React UI consume it, verifies
-measured track/car rendering and responsiveness, then closes the entire process
-tree. The test disables updater side effects and accepts no arbitrary script,
-URL, preload, or recording path from the renderer.
+stream while the normal desktop adapter and React UI consume it. It also opens
+the production overlay on an enumerated display, checks exact bounds,
+non-focusable/topmost state, live opacity/widget configuration, measured replay
+content, deterministic close, lifetime-stat exclusion, track/car rendering and
+main-window responsiveness. It then closes the entire process tree. The test
+disables updater side effects and accepts no arbitrary script, URL, preload, or
+recording path from the renderer.
 
 Never upload the raw recording, replay NDJSON, screenshots containing identity
 data, or temporary corrupt copies as CI artifacts. To replace the fixture,

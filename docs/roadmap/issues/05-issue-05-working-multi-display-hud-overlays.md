@@ -3,7 +3,7 @@ title: "Working multi-display HUD overlays"
 issue: 5
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/5"
 issue_state: "open"
-implementation_status: "implementation-landed-validation-and-closure-pending"
+implementation_status: "shipped in v0.1.14; closure hardening implemented locally; native source/package acceptance pending"
 plan_order: 5
 phase: 1
 workstream: "desktop-overlay-runtime"
@@ -20,10 +20,47 @@ soft_dependencies: [4]
 parallel_with: [13, 6, 8]
 source_updated_at: "2026-07-12T12:31:57Z"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+hardening_branch: "codex/complete-open-issues"
+last_verified: "2026-07-13"
 ---
 
 # Issue #5 — working multi-display HUD overlays
+
+## Closure progress — 2026-07-13
+
+The v0.1.14 implementation was reproduced in source Electron: the real display
+appeared through preload, `openOverlay()` waited for renderer readiness, a
+second transparent window became visible/topmost/non-focusable on the selected
+bounds, its waiting state rendered, and close left exactly one main window.
+
+Additional closure hardening on `codex/complete-open-issues`:
+
+- close now waits for the actual `closed` event and returns `closed`, rather
+  than returning a stale `ready` state while teardown was still asynchronous;
+- display fallback fingerprints now include normalized label and full topology,
+  avoiding wrong selection when multiple monitors share resolution/scale;
+- widget IPC rejects duplicate IDs, extra fields and invalid normalized bounds;
+- Settings shows live connected-display and overlay-window health while
+  explaining that no capture permission exists or is required;
+- Overlay Studio exposes resolution, scale, rotation and primary state and has
+  a renderer contract test for supported/unsupported controls;
+- renderer-crash, close/reopen, identical-monitor fallback and strict-config
+  negative tests were added;
+- the native Windows real-recording E2E now opens the production overlay,
+  checks selected display bounds, non-focusable/topmost visibility, live
+  opacity/widget updates, measured replay content, waiting cleanup,
+  deterministic close and one surviving main window;
+- the manual Windows artifact lane repeats that E2E against
+  `release/win-unpacked/Apex for LMU.exe`, not only source Electron.
+
+Local evidence is green for 9 OverlayManager tests, 5 focused renderer/model
+tests, the source-Electron lifecycle smoke, i18n and typecheck. The complete
+NSIS + portable build also contains the current overlay manager, renderer,
+preload and bridge and passes generated SHA-256 verification; it has not been
+claimed as runtime proof. The issue remains open until the source and packaged
+checks run on native hosted Windows and the physical multi-monitor/borderless
+matrix is recorded. Xvfb and mocked display topology are not being presented as
+physical Windows proof.
 
 > Implementation update (2026-07-12): PR #12 landed this feature on `main` in
 > commit `9660be5` and shipped as `v0.1.14`, while GitHub issue #5 remains open.

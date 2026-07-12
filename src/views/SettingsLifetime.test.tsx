@@ -19,6 +19,10 @@ describe('lifetime statistics settings', () => {
       onUpdateState: vi.fn(() => () => {}),
       getRecordingState: vi.fn(async () => ({ status: 'idle', path: null, frames: 0, bytes: 0, durationSeconds: 0, message: '' })),
       onRecordingState: vi.fn(() => () => {}),
+      getDisplays: vi.fn(async () => [{ id: '1', label: 'Primary display', bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 }, scaleFactor: 1, rotation: 0, primary: true }]),
+      getOverlayState: vi.fn(async () => ({ status: 'closed' as const, displayId: '1', message: '', fallbackFrom: null })),
+      onDisplaysChanged: vi.fn(() => () => {}),
+      onOverlayState: vi.fn(() => () => {}),
     } as unknown as ApexDesktopApi
     const container = document.createElement('div'); document.body.append(container)
     const root = createRoot(container)

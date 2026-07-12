@@ -49,6 +49,9 @@ test('normalizes persisted config and rejects untrusted patches', () => {
   assert.equal(config.widgets[0].enabled, false)
   assert.deepEqual(config.widgets[0].bounds, { x: 0, y: 0, width: 1, height: 1 })
   assert.throws(() => applyConfigPatch(defaultConfig(), { widgets: [{ id: 'radar', enabled: true }] }), /unsupported or invalid/)
+  assert.throws(() => applyConfigPatch(defaultConfig(), { widgets: [{ id: 'relative', enabled: true }] }), /invalid bounds/)
+  assert.throws(() => applyConfigPatch(defaultConfig(), { widgets: [{ id: 'relative', enabled: true, bounds: { x: 0, y: 0, width: 0.2, height: 0.2 } }, { id: 'relative', enabled: false, bounds: { x: 0, y: 0, width: 0.2, height: 0.2 } }] }), /duplicate/)
+  assert.throws(() => applyConfigPatch(defaultConfig(), { widgets: [{ id: 'relative', enabled: true, bounds: { x: 0, y: 0, width: 0.2, height: 0.2 }, arbitrary: true }] }), /Unsupported overlay widget field/)
   assert.throws(() => applyConfigPatch(defaultConfig(), { arbitraryWindowOption: true }), /Unsupported/)
 })
 
@@ -77,6 +80,29 @@ test('enumerates real display geometry and opens an inactive secure window on th
   assert.equal(window.shown, 2)
 })
 
+test('close waits for the real closed state and reopen creates one fresh window', async () => {
+  const h = harness()
+  await h.manager.initialize()
+  let opening = h.manager.open(); await new Promise((resolve) => setImmediate(resolve)); h.manager.markRendererReady(10); await opening
+  const closed = await h.manager.close()
+  assert.equal(closed.state.status, 'closed')
+  assert.equal(h.windows[0].destroyed, true)
+  opening = h.manager.open(); await new Promise((resolve) => setImmediate(resolve)); h.manager.markRendererReady(11)
+  assert.equal((await opening).ok, true)
+  assert.equal(h.windows.length, 2)
+  await h.manager.close()
+})
+
+test('uses label and topology in fallback fingerprints so identical resolutions do not select the wrong display', async () => {
+  const h = harness([display(1, 0, 1920, 1, 0, 'Left'), display(2, 1920, 1920, 1, 0, 'Right')])
+  await h.manager.initialize()
+  await h.manager.setConfig({ displayId: '2' })
+  h.screen.displays = [display(10, 0, 1920, 1, 0, 'Left'), display(20, 1920, 1920, 1, 0, 'Right')]
+  await h.manager.onDisplaysChanged()
+  assert.equal(h.manager.getConfig().displayId, '20')
+  assert.equal(h.manager.getState().fallbackFrom, null)
+})
+
 test('falls back to primary on hot unplug, persists it, and moves the open window', async () => {
   const h = harness([display(1, 0, 1920), display(2, -1920, 1920)])
   await h.manager.initialize()
@@ -99,6 +125,19 @@ test('returns a failure when the renderer never becomes ready and closes determi
   assert.match(result.reason, /timed out/)
   assert.equal(h.windows[0].destroyed, true)
   assert.equal((await h.manager.close()).ok, true)
+})
+
+test('renderer crash produces a failed open and destroys the unsafe window', async () => {
+  const h = harness()
+  await h.manager.initialize()
+  const opening = h.manager.open()
+  await new Promise((resolve) => setImmediate(resolve))
+  h.windows[0].webContents.emit('render-process-gone', {}, { reason: 'crashed', exitCode: 9 })
+  const result = await opening
+  assert.equal(result.ok, false)
+  assert.equal(result.state.status, 'error')
+  assert.equal(h.windows[0].destroyed, true)
+  assert.ok(h.logs.some((entry) => entry[2] === 'renderer-gone'))
 })
 
 test('rejects a configuration change when atomic persistence fails', async () => {

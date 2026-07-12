@@ -83,6 +83,8 @@ export function SettingsView() {
   const [lifetimeHealth, setLifetimeHealth] = useState<ApexLifetimeStatsHealth | null>(null)
   const [lifetimeBackup, setLifetimeBackup] = useState<'idle' | 'working' | 'done' | 'error'>('idle')
   const [lifetimeBackupMessage, setLifetimeBackupMessage] = useState('')
+  const [overlayDisplays, setOverlayDisplays] = useState<ApexDisplay[] | null>(null)
+  const [overlayRuntime, setOverlayRuntime] = useState<ApexOverlayState | null>(null)
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
@@ -146,6 +148,15 @@ export function SettingsView() {
     if (!window.apexDesktop) return
     void window.apexDesktop.getRecordingState().then(setRecording)
     return window.apexDesktop.onRecordingState(setRecording)
+  }, [])
+
+  useEffect(() => {
+    if (!window.apexDesktop) return
+    void window.apexDesktop.getDisplays().then(setOverlayDisplays).catch(() => setOverlayDisplays([]))
+    void window.apexDesktop.getOverlayState().then(setOverlayRuntime)
+    const stopDisplays = window.apexDesktop.onDisplaysChanged(setOverlayDisplays)
+    const stopState = window.apexDesktop.onOverlayState(setOverlayRuntime)
+    return () => { stopDisplays(); stopState() }
   }, [])
 
   const autoDetectLmu = async () => {
@@ -306,8 +317,12 @@ export function SettingsView() {
             {discovery && <details className="discovery-details"><summary>{formatMessage(m.connection.discovery, { count: discovery.attempts.length })}</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
           <Card>
-            <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Monitor size={19} />} />
+            <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Badge tone={overlayDisplays?.length ? 'positive' : overlayDisplays ? 'warning' : 'neutral'}>{overlayDisplays ? formatMessage(m.overlay.displayCount, { count: overlayDisplays.length }) : m.status.notChecked}</Badge>} />
             <p className="diagnostics-intro">{m.overlay.copy}</p>
+            <div className="integration-checks">
+              <div><StatusIcon value={overlayDisplays ? overlayDisplays.length > 0 : null} /><span><strong>{m.overlay.displays}</strong><small>{m.overlay.displaysHint}</small></span><StatusBadge value={overlayDisplays ? overlayDisplays.length > 0 : null} available={overlayDisplays ? formatMessage(m.overlay.displayCount, { count: overlayDisplays.length }) : undefined} /></div>
+              <div><StatusIcon value={overlayRuntime ? overlayRuntime.status !== 'error' : null} /><span><strong>{m.overlay.window}</strong><small>{overlayRuntime?.displayId ? formatMessage(m.overlay.target, { display: overlayDisplays?.find((display) => display.id === overlayRuntime.displayId)?.label || overlayRuntime.displayId }) : m.overlay.windowHint}</small></span><Badge tone={overlayRuntime?.status === 'ready' ? 'positive' : overlayRuntime?.status === 'error' ? 'warning' : 'neutral'}>{overlayRuntime ? m.overlay.state[overlayRuntime.status] : m.status.notChecked}</Badge></div>
+            </div>
             <div className="support-privacy"><Info size={15} /><span><strong>{m.overlay.fullscreen}</strong></span></div>
           </Card>
           </>}

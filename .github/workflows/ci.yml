@@ -75,6 +75,9 @@ jobs:
           cache-dependency-path: bridge/go.mod
       - run: npm ci
       - run: npm run build:desktop:win:all
+      - run: npm run test:e2e:windows:replay
+        env:
+          APEX_E2E_EXECUTABLE: release/win-unpacked/Apex for LMU.exe
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apex-for-lmu-windows

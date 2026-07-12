@@ -48,6 +48,11 @@ merged into the branch. The fixture byte count and SHA-256 match the issue.
   malformed/stale/incorrect-expectation controls, validated isolated Electron
   E2E configuration, source-desktop Playwright orchestration, and bounded
   teardown.
+- Extended the same Windows boundary through the real transparent overlay:
+  selected display bounds, non-focusable/topmost visibility, live opacity and
+  widget configuration, replay-labelled measured content, cleanup and close.
+- The manual artifact lane repeats the replay/UI/overlay boundary against the
+  unpacked packaged executable after NSIS and portable artifacts are built.
 - Added the real replay and source Electron jobs to the existing Windows lane
   without replacing its independent named-mapping/lock/liveness fixture.
 - Documented the commands, privacy boundary, fixture replacement process, and
