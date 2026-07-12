@@ -1,6 +1,6 @@
 {
   "name": "apex-lmu",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "workspaces": [
     "apps/website"
@@ -59,7 +59,7 @@
   },
   "devDependencies": {
     "@babel/parser": "^8.0.4",
-    "@types/node": "^26.1.1",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
