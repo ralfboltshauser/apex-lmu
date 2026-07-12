@@ -14,6 +14,11 @@ interface ApexDesktopApi {
   chooseFile(options?: { title?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>
   pathExists(candidatePath: string): Promise<boolean>
   openDataFolder(): Promise<string>
+  runDiagnostics(): Promise<ApexDiagnosticReport>
+  getDiagnostics(): Promise<ApexDiagnosticReport>
+  exportSupportBundle(): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
+  openLogsFolder(): Promise<string>
+  reportError(input: { message: string; stack?: string; context?: string }): Promise<{ ok: boolean }>
   startTelemetry(): Promise<{ ok: boolean; reason?: string }>
   stopTelemetry(): Promise<{ ok: boolean }>
   runTelemetrySelfTest(): Promise<{ ok: boolean; reason?: string; runId: string; path?: string }>
@@ -31,6 +36,9 @@ interface ApexDesktopApi {
   openOverlay(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
 }
+
+interface ApexDiagnosticCheck { id: string; status: 'pass' | 'fail' | 'blocked'; title: string; summary: string; fixes: string[]; details: string }
+interface ApexDiagnosticReport { generatedAt: string; checks: ApexDiagnosticCheck[]; logs: string }
 
 interface Window {
   apexDesktop?: ApexDesktopApi

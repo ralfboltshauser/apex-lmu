@@ -1,0 +1,25 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const os = require('node:os')
+const path = require('node:path')
+const fs = require('node:fs/promises')
+const { DiagnosticsService, redact } = require('./diagnostics.cjs')
+
+test('redacts home paths and common secrets', () => {
+  const output = redact({ path: 'C:\\Users\\Ralf\\Apex', token: 'token=abc123', auth: 'Bearer secret.value' }, 'C:\\Users\\Ralf')
+  assert.doesNotMatch(output, /Users\\Ralf|abc123|secret\.value/)
+  assert.match(output, /<HOME>|<REDACTED>/)
+})
+
+test('writes logs and builds a privacy-described support bundle', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'apex-diagnostics-'))
+  t.after(() => fs.rm(dir, { recursive: true, force: true }))
+  const service = new DiagnosticsService({ app: { getPath: () => dir, getVersion: () => 'test', isPackaged: false } })
+  await service.record('error', 'bridge', 'failed', 'launch failed', { path: path.join(os.homedir(), 'secret') })
+  const report = await service.getReport()
+  const bundle = await service.buildSupportBundle({ report })
+  assert.match(report.logs, /launch failed/)
+  assert.doesNotMatch(report.logs, new RegExp(os.homedir().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(bundle.privacy, /excludes telemetry frames/)
+  assert.equal(bundle.format, 'apex-support-bundle-v1')
+})

@@ -5,9 +5,10 @@ const path = require('node:path')
 const fs = require('node:fs')
 
 class LmuBridgeManager {
-  constructor({ app, broadcast, runtime = {} }) {
+  constructor({ app, broadcast, logger = null, runtime = {} }) {
     this.app = app
     this.broadcast = broadcast
+    this.logger = logger
     this.platform = runtime.platform ?? process.platform
     this.spawnProcess = runtime.spawn ?? spawn
     this.fileExists = runtime.fileExists ?? fs.existsSync
@@ -28,6 +29,7 @@ class LmuBridgeManager {
   }
 
   start() {
+    this.log('info', 'start-requested', 'Live telemetry start requested.')
     this.requested = true
     if (this.platform !== 'win32') {
       this.broadcast(this.statusMessage('live', null, 'unsupported', 'LMU live telemetry is available on Windows.'))
@@ -36,10 +38,13 @@ class LmuBridgeManager {
     if (this.process) return { ok: true, alreadyRunning: true }
     const binary = this.getBinaryPath()
     if (!this.fileExists(binary)) {
+      this.log('error', 'bridge-missing', 'Telemetry bridge binary is missing.', { binary })
       this.broadcast(this.statusMessage('live', null, 'missing', 'The LMU telemetry bridge is not installed.'))
       return { ok: false, reason: 'missing-bridge', path: binary }
     }
-    const child = this.spawnProcess(binary, ['--hz=50', `--parent-pid=${process.pid}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    let child
+    try { child = this.spawnProcess(binary, ['--hz=50', `--parent-pid=${process.pid}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) }
+    catch (error) { this.log('error', 'spawn-failed', error.message, { stack: error.stack, code: error.code, binary }); this.broadcast(this.statusMessage('live', null, 'error', error.message)); return { ok: false, reason: 'spawn-failed' } }
     this.process = child
     this.attachProcess(child, {
       mode: 'live',
@@ -120,11 +125,13 @@ class LmuBridgeManager {
           return
         }
         this.broadcast(parsed)
-      } catch {
+      } catch (error) {
+        this.log('error', 'invalid-frame', 'Bridge emitted invalid JSON.', { line, error: error.message })
         this.broadcast(this.statusMessage(mode, runId, 'error', 'LMU bridge emitted an invalid frame.'))
       }
     })
     child.stderr.on('data', (chunk) => {
+      this.log('error', 'bridge-stderr', String(chunk).trim(), { mode, runId })
       this.broadcast({
         protocolVersion: 1,
         source: mode === 'self-test' ? 'self-test' : 'lmu-shared-memory',
@@ -135,14 +142,17 @@ class LmuBridgeManager {
       })
     })
     child.once('error', (error) => {
+      this.log('error', 'process-error', error.message, { mode, runId, code: error.code, stack: error.stack })
       if (mode === 'self-test' && this.selfTestProcess === child) {
         this.selfTestProcess = null
         this.selfTestRunId = null
       }
       this.broadcast(this.statusMessage(mode, runId, 'error', error.message))
     })
-    child.once('exit', onExit)
+    child.once('exit', (code, signal) => { this.log(code === 0 ? 'info' : 'error', 'process-exit', `Bridge exited with ${code ?? signal ?? 'unknown'}.`, { mode, runId, code, signal }); onExit(code) })
   }
+
+  log(level, event, message, details) { void this.logger?.record(level, 'bridge', event, message, details) }
 
   statusMessage(mode, runId, state, message) {
     return {

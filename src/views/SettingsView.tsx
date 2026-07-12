@@ -3,6 +3,8 @@ import {
   ChevronRight,
   Database,
   FileCode2,
+  Clipboard,
+  Download,
   FolderOpen,
   Gauge,
   HardDrive,
@@ -39,6 +41,8 @@ export function SettingsView() {
   const [lmuPath, setLmuPath] = useState('')
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult | null>(null)
   const [diagnosing, setDiagnosing] = useState(false)
+  const [report, setReport] = useState<ApexDiagnosticReport | null>(null)
+  const [showLogs, setShowLogs] = useState(false)
   const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about'>('connection')
 
   const inspectPath = async (installationPath: string) => {
@@ -64,6 +68,7 @@ export function SettingsView() {
         void inspectPath(data.defaultLmuPath)
       }
     })
+    void window.apexDesktop?.getDiagnostics().then(setReport)
   }, [])
 
   const chooseLmu = async () => {
@@ -77,9 +82,15 @@ export function SettingsView() {
     setDiagnosing(true)
     try {
       await inspectPath(lmuPath)
+      if (window.apexDesktop) setReport(await window.apexDesktop.runDiagnostics())
     } finally {
       setDiagnosing(false)
     }
+  }
+
+  const exportBundle = async () => {
+    const result = await window.apexDesktop?.exportSupportBundle()
+    if (result?.ok) setShowLogs(true)
   }
 
   const goTo = (section: 'connection' | 'data' | 'about') => {
@@ -111,6 +122,7 @@ export function SettingsView() {
           <button type="button" className={activeSection === 'connection' ? 'is-active' : ''} onClick={() => goTo('connection')}><Gauge size={16} /> Connection <ChevronRight size={14} /></button>
           <button type="button" className={activeSection === 'data' ? 'is-active' : ''} onClick={() => goTo('data')}><Database size={16} /> Data & storage <ChevronRight size={14} /></button>
           <button type="button" className={activeSection === 'about' ? 'is-active' : ''} onClick={() => goTo('about')}><Info size={16} /> About <ChevronRight size={14} /></button>
+          <button type="button" onClick={() => document.getElementById('settings-diagnostics')?.scrollIntoView({ block: 'start' })}><HeartPulse size={16} /> Diagnostics <ChevronRight size={14} /></button>
         </nav>
 
         <div className="settings-content">
@@ -135,6 +147,23 @@ export function SettingsView() {
               <div><StatusIcon value={diagnostics?.telemetryFolder ?? null} /><span><strong>Native DuckDB recordings</strong><small>Read-only inspection from UserData\Telemetry</small></span><StatusBadge value={diagnostics?.telemetryFolder ?? null} available="Folder found" /></div>
               <div><StatusIcon value={diagnostics?.setupFolder ?? null} /><span><strong>Setup directory</strong><small>Backups before every user-initiated write</small></span><StatusBadge value={diagnostics?.setupFolder ?? null} available="Folder found" /></div>
             </div>
+          </Card>
+
+          <Card id="settings-diagnostics" className="diagnostics-card">
+            <CardHeader eyebrow="Troubleshooting" title="Evidence, fixes and full error logs" action={<Badge tone={report?.checks.some((check) => check.status === 'fail') ? 'warning' : 'positive'}>{report ? `${report.checks.filter((check) => check.status === 'pass').length}/${report.checks.length} passed` : 'Not checked'}</Badge>} />
+            <p className="diagnostics-intro">Checks are read-only. The bridge self-test does not need LMU and proves that the bundled executable and local protocol can start. A live connection still requires Windows, LMU running, and a drivable session.</p>
+            <div className="diagnostic-actions">
+              <Button icon={<RefreshCw size={14} />} onClick={() => void runDiagnostics()} disabled={!window.apexDesktop || diagnosing}>{diagnosing ? 'Running checks…' : 'Run all checks'}</Button>
+              <Button variant="secondary" icon={<Download size={14} />} onClick={() => void exportBundle()} disabled={!window.apexDesktop}>Export support bundle</Button>
+              <Button variant="secondary" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openLogsFolder()} disabled={!window.apexDesktop}>Open logs folder</Button>
+            </div>
+            {report && <div className="diagnostic-results">{report.checks.map((check) => <details key={check.id} className={`diagnostic-result is-${check.status}`} open={check.status !== 'pass'}>
+              <summary><StatusIcon value={check.status === 'pass'} /><span><strong>{check.title}</strong><small>{check.summary}</small></span><Badge tone={check.status === 'pass' ? 'positive' : check.status === 'blocked' ? 'neutral' : 'warning'}>{check.status}</Badge></summary>
+              {(check.fixes.length > 0 || check.details) && <div className="diagnostic-result__body">{check.fixes.length > 0 && <ol>{check.fixes.map((fix) => <li key={fix}>{fix}</li>)}</ol>}{check.details && <pre>{check.details}</pre>}</div>}
+            </details>)}</div>}
+            <div className="log-disclosure"><button type="button" className="text-button" onClick={() => setShowLogs((value) => !value)}>{showLogs ? 'Hide full logs' : 'Show full logs'}</button><span>Logs exclude telemetry frames and setup contents.</span></div>
+            {showLogs && <div className="log-viewer"><div><strong>apex.log.jsonl</strong><Button variant="secondary" size="sm" icon={<Clipboard size={13} />} onClick={() => void navigator.clipboard.writeText(report?.logs || 'No logs recorded.')}>Copy</Button></div><pre>{report?.logs || 'No diagnostic events have been recorded yet.'}</pre></div>}
+            <div className="support-privacy"><ShieldCheck size={15} /><span><strong>Safe to review before sending</strong>The JSON bundle contains app/system metadata, check results and Apex logs. Home paths and common secrets are redacted. It contains no telemetry frames, setup files, passwords, or account data.</span></div>
           </Card>
 
           <Card>

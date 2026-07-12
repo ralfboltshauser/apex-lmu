@@ -4,11 +4,14 @@ const fs = require('node:fs/promises')
 const { LmuBridgeManager } = require('./lmu-bridge.cjs')
 const { inspectTelemetryDatabase } = require('./telemetry-import.cjs')
 const { safeInstallSetup } = require('./setup-manager.cjs')
+const { DiagnosticsService, serializeError } = require('./diagnostics.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
 let overlayWindow
 let mainWindow
+let diagnostics
+const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
@@ -33,6 +36,8 @@ function createWindow() {
   window.once('ready-to-show', () => window.show())
   mainWindow = window
   window.on('closed', () => { if (mainWindow === window) mainWindow = null })
+  window.webContents.on('render-process-gone', (_event, details) => void diagnostics?.record('error', 'renderer', 'process-gone', 'Renderer process stopped.', details))
+  window.webContents.on('did-fail-load', (_event, code, description, url) => void diagnostics?.record('error', 'renderer', 'load-failed', description, { code, url }))
 
   if (isDevelopment) {
     window.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -113,6 +118,29 @@ ipcMain.handle('apex:path-exists', async (_event, candidatePath) => {
   }
 })
 ipcMain.handle('apex:open-data-folder', () => shell.openPath(app.getPath('userData')))
+ipcMain.handle('apex:get-diagnostics', () => diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() }))
+ipcMain.handle('apex:run-diagnostics', async () => {
+  const result = bridgeManager.runSelfTest()
+  await diagnostics.record(result.ok ? 'info' : 'error', 'diagnostics', 'self-test-requested', result.ok ? 'Bridge self-test started.' : 'Bridge self-test could not start.', result)
+  let completed = result
+  if (result.ok) completed = await new Promise((resolve) => {
+    const timer = setTimeout(() => { selfTestWaiters.delete(result.runId); resolve({ ok: false, reason: 'Self-test timed out after 8 seconds.' }) }, 8000)
+    selfTestWaiters.set(result.runId, (message) => { clearTimeout(timer); selfTestWaiters.delete(result.runId); resolve(message.state === 'self-test-complete' ? { ok: true } : { ok: false, reason: message.message || message.state }) })
+  })
+  return diagnostics.getReport({ bridgePath: bridgeManager.getBinaryPath(), selfTest: completed })
+})
+ipcMain.handle('apex:open-logs-folder', () => shell.openPath(diagnostics.dir))
+ipcMain.handle('apex:report-renderer-error', (_event, input = {}) => diagnostics.record('error', 'renderer', 'reported-error', String(input.message || 'Renderer error'), { stack: String(input.stack || ''), context: String(input.context || '') }).then(() => ({ ok: true })))
+ipcMain.handle('apex:export-support-bundle', async () => {
+  const report = await diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() })
+  const bundle = await diagnostics.buildSupportBundle({ report })
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
+  const result = await dialog.showSaveDialog({ title: 'Export Apex support bundle', defaultPath: `apex-support-${stamp}.json`, filters: [{ name: 'JSON support bundle', extensions: ['json'] }] })
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+  await fs.writeFile(result.filePath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8')
+  await diagnostics.record('info', 'support', 'bundle-exported', 'Support bundle exported.', { path: result.filePath })
+  return { ok: true, path: result.filePath }
+})
 
 ipcMain.handle('apex:start-telemetry', () => bridgeManager.start())
 ipcMain.handle('apex:stop-telemetry', () => bridgeManager.stop())
@@ -130,9 +158,13 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return
+  diagnostics = new DiagnosticsService({ app })
+  void diagnostics.record('info', 'app', 'started', 'Apex started.', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged })
   bridgeManager = new LmuBridgeManager({
     app,
+    logger: diagnostics,
     broadcast: (message) => {
+      if (message.runId && (message.state === 'self-test-complete' || message.state === 'error')) selfTestWaiters.get(message.runId)?.(message)
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:telemetry-message', message)
     },
   })
@@ -141,6 +173,9 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+process.on('uncaughtException', (error) => void diagnostics?.record('fatal', 'main', 'uncaught-exception', error.message, serializeError(error)))
+process.on('unhandledRejection', (reason) => void diagnostics?.record('error', 'main', 'unhandled-rejection', reason instanceof Error ? reason.message : String(reason), serializeError(reason)))
 
 app.on('window-all-closed', () => {
   bridgeManager?.stop()

@@ -30,6 +30,7 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
   const [found, setFound] = useState(false)
   const [detectedPath, setDetectedPath] = useState('')
   const [detectionMessage, setDetectionMessage] = useState('Search common Steam library locations')
+  const [systemReport, setSystemReport] = useState<ApexDiagnosticReport | null>(null)
 
   const detect = async () => {
     setChecking(true)
@@ -57,6 +58,12 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
     setFound(exists)
     setDetectedPath(exists ? selected : '')
     setDetectionMessage(exists ? selected : 'That folder is not accessible')
+  }
+
+  const verifySystem = async () => {
+    setChecking(true)
+    try { if (window.apexDesktop) setSystemReport(await window.apexDesktop.runDiagnostics()) }
+    finally { setChecking(false) }
   }
 
   return (
@@ -99,11 +106,13 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
           </div>
           {!found && detectionMessage !== 'Search common Steam library locations' && window.apexDesktop && <button type="button" className="text-button" onClick={() => void chooseInstallation()}>Choose the installation folder</button>}
           <div className="connection-facts"><div><i><Check size={12} /></i><span><strong>Live telemetry</strong>Official shared memory</span></div><div><i><Check size={12} /></i><span><strong>Recorded sessions</strong>Native DuckDB files</span></div><div><i><Check size={12} /></i><span><strong>Setup management</strong>Backups before every write</span></div></div>
-          <div className="onboarding-step__actions"><Button variant="secondary" onClick={() => setStep(0)}>Back</Button><Button disabled={!found} onClick={() => setStep(2)}>Continue <ArrowRight size={15} /></Button></div>
+          {found && <div className="onboarding-system-check"><Button variant="secondary" size="sm" onClick={() => void verifySystem()} disabled={checking}>{checking ? 'Testing bridge…' : 'Run system check'}</Button>{systemReport && <span className={systemReport.checks.some((item) => item.status === 'fail') ? 'is-warning' : 'is-pass'}>{systemReport.checks.filter((item) => item.status === 'pass').length}/{systemReport.checks.length} checks passed</span>}</div>}
+          {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>Fix: {item.fixes[0]}</small>}</div>)}
+          <div className="onboarding-step__actions"><Button variant="secondary" onClick={() => setStep(0)}>Back</Button><Button disabled={!found || !systemReport || systemReport.checks.some((item) => item.status === 'fail')} onClick={() => setStep(2)}>Continue <ArrowRight size={15} /></Button></div>
         </div>}
 
         {step === 2 && <div className="onboarding-step onboarding-step--ready">
-          <div className="ready-check"><Check size={34} /></div><Badge tone="positive">Ready</Badge><h1>That’s all Apex needs.</h1><p>Start LMU and drive. Your first lap will appear automatically, with sensible defaults already selected.</p>
+          <div className="ready-check"><Check size={34} /></div><Badge tone="positive">Local checks passed</Badge><h1>Start LMU, then enter the car.</h1><p>Apex waits for a drivable session. If it stays offline, open Settings → Diagnostics: every failure includes a targeted fix, technical details, and a support bundle you can send with a bug report.</p>
           <div className="ready-summary"><div><span>Data source</span><strong>Official · 50 Hz</strong></div><div><span>Storage</span><strong>Local only</strong></div><div><span>Overlay layout</span><strong>Essential</strong></div></div>
           <Button onClick={onComplete}>Open command center <ArrowRight size={15} /></Button>
           <button type="button" className="text-button" onClick={() => { onDemo(); onComplete() }}>Open with demo telemetry</button>
@@ -186,6 +195,17 @@ export default function App() {
       .then((result) => addToast(result.ok ? 'Overlay window opened' : 'Overlay did not open', result.ok ? 'It is always-on-top and click-through while you race.' : 'Check desktop diagnostics and try again.'))
       .catch((error) => addToast('Overlay did not open', error instanceof Error ? error.message : String(error)))
   }
+
+  useEffect(() => {
+    const report = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const reason = 'reason' in event ? event.reason : event.error
+      const error = reason instanceof Error ? reason : new Error('message' in event ? event.message : String(reason))
+      void window.apexDesktop?.reportError({ message: error.message, stack: error.stack, context: event.type })
+    }
+    window.addEventListener('error', report)
+    window.addEventListener('unhandledrejection', report)
+    return () => { window.removeEventListener('error', report); window.removeEventListener('unhandledrejection', report) }
+  }, [])
 
   useEffect(() => {
     const adapter = demoAdapter.current

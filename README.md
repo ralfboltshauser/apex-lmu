@@ -43,6 +43,19 @@ are attached to every release.
 The alpha installer is unsigned, so Windows SmartScreen may show a warning.
 Verify the checksum before running it. Code signing is a release-roadmap item.
 
+### First run and troubleshooting
+
+The first-run wizard verifies the LMU installation path and runs the bundled bridge's isolated protocol self-test before calling the integration ready. The self-test does not require LMU to be running. For live data, start LMU and enter a drivable session; Apex will wait rather than inject into or modify the game.
+
+If connection or setup fails, open **Settings → Diagnostics**:
+
+- Run read-only platform, storage, bridge, and protocol checks.
+- Expand a failed check for a targeted fix and its complete technical details.
+- View or copy the rotating local JSONL error log.
+- Open the log directory or export a support bundle for a GitHub issue.
+
+Support bundles contain Apex version/system metadata, diagnostic results, and Apex process/bridge logs. They exclude telemetry frames and setup contents, redact the user's home directory and common secret fields, and are plain JSON so they can be reviewed before sharing.
+
 ## What works today
 
 | Area | Current behavior |

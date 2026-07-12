@@ -65,3 +65,9 @@ without changing UI consumers.
 5. Run a practice session offline.
 6. Run an EAC-protected online session without privileged access.
 7. Only then mark the new LMU version compatible.
+
+## Diagnostics and supportability
+
+The Electron main process owns a rotating JSONL log under the application user-data directory. It records lifecycle failures, bridge stderr and process exits, renderer termination/load failures, and explicitly reported renderer exceptions. Telemetry frames and setup file contents are never written to this log.
+
+Renderer access is limited to narrow preload calls for running read-only checks, viewing logs, opening the log folder, and exporting a redacted JSON support bundle. A bridge self-test is only considered successful after its correlated completion frame arrives; process launch alone is not success.
