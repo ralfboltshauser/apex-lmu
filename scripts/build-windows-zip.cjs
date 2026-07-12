@@ -7,8 +7,8 @@ const root = path.join(__dirname, '..')
 const releaseRoot = path.join(root, 'release')
 const duckdbRoot = path.join(root, 'node_modules', '@duckdb')
 const parkingRoot = path.join(root, '.packaging-cache')
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+const npmCli = process.env.npm_execpath
+if (!npmCli) throw new Error('This packaging helper must be launched through an npm script')
 const windowsBinding = path.join(duckdbRoot, 'node-bindings-win32-x64')
 const { version } = require(path.join(root, 'package.json'))
 const targets = process.argv.slice(2)
@@ -23,13 +23,22 @@ function run(command, args) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${result.status}`)
 }
 
+function spawnNpm(args, options = {}) {
+  return spawnSync(process.execPath, [npmCli, ...args], { cwd: root, ...options })
+}
+
+function runNpm(args) {
+  const result = spawnNpm(args, { stdio: 'inherit' })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(`npm ${args.join(' ')} exited with ${result.status}`)
+}
+
 function ensureWindowsBinding() {
   if (fs.existsSync(path.join(windowsBinding, 'duckdb.node'))) return
   fs.mkdirSync(parkingRoot, { recursive: true })
-  const packed = spawnSync(
-    npm,
+  const packed = spawnNpm(
     ['pack', '@duckdb/node-bindings-win32-x64@1.5.4-r.1', '--pack-destination', parkingRoot, '--json'],
-    { cwd: root, encoding: 'utf8' },
+    { encoding: 'utf8' },
   )
   if (packed.error) throw packed.error
   if (packed.status !== 0) throw new Error(packed.stderr || `npm pack exited with ${packed.status}`)
@@ -96,12 +105,12 @@ function stagePublicArtifacts() {
 }
 
 ensureWindowsBinding()
-run(npm, ['run', 'build:bridge:win'])
-run(npm, ['run', 'build'])
+runNpm(['run', 'build:bridge:win'])
+runNpm(['run', 'build'])
 
 const parked = parkNonWindowsBindings()
 try {
-  run(npx, ['electron-builder', '--win', ...requestedTargets])
+  runNpm(['exec', '--', 'electron-builder', '--win', ...requestedTargets])
   stagePublicArtifacts()
 } finally {
   restoreBindings(parked)
