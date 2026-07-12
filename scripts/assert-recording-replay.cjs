@@ -19,7 +19,7 @@ async function sha256(file) {
 }
 
 function emptySummary() {
-  return { statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: new Set(), layouts: new Set(), cars: new Set(), classes: new Set(), controlOwners: new Set(), controlOwnerFrames: {}, controlOwnerTransitions: [], previousControlOwner: null, opponentMaximum: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], controlMaximums: { throttle: 0, brake: 0, absoluteSteering: 0 }, fuel: [Infinity, -Infinity], decreaseFrames: 0, maximumIncrease: 0, lastLaps: new Set(), pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null }
+  return { statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: new Set(), layouts: new Set(), cars: new Set(), classes: new Set(), controlOwners: new Set(), controlOwnerFrames: {}, controlOwnerTransitions: [], previousControlOwner: null, opponentMaximum: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], controlMaximums: { throttle: 0, brake: 0, absoluteSteering: 0 }, fuel: [Infinity, -Infinity], decreaseFrames: 0, maximumIncrease: 0, lastLaps: new Set(), pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, worldPositionFrames: 0, worldX: [Infinity, -Infinity], worldZ: [Infinity, -Infinity], motionRatios: [], previousMotion: null, completionFrames: null }
 }
 
 function range(summary, key, value) { if (Number.isFinite(value)) { summary[key][0] = Math.min(summary[key][0], value); summary[key][1] = Math.max(summary[key][1], value) } }
@@ -50,6 +50,19 @@ function accept(summary, message, runId) {
   }
   range(summary, 'air', message.session?.airTempC); range(summary, 'trackTemp', message.session?.trackTempC); range(summary, 'rain', message.session?.rain); range(summary, 'wetness', message.session?.wetness)
   if (message.playerTelemetryAvailable === false) return
+  const position = message.player?.worldPositionM
+  const elapsed = message.player?.gameElapsedSeconds
+  if (position && [position.x, position.y, position.z, elapsed].every(Number.isFinite)) {
+    summary.worldPositionFrames += 1
+    range(summary, 'worldX', position.x); range(summary, 'worldZ', position.z)
+    const previous = summary.previousMotion
+    if (previous && elapsed > previous.elapsed && elapsed - previous.elapsed < 1) {
+      const movement = Math.hypot(position.x - previous.position.x, position.y - previous.position.y, position.z - previous.position.z)
+      const expectedMovement = ((message.player.speedKph + previous.speedKph) / 2 / 3.6) * (elapsed - previous.elapsed)
+      if (expectedMovement > 0.01) summary.motionRatios.push(movement / expectedMovement)
+    }
+    summary.previousMotion = { position, elapsed, speedKph: message.player.speedKph }
+  }
   summary.controlMaximums.throttle = Math.max(summary.controlMaximums.throttle, Math.abs(message.player?.throttle ?? 0))
   summary.controlMaximums.brake = Math.max(summary.controlMaximums.brake, Math.abs(message.player?.brake ?? 0))
   summary.controlMaximums.absoluteSteering = Math.max(summary.controlMaximums.absoluteSteering, Math.abs(message.player?.steering ?? 0))
@@ -103,6 +116,15 @@ function assertSummary(summary, expected) {
   atLeast(summary.decreaseFrames, expected.minimumFuelDecreaseFrames, 'fuel decrease frames')
   atLeast(summary.maximumIncrease, expected.minimumRefuelIncreaseLiters, 'refuel increase')
   for (const [key, value] of Object.entries(expected.minimumWheelMaximums)) atLeast(summary.wheelMaximums[key], value, key)
+  exact(summary.worldPositionFrames, expected.worldPosition.frames, 'world-position frame count')
+  between(summary.worldX[0], expected.worldPosition.xM, 'minimum world X'); between(summary.worldX[1], expected.worldPosition.xM, 'maximum world X')
+  between(summary.worldZ[0], expected.worldPosition.zM, 'minimum world Z'); between(summary.worldZ[1], expected.worldPosition.zM, 'maximum world Z')
+  const ratios = [...summary.motionRatios].sort((left, right) => left - right)
+  const percentile = (value) => ratios[Math.floor((ratios.length - 1) * value)]
+  atLeast(ratios.length, expected.worldPosition.minimumMotionComparisons, 'world-motion comparisons')
+  between(percentile(0.05), expected.worldPosition.motionRatio, 'world-motion ratio p05')
+  between(percentile(0.5), expected.worldPosition.motionRatio, 'world-motion ratio median')
+  between(percentile(0.95), expected.worldPosition.motionRatio, 'world-motion ratio p95')
 }
 
 async function run(options = {}) {

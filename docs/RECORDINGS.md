@@ -77,7 +77,8 @@ an allowlisted expectation manifest under `data/recordings/`. The manifest pins
 the exact byte count and SHA-256 before any replay starts. It contains only
 reviewable aggregate expectations—track/car/class, capability timing, control
 ownership transitions, ranges, lap time, pit sequence, fuel movement, wheel
-evidence, and opponent count—not driver, Steam, server, or local-path data.
+evidence, opponent count, world-coordinate bounds, and coordinate-motion versus
+speed consistency—not driver, Steam, server, or local-path data.
 
 Run the current decoder and bridge protocol check on Linux or Windows:
 
@@ -114,7 +115,10 @@ stream while the normal desktop adapter and React UI consume it. It also opens
 the production overlay on an enumerated display, checks exact bounds,
 non-focusable/topmost state, live opacity/widget configuration, measured replay
 content, deterministic close, lifetime-stat exclusion, track/car rendering and
-main-window responsiveness. It then closes the entire process tree. The test
+main-window responsiveness. It also requires the real recording to reconstruct
+a 99% covered route, expose all 11 stable braking zones in Live and Analysis,
+and keep the map/chart evidence distance-aligned. It then closes the entire
+process tree. The test
 disables updater side effects and accepts no arbitrary script, URL, preload, or
 recording path from the renderer.
 

@@ -51,7 +51,7 @@ it is not an instruction to reimplement the feature.
 | 4 | [#6](04-issue-06-durable-lifetime-driving-statistics.md) | Durable, recoverable lifetime activity ledger and statistics UI | Implemented locally; native packaged-Windows acceptance pending | XL | 20–30 days | High | Merge after #9; #13 is a release-quality soft gate |
 | 5 | [#5](05-issue-05-working-multi-display-hud-overlays.md) | Validate landed display-targeted overlay and close or file gaps | Shipped and locally hardened; native source/package + hardware evidence pending | XL implementation; bounded closure | 10–15-day implementation already landed | High | Packaged Windows/hardware evidence |
 | 6 | [#8](06-issue-08-trustworthy-strategy-planner.md) | One coherent calculated strategy model and explainable UX | Fuel-only planner implemented locally; release gates pending | XL | 25–40 days | High | #7; use #13 for replay-integrated acceptance |
-| 7 | [#4](07-issue-04-track-map-telemetry-context.md) | Measured track geometry, braking context, and chart cross-linking | Not started | XL | 12–20 days after #6 | High | #6 and #13 |
+| 7 | [#4](07-issue-04-track-map-telemetry-context.md) | Measured track geometry, braking context, and chart cross-linking | Implemented locally; native Windows/header gates pending | XL | 12–20 days after #6 | High | #6 and #13 |
 | 8 | [#3](08-issue-03-premium-feature-program.md) | Bounded premium-grade feature program and remaining child epics | Requires decomposition | XL epic | 55–95 incremental; 122–200 total portfolio | Very high | #4, #5, #6, #8, #13 for completion |
 
 The #3 plan reports an incremental estimate after concrete foundations and a

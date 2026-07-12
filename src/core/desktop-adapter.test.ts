@@ -22,9 +22,9 @@ describe('desktop LMU bridge mapping', () => {
       capturedAt: '2026-07-11T20:00:00.000Z',
       sequence: 42,
       session: { track: 'Circuit de la Sarthe', layout: 'Le Mans', elapsedSeconds: 900, endSeconds: 7200, maximumLaps: 0, trackLengthM: 13626, phase: 5, inRealtime: true, airTempC: 18, trackTempC: 27, rain: 0, wetness: 0.1, windSpeedMps: 3.2, yellowState: 0 },
-      player: { id: 6, driver: 'Ralf Driver', name: 'Porsche 963', class: 'Hypercar', position: 3, lap: 8, sector: 2, lapDistanceM: 6813, speedKph: 271.4, rpm: 8021, maximumRpm: 9000, gear: 6, throttle: 0.92, brake: 0, steering: -0.08, clutch: 0, fuelL: 48.2, fuelCapacityL: 90, batteryFraction: 0.64, rearBrakeBias: 0.47, deltaBestSeconds: 0.12, bestLapSeconds: 205.2, lastLapSeconds: 206.1, timeBehindLeaderSeconds: 6.1, timeBehindNextSeconds: 2.8, inPits: false, pitState: 0, frontCompound: 'Mediums', rearCompound: 'Mediums', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')] },
+      player: { id: 6, driver: 'Ralf Driver', name: 'Porsche 963', class: 'Hypercar', controlOwner: 'local-player', worldPositionM: { x: 123, y: 4, z: -456 }, gameElapsedSeconds: 900.5, lapStartSeconds: 700, position: 3, lap: 8, sector: 2, lapDistanceM: 6813, speedKph: 271.4, rpm: 8021, maximumRpm: 9000, gear: 6, throttle: 0.92, brake: 0, steering: -0.08, clutch: 0, fuelL: 48.2, fuelCapacityL: 90, batteryFraction: 0.64, rearBrakeBias: 0.47, deltaBestSeconds: 0.12, bestLapSeconds: 205.2, lastLapSeconds: 206.1, timeBehindLeaderSeconds: 6.1, timeBehindNextSeconds: 2.8, inPits: false, pitState: 0, frontCompound: 'Mediums', rearCompound: 'Mediums', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')] },
       opponents: [
-        { id: 51, driver: 'Leader', name: 'Ferrari 499P', class: 'Hypercar', position: 1, laps: 8, lapDistanceM: 7000, bestLapSeconds: 204.8, lastLapSeconds: 205.4, behindLeaderSeconds: 0, behindNextSeconds: 0, lapsBehindLeader: 0, inPits: false, pitState: 0 },
+        { id: 51, driver: 'Leader', name: 'Ferrari 499P', class: 'Hypercar', position: 1, laps: 8, lapDistanceM: 7000, worldPositionM: { x: 140, y: 4, z: -440 }, bestLapSeconds: 204.8, lastLapSeconds: 205.4, behindLeaderSeconds: 0, behindNextSeconds: 0, lapsBehindLeader: 0, inPits: false, pitState: 0 },
         { id: 22, driver: 'LMP Driver', name: 'Oreca 07', class: 'LMP2', position: 8, laps: 7, lapDistanceM: 3000, bestLapSeconds: 212, lastLapSeconds: 213, behindLeaderSeconds: 35, behindNextSeconds: 4, lapsBehindLeader: 1, inPits: true, pitState: 3 },
       ],
     }
@@ -38,6 +38,11 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.opponents[1].car.vehicleClass).toBe('LMP2')
     expect(frame.opponents[1].pitState).toBe('stopped')
     expect(frame.sample.sequence).toBe(42)
+    expect(frame.sample.worldPositionM).toEqual({ x: 123, y: 4, z: -456 })
+    expect(frame.sample.controlOwner).toBe('local-player')
+    expect(frame.sample.sessionElapsedMs).toBe(900500)
+    expect(frame.sample.lapElapsedMs).toBe(200500)
+    expect(frame.opponents[0].worldPositionM).toEqual({ x: 140, y: 4, z: -440 })
   })
 
   it('maps a pre-race scoring snapshot without claiming vehicle telemetry', () => {

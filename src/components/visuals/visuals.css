@@ -271,6 +271,17 @@
   max-height: 320px;
 }
 
+.circuit-canvas--empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  color: var(--visual-muted);
+  border: 1px dashed var(--visual-border);
+  border-radius: 12px;
+  font-size: 11px;
+  text-align: center;
+}
+
 .circuit-track-glow {
   fill: none;
   opacity: 0.12;

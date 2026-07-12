@@ -41,6 +41,10 @@ interface RawBridgeVehicle {
   driver: string
   name: string
   class: string
+  controlOwner?: 'local-player' | 'ai' | 'remote' | 'replay' | 'unknown'
+  worldPositionM?: { x: number; y: number; z: number }
+  gameElapsedSeconds?: number
+  lapStartSeconds?: number
   position: number
   lap: number
   sector: number
@@ -77,6 +81,7 @@ interface RawBridgeOpponent {
   position: number
   laps: number
   lapDistanceM: number
+  worldPositionM?: { x: number; y: number; z: number }
   bestLapSeconds: number
   lastLapSeconds: number
   behindLeaderSeconds: number
@@ -130,6 +135,16 @@ function isRawFrame(value: unknown): value is RawBridgeFrame {
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function optionalVector(value: unknown) {
+  if (!isRecord(value)) return undefined
+  const { x, y, z } = value
+  return typeof x === 'number' && Number.isFinite(x)
+    && typeof y === 'number' && Number.isFinite(y)
+    && typeof z === 'number' && Number.isFinite(z)
+    ? { x, y, z }
+    : undefined
 }
 
 function normalizeClass(raw: string): VehicleClass {
@@ -254,6 +269,7 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     engineMap: 0,
     inputs, motion, powertrain, hybrid, wheels,
     damage: { aeroPercent: 100, enginePercent: 100, transmissionPercent: 100, suspensionPercent: { frontLeft: 100, frontRight: 100, rearLeft: 100, rearRight: 100 }, headlightsWorking: true },
+    worldPositionM: optionalVector(raw.player.worldPositionM),
   }
   const opponents: OpponentState[] = raw.opponents.map((opponent) => ({
     car: makeCar(opponent.id, opponent.name, opponent.class), driver: makeDriver(opponent.id, opponent.driver),
@@ -264,12 +280,15 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     intervalAheadMs: opponent.behindNextSeconds > 0 ? opponent.behindNextSeconds * 1000 : null,
     lastLapTimeMs: opponent.lastLapSeconds > 0 ? opponent.lastLapSeconds * 1000 : null, bestLapTimeMs: opponent.bestLapSeconds > 0 ? opponent.bestLapSeconds * 1000 : null,
     pitState: pitState(opponent.inPits, opponent.pitState), isConnected: true, isPlayerClass: normalizeClass(opponent.class) === playerClass,
+    worldPositionM: optionalVector(opponent.worldPositionM),
   }))
   const sessionId = `lmu-${raw.session.track || 'session'}-${startedAt}`
   const weather = mapWeather(raw.session)
-  const sample = { sequence: raw.sequence, sessionId, lapId: `${sessionId}-lap-${player.currentLapNumber}`, capturedAt: raw.capturedAt, sessionElapsedMs: raw.session.elapsedSeconds * 1000, lapElapsedMs: 0, distanceM: player.distanceM, distanceFraction: player.distanceFraction, sectorIndex: player.sectorIndex, isInPitLane: player.pitState !== 'none', inputs, motion, powertrain, hybrid, wheels }
+  const gameElapsedSeconds = typeof raw.player.gameElapsedSeconds === 'number' && Number.isFinite(raw.player.gameElapsedSeconds) ? raw.player.gameElapsedSeconds : raw.session.elapsedSeconds
+  const lapStartSeconds = typeof raw.player.lapStartSeconds === 'number' && Number.isFinite(raw.player.lapStartSeconds) ? raw.player.lapStartSeconds : undefined
+  const sample = { sequence: raw.sequence, sessionId, lapId: `${sessionId}-lap-${player.currentLapNumber}`, capturedAt: raw.capturedAt, sessionElapsedMs: gameElapsedSeconds * 1000, lapElapsedMs: lapStartSeconds === undefined ? 0 : Math.max(0, gameElapsedSeconds - lapStartSeconds) * 1000, distanceM: player.distanceM, distanceFraction: player.distanceFraction, sectorIndex: player.sectorIndex, isInPitLane: player.pitState !== 'none', inputs, motion, powertrain, hybrid, wheels, worldPositionM: optionalVector(raw.player.worldPositionM), controlOwner: raw.player.controlOwner ?? 'unknown' }
   return {
-    sequence: raw.sequence,
+    sequence: raw.sequence, source: raw.source,
     capturedAt: raw.capturedAt,
     session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt, scheduledDurationMs: raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: raw.opponents.length > 0 },
     sessionState: { phase: phase(raw), flag: raw.session.yellowState > 0 ? 'yellow' : 'green', elapsedMs: raw.session.elapsedSeconds * 1000, remainingMs: raw.session.endSeconds > 0 ? Math.max(0, raw.session.endSeconds - raw.session.elapsedSeconds) * 1000 : null, currentLap: player.currentLapNumber, totalLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, sessionBestLapMs: null, incidentCount: 0 },

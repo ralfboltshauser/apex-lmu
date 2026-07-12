@@ -62,55 +62,65 @@ type wheel struct {
 	Detached       bool       `json:"detached"`
 }
 
+type worldPositionM struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
 type vehicle struct {
-	ID                  int32    `json:"id"`
-	Driver              string   `json:"driver"`
-	Name                string   `json:"name"`
-	Class               string   `json:"class"`
-	ControlOwner        string   `json:"controlOwner"`
-	Position            uint8    `json:"position"`
-	Lap                 int32    `json:"lap"`
-	Sector              int32    `json:"sector"`
-	LapDistanceM        float64  `json:"lapDistanceM"`
-	SpeedKph            float64  `json:"speedKph"`
-	RPM                 float64  `json:"rpm"`
-	MaximumRPM          float64  `json:"maximumRpm"`
-	Gear                int32    `json:"gear"`
-	Throttle            float64  `json:"throttle"`
-	Brake               float64  `json:"brake"`
-	Steering            float64  `json:"steering"`
-	Clutch              float64  `json:"clutch"`
-	FuelL               float64  `json:"fuelL"`
-	FuelCapacityL       float64  `json:"fuelCapacityL"`
-	BatteryFraction     float64  `json:"batteryFraction"`
-	RearBrakeBias       float64  `json:"rearBrakeBias"`
-	DeltaBestSeconds    float64  `json:"deltaBestSeconds"`
-	BestLapSeconds      float64  `json:"bestLapSeconds"`
-	LastLapSeconds      float64  `json:"lastLapSeconds"`
-	TimeBehindLeaderSec float64  `json:"timeBehindLeaderSeconds"`
-	TimeBehindNextSec   float64  `json:"timeBehindNextSeconds"`
-	InPits              bool     `json:"inPits"`
-	PitState            uint8    `json:"pitState"`
-	FrontCompound       string   `json:"frontCompound"`
-	RearCompound        string   `json:"rearCompound"`
-	Wheels              [4]wheel `json:"wheels"`
+	ID                  int32           `json:"id"`
+	Driver              string          `json:"driver"`
+	Name                string          `json:"name"`
+	Class               string          `json:"class"`
+	ControlOwner        string          `json:"controlOwner"`
+	WorldPositionM      *worldPositionM `json:"worldPositionM,omitempty"`
+	GameElapsedSeconds  *float64        `json:"gameElapsedSeconds,omitempty"`
+	LapStartSeconds     *float64        `json:"lapStartSeconds,omitempty"`
+	Position            uint8           `json:"position"`
+	Lap                 int32           `json:"lap"`
+	Sector              int32           `json:"sector"`
+	LapDistanceM        float64         `json:"lapDistanceM"`
+	SpeedKph            float64         `json:"speedKph"`
+	RPM                 float64         `json:"rpm"`
+	MaximumRPM          float64         `json:"maximumRpm"`
+	Gear                int32           `json:"gear"`
+	Throttle            float64         `json:"throttle"`
+	Brake               float64         `json:"brake"`
+	Steering            float64         `json:"steering"`
+	Clutch              float64         `json:"clutch"`
+	FuelL               float64         `json:"fuelL"`
+	FuelCapacityL       float64         `json:"fuelCapacityL"`
+	BatteryFraction     float64         `json:"batteryFraction"`
+	RearBrakeBias       float64         `json:"rearBrakeBias"`
+	DeltaBestSeconds    float64         `json:"deltaBestSeconds"`
+	BestLapSeconds      float64         `json:"bestLapSeconds"`
+	LastLapSeconds      float64         `json:"lastLapSeconds"`
+	TimeBehindLeaderSec float64         `json:"timeBehindLeaderSeconds"`
+	TimeBehindNextSec   float64         `json:"timeBehindNextSeconds"`
+	InPits              bool            `json:"inPits"`
+	PitState            uint8           `json:"pitState"`
+	FrontCompound       string          `json:"frontCompound"`
+	RearCompound        string          `json:"rearCompound"`
+	Wheels              [4]wheel        `json:"wheels"`
 }
 
 type opponent struct {
-	ID               int32   `json:"id"`
-	Driver           string  `json:"driver"`
-	Name             string  `json:"name"`
-	Class            string  `json:"class"`
-	Position         uint8   `json:"position"`
-	Laps             int16   `json:"laps"`
-	LapDistanceM     float64 `json:"lapDistanceM"`
-	BestLapSeconds   float64 `json:"bestLapSeconds"`
-	LastLapSeconds   float64 `json:"lastLapSeconds"`
-	BehindLeaderSec  float64 `json:"behindLeaderSeconds"`
-	BehindNextSec    float64 `json:"behindNextSeconds"`
-	LapsBehindLeader int32   `json:"lapsBehindLeader"`
-	InPits           bool    `json:"inPits"`
-	PitState         uint8   `json:"pitState"`
+	ID               int32           `json:"id"`
+	Driver           string          `json:"driver"`
+	Name             string          `json:"name"`
+	Class            string          `json:"class"`
+	Position         uint8           `json:"position"`
+	Laps             int16           `json:"laps"`
+	LapDistanceM     float64         `json:"lapDistanceM"`
+	WorldPositionM   *worldPositionM `json:"worldPositionM,omitempty"`
+	BestLapSeconds   float64         `json:"bestLapSeconds"`
+	LastLapSeconds   float64         `json:"lastLapSeconds"`
+	BehindLeaderSec  float64         `json:"behindLeaderSeconds"`
+	BehindNextSec    float64         `json:"behindNextSeconds"`
+	LapsBehindLeader int32           `json:"lapsBehindLeader"`
+	InPits           bool            `json:"inPits"`
+	PitState         uint8           `json:"pitState"`
 }
 
 func emit(encoder *json.Encoder, value message) error {

@@ -91,7 +91,10 @@ building the NSIS and portable artifacts.
 The overlay portion checks display enumeration and selection, exact display
 bounds, non-focusable/topmost state, live opacity and supported-widget updates,
 measured replay content, unavailable-to-waiting cleanup, deterministic close,
-and a single remaining main window.
+and a single remaining main window. The main renderer must also reconstruct the
+measured driven route from official world coordinates, reach the allowlisted
+coverage, expose the allowlisted braking-zone count, and open the matching
+distance-aligned Analysis view.
 
 This proves that the recorded session's known facts survive the current Apex
 pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,

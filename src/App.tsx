@@ -26,6 +26,7 @@ import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, update
 import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
 import { pendingReleaseNotes, type ReleaseNote } from './release-notes'
+import { MeasuredTrackRecorder, type MeasuredTrackSnapshot } from './engine'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
@@ -189,6 +190,7 @@ export default function App() {
   const demoAdapter = useRef(new MockTelemetryAdapter({ autoTick: true, stepMs: 80, seed: 963 }))
   const desktopAdapter = useRef(new DesktopTelemetryAdapter())
   const fuelTracker = useRef(emptyFuelTracker())
+  const measuredTrackRecorder = useRef(new MeasuredTrackRecorder())
   const demoRunningRef = useRef(false)
   const viewRef = useRef<ViewId>('home')
   const lastUpdateNotice = useRef('')
@@ -196,6 +198,7 @@ export default function App() {
   const [liveConnectionMessage, setLiveConnectionMessage] = useState(m.connection.starting)
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
   const [liveFuel, setLiveFuel] = useState<LiveFuelEstimate | null>(null)
+  const [measuredTrack, setMeasuredTrack] = useState<MeasuredTrackSnapshot | null>(null)
   demoRunningRef.current = demoRunning
   viewRef.current = view
 
@@ -326,6 +329,10 @@ export default function App() {
     void window.apexDesktop?.getEnvironment().then((environment) => {
       if (cancelled || environment.platform !== 'win32') return
       unsubscribeFrame = adapter.subscribe((frame) => {
+        // Route aggregation is deliberately slower than the 50 Hz instruments;
+        // car markers still use the current frame while geometry refreshes at 2 Hz.
+        const measuredSnapshot = measuredTrackRecorder.current.ingest(frame, frame.sequence % 25 === 0)
+        if (measuredSnapshot) setMeasuredTrack(measuredSnapshot)
         const previousFuel = fuelTracker.current
         let nextFuel = updateFuelTracker(previousFuel, frame)
         if (nextFuel.sessionId && nextFuel.sessionId !== previousFuel.sessionId) {
@@ -370,9 +377,9 @@ export default function App() {
   const renderView = () => {
     const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
     switch (view) {
-      case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
+      case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} measuredTrack={measuredTrack} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
       case 'fuel': return <FuelCalculatorView live={liveFuel} />
-      case 'analyze': return <AnalyzeView />
+      case 'analyze': return <AnalyzeView measuredTrack={measuredTrack} />
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />
       case 'overlays': return <OverlaysView onOpenOverlay={openOverlay} />

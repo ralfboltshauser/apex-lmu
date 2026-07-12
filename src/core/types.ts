@@ -199,6 +199,8 @@ export interface CarState {
   readonly hybrid: HybridState | null
   readonly wheels: WheelStates
   readonly damage: DamageState
+  /** Official LMU world position when the vehicle telemetry block is available. */
+  readonly worldPositionM?: ReadonlyVector3
 }
 
 export interface OpponentState {
@@ -218,6 +220,8 @@ export interface OpponentState {
   readonly pitState: PitState
   readonly isConnected: boolean
   readonly isPlayerClass: boolean
+  /** Official LMU scoring world position; absent when the producer does not expose it. */
+  readonly worldPositionM?: ReadonlyVector3
 }
 
 export interface TelemetrySample {
@@ -236,6 +240,8 @@ export interface TelemetrySample {
   readonly powertrain: PowertrainState
   readonly hybrid: HybridState | null
   readonly wheels: WheelStates
+  readonly worldPositionM?: ReadonlyVector3
+  readonly controlOwner?: 'local-player' | 'ai' | 'remote' | 'replay' | 'unknown'
 }
 
 export type TelemetryEventType =
@@ -269,6 +275,7 @@ export interface TelemetryFrame {
   readonly opponents: readonly OpponentState[]
   readonly sample: TelemetrySample
   readonly events: readonly TelemetryEvent[]
+  readonly source?: 'lmu-shared-memory' | 'self-test' | 'recording-replay'
   /** Session-only means LMU exposes scoring/weather but not the player's per-wheel telemetry yet. */
   readonly sourceState?: 'session-only' | 'vehicle-telemetry'
 }

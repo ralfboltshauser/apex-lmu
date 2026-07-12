@@ -3,7 +3,7 @@ title: "Measured track map and braking context"
 issue: 4
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/4"
 issue_state: "open"
-implementation_status: "not-started"
+implementation_status: "implemented-locally-native-windows-pending"
 plan_order: 7
 phase: 2
 workstream: "telemetry-analysis-and-geometry"
@@ -18,7 +18,7 @@ blocks: [3]
 parallel_with: []
 source_updated_at: "2026-07-12T12:28:17Z"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+last_verified: "2026-07-13"
 ---
 
 # Issue #4 — measured track map and braking context
@@ -31,6 +31,49 @@ marks application/release, and synchronizes the map, charts, and selected
 insight by lap distance. Live mode learns the route locally and places cars only
 from measured coordinates. Until enough geometry exists, Apex shows a partial
 route or honest distance strip—never a generic/demo circuit presented as real.
+
+## Implementation evidence — 2026-07-13
+
+The local implementation branch now carries a measured live and analysis path:
+
+- The packed bridge decodes telemetry `mElapsedTime`, `mLapStartET`, and `mPos`
+  plus scoring `mPos` using explicit little-endian offsets, bounds, and finite
+  checks. The fields are additive/optional through the normalized contract.
+- The approved real recording contributes 18,035 finite position frames. World
+  displacement divided by speed integrated over game time is 0.99988 / 1.00001
+  / 1.00007 at the 5th/median/95th percentiles. This independently proves the
+  coordinate/time interpretation rather than accepting merely plausible axes.
+- That recording reconstructs two clean laps, 354 robust 12 m route bins,
+  99.16% coverage, geometry fingerprint `34f2b542`, and 11 stable braking zones.
+- `MeasuredTrackRecorder` deduplicates repeated LMU game-time snapshots, rejects
+  non-local control, pits, backwards/long gaps, teleports, invalid ranges, and
+  duplicate/out-of-order sequences. Pit/AI/incomplete laps cannot become clean
+  reference laps.
+- Braking uses application/release hysteresis, minimum duration/sample count,
+  chatter-gap merging, isolated-spike rejection, and retains application, peak,
+  release, duration, entry/minimum/exit speed, and sample count.
+- Measured Live renders the locally reconstructed driven line, exact measured
+  player/opponent positions, coverage state, heat segments, and a textual brake
+  list. No opponent coordinate means no marker.
+- Measured Analysis reuses the latest clean lap and synchronizes selected brake
+  evidence, map segment, distance cursor, speed trace, and brake trace. Zone
+  rows are keyboard buttons and expose complete textual evidence.
+- `CircuitTrackMap` no longer silently substitutes its generated demo path when
+  an explicit measured point set is empty. Measured marker and segment lookup
+  preserve LMU lap distance rather than SVG arc-length percentage.
+
+The normal product keeps this high-rate analysis in memory and reconstructs it
+from an explicitly chosen private `.apexrec` when replayed. It does not silently
+persist or upload high-rate position/pedal history. Durable automatic history
+would require a separate user-facing privacy/retention decision; the raw
+recorder remains the lossless opt-in path.
+
+Focused and full local gates pass: packed offset/rejection tests, geometry and
+brake engine tests, renderer safety/interaction tests, all 18,039 real frames,
+109 renderer tests, 54 desktop tests, scripts, Go, Electron SQLite, production
+build, EN/DE, TypeScript, and Windows cross-compile. The native source/package
+Windows E2E now requires 99% route coverage and all 11 zones in both views; the
+hosted run and an installed-header diff remain release gates.
 
 ## Current implementation truth
 

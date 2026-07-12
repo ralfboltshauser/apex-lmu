@@ -25,6 +25,8 @@ import { useMemo, useState } from 'react'
 import { Badge, Button, Card, CardHeader, Progress, Segmented, Select, TooltipHint } from '../components/ui'
 import { demoInsights, demoSessions, lapTrace, referenceTrace } from '../data/demo'
 import { defineMessages, formatMessage, useI18n, useMessages, type Language } from '../i18n'
+import { CircuitTrackMap } from '../components/visuals/CircuitTrackMap'
+import type { BrakeZone, MeasuredTrackSnapshot } from '../engine'
 
 type Channel = 'speed' | 'throttle' | 'brake' | 'delta'
 
@@ -49,6 +51,7 @@ const copy = defineMessages({
   breakdown: { eyebrow: 'Lap anatomy', title: 'Where the difference comes from', corners: 'corners', braking: 'Braking', midCorner: 'Mid-corner', exit: 'Exit', conclusionTitle: 'Brake release is the recurring pattern.', conclusionBody: 'Five of seven losing corners show an abrupt release before turn-in.' },
   session: { eyebrow: 'Session quality', cleanLaps: 'clean laps', consistency: 'Consistency', top: 'Top 12%', topSessions: 'of your sessions', averagePace: 'Average pace', lastCleanLaps: 'clean laps', trackLimits: 'Track limits', raidillon: 'Both at Raidillon exit', improvement: 'Improvement', acrossSession: 'Across the session' },
   units: { seconds: '{value} s' },
+  measured: { badge: 'Measured local session', title: 'Measured braking by lap distance', description: 'World position, brake pressure, speed and timing come from LMU official shared memory. The line is a locally reconstructed driven route, not surveyed track limits.', route: 'Measured driven line', selectedLap: 'Selected lap', coverage: 'route coverage', evidence: 'Brake-zone evidence', applied: 'Brake applied', peak: 'Peak pressure', released: 'Released', duration: 'Duration', entry: 'Entry', minimum: 'minimum', exit: 'exit', noZones: 'No stable brake zones were detected on this lap.', trace: 'Distance-aligned speed and brake trace', speed: 'Speed', brake: 'Brake', metres: 'm', secondUnit: 's', speedUnit: 'km/h' },
   fixtures: {
     sessions: {
       'spa-race': 'Spa-Francorchamps · Race · Today, 20:41',
@@ -91,6 +94,7 @@ const copy = defineMessages({
   breakdown: { eyebrow: 'Rundenanatomie', title: 'Woher die Differenz kommt', corners: 'Kurven', braking: 'Bremsen', midCorner: 'Kurvenmitte', exit: 'Ausgang', conclusionTitle: 'Das Lösen der Bremse ist das wiederkehrende Muster.', conclusionBody: 'Fünf von sieben langsamen Kurven zeigen ein abruptes Lösen vor dem Einlenken.' },
   session: { eyebrow: 'Sitzungsqualität', cleanLaps: 'saubere Runden', consistency: 'Konstanz', top: 'Top 12 %', topSessions: 'deiner Sitzungen', averagePace: 'Durchschnittstempo', lastCleanLaps: 'saubere Runden zuletzt', trackLimits: 'Streckenbegrenzungen', raidillon: 'Beide am Ausgang von Raidillon', improvement: 'Verbesserung', acrossSession: 'Über die gesamte Sitzung' },
   units: { seconds: '{value} s' },
+  measured: { badge: 'Gemessene lokale Sitzung', title: 'Gemessene Bremsvorgänge nach Rundendistanz', description: 'Weltposition, Bremsdruck, Geschwindigkeit und Zeit stammen aus dem offiziellen LMU Shared Memory. Die Linie ist eine lokal rekonstruierte Fahrlinie, keine vermessene Streckenbegrenzung.', route: 'Gemessene Fahrlinie', selectedLap: 'Ausgewählte Runde', coverage: 'Streckenabdeckung', evidence: 'Belege der Bremszonen', applied: 'Bremse betätigt', peak: 'Maximaldruck', released: 'Gelöst', duration: 'Dauer', entry: 'Eingang', minimum: 'Minimum', exit: 'Ausgang', noZones: 'Auf dieser Runde wurden keine stabilen Bremszonen erkannt.', trace: 'Distanzbasierte Geschwindigkeits- und Bremskurve', speed: 'Geschwindigkeit', brake: 'Bremse', metres: 'm', secondUnit: 's', speedUnit: 'km/h' },
   fixtures: {
     sessions: {
       'spa-race': 'Spa-Francorchamps · Rennen · Heute, 20:41',
@@ -207,7 +211,57 @@ function SegmentRibbon({ selected, onSelect }: { selected: number; onSelect: (in
   )
 }
 
-export function AnalyzeView() {
+function measuredTracePoints(snapshot: MeasuredTrackSnapshot, channel: 'speed' | 'brake') {
+  const width = 1000
+  const height = 130
+  const maximumSpeed = Math.max(1, ...snapshot.selectedLap.map((sample) => sample.speedKph))
+  return snapshot.selectedLap.map((sample) => {
+    const x = sample.distanceM / Math.max(1, snapshot.trackLengthM) * width
+    const value = channel === 'speed' ? sample.speedKph / maximumSpeed : sample.brake
+    return `${x.toFixed(1)},${(height - value * height).toFixed(1)}`
+  }).join(' ')
+}
+
+function zoneLabel(zone: BrakeZone, language: Language, metres: string) {
+  return `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(zone.startDistanceM)}–${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(zone.releaseDistanceM)} ${metres}`
+}
+
+function MeasuredAnalysisView({ snapshot }: { snapshot: MeasuredTrackSnapshot }) {
+  const m = useMessages(copy)
+  const { language } = useI18n()
+  const [selectedId, setSelectedId] = useState<string | null>(snapshot.brakeZones[0]?.id ?? null)
+  const selected = snapshot.brakeZones.find((zone) => zone.id === selectedId) ?? snapshot.brakeZones[0]
+  const points = snapshot.route.map((point) => ({ x: point.x, y: point.z, distanceM: point.distanceM }))
+  const segments = snapshot.brakeZones.map((zone) => ({
+    from: zone.startDistanceM / snapshot.trackLengthM,
+    to: zone.releaseDistanceM / snapshot.trackLengthM,
+    color: zone.id === selected?.id ? '#ffb45d' : '#ff5d57',
+    label: zoneLabel(zone, language, m.measured.metres),
+  }))
+  const cursor = selected ? selected.peakDistanceM / snapshot.trackLengthM * 100 : 0
+
+  return <div className="view view--analyze measured-analysis">
+    <div className="page-heading page-heading--compact"><div><div className="eyebrow">{m.heading.eyebrow}</div><h1>{m.measured.title}</h1><p>{m.measured.description}</p></div></div>
+    <div className="data-provenance-banner"><Badge tone="positive">{m.measured.badge}</Badge><span>{snapshot.trackName} · {m.measured.selectedLap} {snapshot.selectedLapNumber ?? '—'} · {formatPercent(language, snapshot.coverage * 100)} {m.measured.coverage}</span></div>
+    <div className="measured-analysis__grid">
+      <CircuitTrackMap points={points} segments={segments} trackLengthM={snapshot.trackLengthM} closed={snapshot.state === 'complete'} circuitName={snapshot.trackName} layoutName={snapshot.layoutName} currentLap={snapshot.selectedLapNumber ?? undefined} activeSegment={selected ? segments.find((_, index) => snapshot.brakeZones[index].id === selected.id) : undefined} ariaLabel={m.measured.route} />
+      <Card className="measured-zone-card"><CardHeader eyebrow={m.measured.evidence} title={m.measured.route} action={<Badge tone="neutral">{snapshot.brakeZones.length}</Badge>} />
+        {snapshot.brakeZones.length === 0 ? <p className="measured-zone-empty">{m.measured.noZones}</p> : <ol className="measured-zone-list">{snapshot.brakeZones.map((zone, index) => <li key={zone.id}><button type="button" aria-pressed={zone.id === selected?.id} onClick={() => setSelectedId(zone.id)}><i>{String(index + 1).padStart(2, '0')}</i><span><strong>{zoneLabel(zone, language, m.measured.metres)}</strong><small>{m.measured.applied} {formatDecimal(language, zone.startDistanceM, 0)} {m.measured.metres} · {m.measured.peak} {formatPercent(language, zone.peakPressure * 100)} · {m.measured.released} {formatDecimal(language, zone.releaseDistanceM, 0)} {m.measured.metres}</small><em>{m.measured.entry} {formatDecimal(language, zone.entrySpeedKph, 0)} · {m.measured.minimum} {formatDecimal(language, zone.minimumSpeedKph, 0)} · {m.measured.exit} {formatDecimal(language, zone.exitSpeedKph, 0)} {m.measured.speedUnit}</em></span><b>{formatDecimal(language, zone.durationSeconds, 2)} {m.measured.secondUnit}</b></button></li>)}</ol>}
+      </Card>
+    </div>
+    <Card className="measured-trace-card"><CardHeader eyebrow={m.telemetry.eyebrow} title={m.measured.trace} action={<div className="measured-trace-legend"><span><i className="speed" />{m.measured.speed}</span><span><i className="brake" />{m.measured.brake}</span></div>} />
+      <div className="measured-trace" role="img" aria-label={m.measured.trace}><svg viewBox="0 0 1000 150" preserveAspectRatio="none"><line x1="0" x2="1000" y1="130" y2="130" /><polyline className="speed" points={measuredTracePoints(snapshot, 'speed')} /><polyline className="brake" points={measuredTracePoints(snapshot, 'brake')} />{selected && <line className="cursor" x1={cursor * 10} x2={cursor * 10} y1="0" y2="135" />}</svg><div className="measured-trace-axis"><span>0 {m.measured.metres}</span><span>{formatDecimal(language, snapshot.trackLengthM / 2, 0)} {m.measured.metres}</span><span>{formatDecimal(language, snapshot.trackLengthM, 0)} {m.measured.metres}</span></div></div>
+    </Card>
+  </div>
+}
+
+export function AnalyzeView({ measuredTrack = null }: { measuredTrack?: MeasuredTrackSnapshot | null }) {
+  return measuredTrack && measuredTrack.route.length > 1 && measuredTrack.selectedLap.length > 1
+    ? <MeasuredAnalysisView snapshot={measuredTrack} />
+    : <DemoAnalysisView />
+}
+
+function DemoAnalysisView() {
   const m = useMessages(copy)
   const { language } = useI18n()
   const [comparisonMode, setComparisonMode] = useState<'reference' | 'personal'>('reference')

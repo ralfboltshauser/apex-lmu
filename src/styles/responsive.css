@@ -37,6 +37,7 @@
   .analysis-layout { grid-template-columns: 1fr; }
   .coach-panel { min-height: auto; }
   .strategy-bottom-grid { grid-template-columns: 1fr; }
+  .measured-analysis__grid { grid-template-columns: 1fr; }
   .fuel-calculator-layout { grid-template-columns: 1fr; }
   .fuel-inputs { display: grid; grid-template-columns: repeat(2, 1fr); }
   .scenario-card__stats { gap: 6px; }

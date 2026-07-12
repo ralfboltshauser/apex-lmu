@@ -51,6 +51,17 @@
       "wearUsedFraction": 0.02,
       "absoluteRotationRadSec": 200
     },
+    "worldPosition": {
+      "frames": 18035,
+      "xM": [-153, 504],
+      "zM": [-448, 589],
+      "minimumMotionComparisons": 16000,
+      "motionRatio": [0.99, 1.01]
+    },
+    "measuredRoute": {
+      "minimumCoveragePercent": 99,
+      "brakeZones": 11
+    },
     "truthfulUnknowns": ["layout", "opponents"]
   }
 }
