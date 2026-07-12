@@ -1,0 +1,58 @@
+name: LMU compatibility report
+description: Report evidence from a specific Le Mans Ultimate build
+title: "[Compatibility]: LMU "
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Compatibility must be established from source artifacts and reproducible observations, not guesses. Do not upload Studio 397 headers or game files.
+  - type: input
+    id: apex
+    attributes:
+      label: Apex version or commit
+    validations:
+      required: true
+  - type: input
+    id: lmu
+    attributes:
+      label: Exact LMU version/build
+    validations:
+      required: true
+  - type: input
+    id: header_hash
+    attributes:
+      label: SHA-256 of the locally shipped SharedMemoryInterface header
+      description: Publish the hash only, not the copyrighted header.
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: Session tested
+      multiple: true
+      options:
+        - Garage
+        - Practice
+        - Qualifying
+        - Offline race
+        - EAC-protected online race
+        - Replay
+        - Pit stop or driver swap
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Observed behavior and sanitized diagnostics
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Data boundaries
+      options:
+        - label: No game binary, proprietary header, commercial setup, or private telemetry is attached.
+          required: true
+        - label: Apex ran without administrator rights, injection, memory scraping, or anti-cheat workaround.
+          required: true

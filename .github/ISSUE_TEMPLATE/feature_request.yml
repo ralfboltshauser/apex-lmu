@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a focused, local-first improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Player problem
+      description: What decision or workflow is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required data and evidence
+      description: Which official/local fields support this, and how would correctness be validated?
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: The proposal can remain fully local with no account or telemetry upload.
+          required: true
+        - label: The proposal does not require injection, memory scraping, or an anti-cheat workaround.
+          required: true
+        - label: I identified generated or third-party data and its licensing needs.
+          required: true

@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible Apex application problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Apex. Do not include private telemetry or an unlicensed game file.
+  - type: input
+    id: version
+    attributes:
+      label: Apex version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 25H2, build 26200
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Startup or installation
+        - Live bridge
+        - Overlay
+        - DuckDB import
+        - Setup installation
+        - Analysis or strategy
+        - Accessibility or visual issue
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: Tell us exactly what you did and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste non-sensitive Apex diagnostics or bridge status. Remove names and paths you do not want public.
+      render: text
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I did not attach a game binary, proprietary header, commercial setup, or private telemetry.
+          required: true
+        - label: This is not an undisclosed security vulnerability.
+          required: true

@@ -1,0 +1,121 @@
+{
+  "name": "apex-lmu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first, open-source telemetry, strategy, setup and race engineering companion for Le Mans Ultimate.",
+  "author": "Apex LMU contributors",
+  "main": "electron/main.cjs",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/ralfboltshauser/apex-lmu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ralfboltshauser/apex-lmu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ralfboltshauser/apex-lmu/issues"
+  },
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:desktop\"",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:desktop": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "tsc -b && vite build",
+    "build:bridge:win": "cd bridge && cross-env GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags=\"-s -w\" -o bin/apex-lmu-bridge.exe .",
+    "build:desktop": "npm run build && electron-builder",
+    "build:desktop:win": "node scripts/build-windows-zip.cjs nsis",
+    "build:desktop:win:zip": "node scripts/build-windows-zip.cjs zip",
+    "build:desktop:win:all": "node scripts/build-windows-zip.cjs nsis zip",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:desktop": "node --test electron/*.node-test.cjs",
+    "test:bridge": "cd bridge && go test -buildvcs=false ./...",
+    "test:all": "npm test && npm run test:desktop && npm run test:bridge",
+    "test:watch": "vitest",
+    "lint": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.4-r.1",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "lucide-react": "^1.24.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "jsdom": "^25.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "org.apexlmu.companion",
+    "productName": "Apex for LMU",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/@duckdb/node-bindings*/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bridge/bin",
+        "to": "bridge",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "LICENSE",
+        "to": "legal/LICENSE.txt"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "legal/THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Apex for LMU",
+      "uninstallDisplayName": "Apex for LMU",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": "AppImage",
+      "category": "Game"
+    }
+  },
+  "allowScripts": {
+    "electron@43.1.0": true,
+    "electron-winstaller@5.4.0": true
+  },
+  "optionalDependencies": {
+    "@duckdb/node-bindings-win32-x64": "^1.5.4-r.1"
+  }
+}

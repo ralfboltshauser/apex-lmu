@@ -1,0 +1,211 @@
+package main
+
+import (
+	"encoding/binary"
+	"math"
+	"testing"
+)
+
+func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
+	raw := makeContractFixture()
+
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if decoded.GameVersion != 130 || decoded.Session.Track != "Circuit de la Sarthe" || decoded.Session.ElapsedSeconds != 901.25 {
+		t.Fatalf("unexpected session: %#v", decoded.Session)
+	}
+	if decoded.Session.Rain != 0.2 || decoded.Session.Wetness != 0.35 || decoded.Session.WindSpeedMps != 5 {
+		t.Fatalf("weather offsets decoded incorrectly: %#v", decoded.Session)
+	}
+	if decoded.Player.ID != 42 || decoded.Player.Driver != "Apex Driver" || decoded.Player.Class != "Hypercar" {
+		t.Fatalf("player correlation failed: %#v", decoded.Player)
+	}
+	if decoded.Player.Name != "Porsche 963" || decoded.Player.Sector != 3 || decoded.Player.SpeedKph != 180 {
+		t.Fatalf("telemetry offsets decoded incorrectly: %#v", decoded.Player)
+	}
+	if decoded.Player.FrontCompound != "Medium" || decoded.Player.RearCompound != "Soft" {
+		t.Fatalf("compound strings decoded incorrectly: %q/%q", decoded.Player.FrontCompound, decoded.Player.RearCompound)
+	}
+	if got := decoded.Player.Wheels[0].PressurePsi; math.Abs(got-24.00374559434963) > 1e-12 {
+		t.Fatalf("pressure conversion = %.15f", got)
+	}
+	if got := decoded.Player.Wheels[0].SurfaceTempC; math.Abs(got[0]-82) > 1e-12 || math.Abs(got[2]-80) > 1e-12 {
+		t.Fatalf("wheel temperature offsets decoded incorrectly: %v", got)
+	}
+	if got := decoded.Player.Wheels[1].SurfaceTempC; math.Abs(got[0]-80) > 1e-12 || math.Abs(got[2]-82) > 1e-12 {
+		t.Fatalf("right-side tyre temperatures should retain left/right order: %v", got)
+	}
+	if decoded.Player.Wheels[0].Flat || !decoded.Player.Wheels[0].Detached {
+		t.Fatalf("packed bool offsets decoded incorrectly: %#v", decoded.Player.Wheels[0])
+	}
+	if len(decoded.Opponents) != 2 || decoded.Opponents[0].Position != 1 || decoded.Opponents[1].Position != 3 {
+		t.Fatalf("opponents were not sorted: %#v", decoded.Opponents)
+	}
+}
+
+func TestDecodeSnapshotRejectsTruncationCountsAndNonFiniteData(t *testing.T) {
+	if _, err := decodeSnapshot(make([]byte, lmuSharedMemoryPayloadSize-1)); err == nil {
+		t.Fatal("expected truncated snapshot rejection")
+	}
+
+	raw := makeContractFixture()
+	raw[lmuTelemetryOffset] = lmuMaximumVehicles + 1
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected invalid active vehicle count rejection")
+	}
+
+	raw = makeContractFixture()
+	putF64(raw, lmuScoringOffset+220, math.NaN())
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected NaN rejection")
+	}
+
+	raw = makeContractFixture()
+	raw[lmuTelemetryOffset+2] = 2
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected invalid C++ bool representation rejection")
+	}
+
+	raw = makeContractFixture()
+	player := lmuTelemetryArrayBase + lmuVehicleTelemetrySize
+	putF64(raw, player+388, 1.01)
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected out-of-contract throttle rejection")
+	}
+}
+
+func TestDecodeSnapshotReportsButDoesNotRejectUnknownGameVersion(t *testing.T) {
+	raw := makeContractFixture()
+	putI32(raw, 64, 987654)
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("unknown game version should remain observable: %v", err)
+	}
+	if decoded.GameVersion != 987654 {
+		t.Fatalf("game version = %d", decoded.GameVersion)
+	}
+}
+
+func TestNormalizeSectorRemovesPitBitAndConvertsToOneBased(t *testing.T) {
+	for raw, want := range map[int32]int32{0: 1, 1: 2, 2: 3, -2147483646: 3, 8: 1} {
+		if got := normalizeSector(raw); got != want {
+			t.Errorf("normalizeSector(%d) = %d, want %d", raw, got, want)
+		}
+	}
+}
+
+func TestContractDistinguishesPayloadFromCXXTailPadding(t *testing.T) {
+	if lmuSharedMemoryPayloadSize != 324820 || lmuSharedMemoryAllocationSize != 324824 {
+		t.Fatalf("unexpected payload/allocation sizes: %d/%d", lmuSharedMemoryPayloadSize, lmuSharedMemoryAllocationSize)
+	}
+	if lmuVehicleScoringBase != 2192 || lmuTelemetryOffset != 128464 {
+		t.Fatalf("unexpected packed section offsets: %d/%d", lmuVehicleScoringBase, lmuTelemetryOffset)
+	}
+}
+
+func makeContractFixture() []byte {
+	raw := make([]byte, lmuSharedMemoryPayloadSize)
+	putI32(raw, 64, 130)
+	raw[lmuTelemetryOffset] = 3
+	raw[lmuTelemetryOffset+1] = 1
+	raw[lmuTelemetryOffset+2] = 1
+
+	putText(raw, lmuScoringOffset, 64, "Circuit de la Sarthe")
+	putF64(raw, lmuScoringOffset+68, 901.25)
+	putF64(raw, lmuScoringOffset+76, 21600)
+	putI32(raw, lmuScoringOffset+84, 62)
+	putF64(raw, lmuScoringOffset+88, 13626)
+	putI32(raw, lmuScoringOffset+104, 3)
+	raw[lmuScoringOffset+108] = 5
+	raw[lmuScoringOffset+109] = 0xff
+	raw[lmuScoringOffset+115] = 1
+	putF64(raw, lmuScoringOffset+220, 0.2)
+	putF64(raw, lmuScoringOffset+228, 19.5)
+	putF64(raw, lmuScoringOffset+236, 24.25)
+	putF64(raw, lmuScoringOffset+244, 3)
+	putF64(raw, lmuScoringOffset+252, 4)
+	putF64(raw, lmuScoringOffset+260, 0)
+	putF64(raw, lmuScoringOffset+332, 0.35)
+
+	putScoringVehicle(raw, 0, 7, "Leader", "Ferrari 499P", "Hypercar", 1, false)
+	putScoringVehicle(raw, 1, 42, "Apex Driver", "Porsche 963", "Hypercar", 2, true)
+	putScoringVehicle(raw, 2, 90, "LMP Driver", "Oreca 07", "LMP2", 3, false)
+
+	player := lmuTelemetryArrayBase + lmuVehicleTelemetrySize
+	putI32(raw, player, 42)
+	putI32(raw, player+20, 8)
+	putText(raw, player+32, 64, "Porsche 963")
+	putF64(raw, player+184, 30)
+	putF64(raw, player+192, 0)
+	putF64(raw, player+200, 40)
+	putI32(raw, player+352, 6)
+	putF64(raw, player+356, 8200)
+	putF64(raw, player+388, 0.8)
+	putF64(raw, player+396, 0.1)
+	putF64(raw, player+404, -0.15)
+	putF64(raw, player+412, 0)
+	putF64(raw, player+524, 45.5)
+	putF64(raw, player+532, 9000)
+	putI32(raw, player+600, 2)
+	raw[player+606] = 6
+	raw[player+607] = 9
+	putF64(raw, player+608, 90)
+	putText(raw, player+620, 18, "Medium")
+	putText(raw, player+638, 18, "Soft")
+	putF64(raw, player+664, 0.47)
+	putF64(raw, player+696, -0.125)
+	putF64(raw, player+704, 0.64)
+	for index := 0; index < 4; index++ {
+		wheel := player + lmuWheelOffset + index*lmuWheelSize
+		putF64(raw, wheel, 0.02+float64(index)/1000)
+		putF64(raw, wheel+8, 0.06)
+		putF64(raw, wheel+24, 525)
+		putF64(raw, wheel+40, 180)
+		putF64(raw, wheel+120, 165.5)
+		putF64(raw, wheel+128, 353.15)
+		putF64(raw, wheel+136, 354.15)
+		putF64(raw, wheel+144, 355.15)
+		putF64(raw, wheel+152, 0.13)
+		putF64(raw, wheel+204, 350.15)
+	}
+	raw[player+lmuWheelOffset+178] = 1
+	return raw
+}
+
+func putScoringVehicle(raw []byte, index int, id int32, driver, name, class string, place byte, player bool) {
+	base := lmuVehicleScoringBase + index*lmuVehicleScoringSize
+	putI32(raw, base, id)
+	putText(raw, base+4, 32, driver)
+	putText(raw, base+36, 64, name)
+	putI16(raw, base+100, int16(7-index))
+	putF64(raw, base+104, 5000+float64(index)*100)
+	putF64(raw, base+144, 205+float64(index))
+	putF64(raw, base+168, 206+float64(index))
+	if player {
+		raw[base+196] = 1
+	}
+	raw[base+199] = place
+	putText(raw, base+200, 32, class)
+	putF64(raw, base+232, float64(index)*1.5)
+	putI32(raw, base+240, 0)
+	putF64(raw, base+244, float64(index)*3.5)
+	putI32(raw, base+252, 0)
+}
+
+func putText(data []byte, offset, size int, value string) {
+	copy(data[offset:offset+size], value)
+}
+
+func putI16(data []byte, offset int, value int16) {
+	binary.LittleEndian.PutUint16(data[offset:offset+2], uint16(value))
+}
+
+func putI32(data []byte, offset int, value int32) {
+	binary.LittleEndian.PutUint32(data[offset:offset+4], uint32(value))
+}
+
+func putF64(data []byte, offset int, value float64) {
+	binary.LittleEndian.PutUint64(data[offset:offset+8], math.Float64bits(value))
+}
