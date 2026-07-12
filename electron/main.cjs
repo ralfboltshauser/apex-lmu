@@ -9,6 +9,7 @@ const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
 const { UpdateManager } = require('./updater.cjs')
 const { buildSupportMailto } = require('./support-mail.cjs')
 const { OverlayManager } = require('./overlay-manager.cjs')
+const { WhatsNewService } = require('./whats-new.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
@@ -16,6 +17,7 @@ let overlayManager
 let mainWindow
 let diagnostics
 let updateManager
+let whatsNewService
 const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -127,6 +129,8 @@ ipcMain.handle('apex:run-diagnostics', async () => {
 })
 ipcMain.handle('apex:open-logs-folder', () => shell.openPath(diagnostics.dir))
 ipcMain.handle('apex:get-update-state', () => updateManager?.getState())
+ipcMain.handle('apex:get-whats-new-state', () => whatsNewService.getState())
+ipcMain.handle('apex:acknowledge-whats-new', (_event, version) => whatsNewService.acknowledge(version))
 ipcMain.handle('apex:check-for-updates', () => updateManager?.check(false))
 ipcMain.handle('apex:download-update', () => updateManager?.download())
 ipcMain.handle('apex:install-update', () => updateManager?.install())
@@ -201,6 +205,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
+  whatsNewService = new WhatsNewService({ userDataPath: app.getPath('userData'), currentVersion: app.getVersion(), logger: diagnostics })
   void diagnostics.record('info', 'app', 'started', 'Apex started.', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged })
   bridgeManager = new LmuBridgeManager({
     app,

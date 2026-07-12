@@ -1,37 +1,245 @@
 # Changelog
 
-All notable changes to Apex for LMU are documented here. The project follows
-[Semantic Versioning](https://semver.org/) while it develops toward a stable
-data contract.
+This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
-## [0.1.0] - 2026-07-12
+## 0.1.14 — 2026-07-12
 
-First public alpha.
+### English — Working multi-display overlays
 
-### Added
+Apex can now place its local HUD on a selected Windows display and retain a validated layout.
 
-- Windows LMU shared-memory bridge using explicit packed offsets, SDK locking,
-  range validation, process liveness and reconnect handling.
-- Measured live pit wall for session, player, standings, weather, fuel, hybrid,
-  tyres and brakes.
-- Transparent, always-on-top, click-through overlay with disconnect cleanup.
-- Read-only LMU DuckDB schema, metadata, channel, event and lap inspection.
-- Deterministic fuel, Virtual Energy, finish, strategy, comparison, coaching and
-  setup-recommendation engines.
-- Guarded `.svm` installer with durable backups, read-only handling, atomic
-  replacement and rollback.
-- Seeded multiclass demo and clearly labeled example workspaces.
-- Guided onboarding, local-only settings, accessibility preferences and
-  reduced-motion support.
-- Per-user NSIS installer and portable Windows ZIP.
-- Linux, Wine/Win32 and Windows VM validation suites.
+- **Choose the display that carries the HUD** — The desktop app enumerates real displays, restores a safe display target, and opens a non-activating click-through overlay without capturing the screen.
 
-### Known boundaries
+**Known limitations**
 
-- Current real-game LMU compatibility has not yet been established.
-- Live-session recording and DuckDB-to-analysis ingestion are not implemented.
-- Analysis/coaching workspaces use labeled generated fixtures.
-- Overlay widgets cannot yet be freely positioned.
-- Windows binaries are not code-signed.
+- **Use borderless or windowed mode** — Exclusive fullscreen can cover normal desktop overlay windows; Apex does not inject an in-game DLL.
 
-[0.1.0]: https://github.com/ralfboltshauser/apex-lmu/releases/tag/v0.1.0
+### Deutsch — Funktionierende Overlays auf mehreren Bildschirmen
+
+Apex kann sein lokales HUD jetzt auf einem ausgewählten Windows-Bildschirm platzieren und ein geprüftes Layout beibehalten.
+
+- **Wähle den Bildschirm für das HUD** — Die Desktop-App erkennt reale Bildschirme, stellt ein sicheres Ziel wieder her und öffnet ein nicht aktivierendes, klickdurchlässiges Overlay, ohne den Bildschirm aufzuzeichnen.
+
+**Bekannte Einschränkungen**
+
+- **Verwende den randlosen oder Fenstermodus** — Exklusives Vollbild kann normale Desktop-Overlayfenster verdecken; Apex klinkt keine DLL in das Spiel ein.
+
+## 0.1.13 — 2026-07-12
+
+### English — Raw LMU recording and replay
+
+Record official LMU shared-memory snapshots locally and replay them through the current decoder.
+
+- **Reproduce integration bugs without LMU** — The append-safe .apexrec format stores raw snapshots with keyframes, compressed deltas, monotonic timing, checksums, and strict reader limits.
+
+**Known limitations**
+
+- **Recordings are private** — Raw LMU memory can contain driver names, Steam IDs, server details, and local paths. Apex stores it locally and never uploads it.
+
+### Deutsch — LMU-Rohdaten aufnehmen und wiedergeben
+
+Zeichne offizielle LMU-Shared-Memory-Snapshots lokal auf und gib sie mit dem aktuellen Decoder wieder.
+
+- **Integrationsfehler ohne LMU reproduzieren** — Das anhängesichere .apexrec-Format speichert Rohdaten mit Schlüsselbildern, komprimierten Deltas, monotoner Zeit, Prüfsummen und strengen Lesergrenzen.
+
+**Bekannte Einschränkungen**
+
+- **Aufzeichnungen sind privat** — LMU-Rohdaten können Fahrernamen, Steam-IDs, Serverdetails und lokale Pfade enthalten. Apex speichert sie lokal und lädt sie niemals hoch.
+
+## 0.1.12 — 2026-07-12
+
+### English — Reliable player identification
+
+The bridge now identifies the LMU player before vehicle telemetry becomes available.
+
+- **Scoring-first sessions stay truthful** — Apex first trusts LMU's player marker, then uniquely correlates the scoring header name, so session context can appear without inventing vehicle values.
+
+### Deutsch — Zuverlässige Spielererkennung
+
+Die Bridge erkennt den LMU-Spieler jetzt, bevor Fahrzeugtelemetrie verfügbar ist.
+
+- **Sessions mit früher Wertung bleiben wahrheitsgetreu** — Apex vertraut zuerst der LMU-Spielermarkierung und ordnet danach den Namen aus dem Wertungskopf eindeutig zu. So erscheint der Sessionkontext ohne erfundene Fahrzeugwerte.
+
+## 0.1.11 — 2026-07-12
+
+### English — Updated development toolchain
+
+The project toolchain was upgraded with builds and tests kept reproducible.
+
+- **Safer contributor builds** — Pinned Node, npm, TypeScript, Vite, Electron, and test dependencies keep local development and CI aligned.
+
+### Deutsch — Aktualisierte Entwicklungswerkzeuge
+
+Die Projektwerkzeuge wurden aktualisiert, während Builds und Tests reproduzierbar bleiben.
+
+- **Sicherere Builds für Mitwirkende** — Festgelegte Versionen von Node, npm, TypeScript, Vite, Electron und Testabhängigkeiten halten lokale Entwicklung und CI im Gleichlauf.
+
+## 0.1.10 — 2026-07-12
+
+### English — Automatic fuel calculation
+
+Live measured fuel use and lap samples now feed a local finish-fuel estimate.
+
+- **Fuel planning from your own session** — Apex retains bounded local samples per car and track and exposes the assumptions behind its finish projection.
+
+### Deutsch — Automatische Kraftstoffberechnung
+
+Live gemessener Verbrauch und Rundenwerte speisen jetzt eine lokale Kraftstoffprognose bis ins Ziel.
+
+- **Kraftstoffplanung aus deiner eigenen Session** — Apex bewahrt begrenzte lokale Stichproben pro Auto und Strecke auf und zeigt die Annahmen hinter der Zielprognose.
+
+## 0.1.9 — 2026-07-12
+
+### English — Pre-race session context
+
+Track, car, class, weather, and session information can appear before driving begins.
+
+- **Garage context without fake telemetry** — Scoring-only frames are accepted while fuel, controls, tyres, and wheels remain explicitly unavailable until LMU publishes vehicle telemetry.
+
+### Deutsch — Sessionkontext vor dem Rennstart
+
+Strecke, Auto, Klasse, Wetter und Session können erscheinen, bevor die Fahrt beginnt.
+
+- **Garagenkontext ohne erfundene Telemetrie** — Frames nur mit Wertungsdaten werden akzeptiert. Kraftstoff, Eingaben, Reifen und Räder bleiben ausdrücklich nicht verfügbar, bis LMU Fahrzeugtelemetrie liefert.
+
+## 0.1.8 — 2026-07-12
+
+### English — Complete English and German interface
+
+All rendered application copy is available in English and German with structural parity checks.
+
+- **Switch language throughout Apex** — A local language preference updates the interface, while the build rejects untranslated rendered strings and mismatched message structures.
+
+### Deutsch — Vollständige englische und deutsche Oberfläche
+
+Alle angezeigten Anwendungstexte sind auf Englisch und Deutsch verfügbar und werden strukturell geprüft.
+
+- **Sprache in ganz Apex wechseln** — Eine lokale Spracheinstellung aktualisiert die Oberfläche. Der Build lehnt nicht übersetzte sichtbare Texte und abweichende Nachrichtenstrukturen ab.
+
+## 0.1.7 — 2026-07-12
+
+### English — One-click debug sharing
+
+Prepare complete redacted diagnostics for support without sending anything automatically.
+
+- **Copy, save, or draft support details** — Apex can prepare local logs with common secrets and home paths redacted, then lets the user explicitly copy, save, or open an email draft.
+
+### Deutsch — Debug-Informationen mit einem Klick teilen
+
+Bereite vollständige bereinigte Diagnosen für den Support vor, ohne automatisch etwas zu senden.
+
+- **Supportdetails kopieren, speichern oder als Entwurf öffnen** — Apex bereitet lokale Protokolle mit unkenntlich gemachten üblichen Geheimnissen und Benutzerpfaden vor. Erst der Benutzer kopiert, speichert oder öffnet ausdrücklich einen E-Mail-Entwurf.
+
+## 0.1.6 — 2026-07-12
+
+### English — Correct timed-session lap handling
+
+LMU's timed-session lap sentinel is normalized instead of being displayed as a real lap count.
+
+- **Timed races remain timed** — The bridge now treats the special total-laps value as unavailable and preserves the session's measured remaining time.
+
+### Deutsch — Korrekte Rundenbehandlung in zeitbegrenzten Sessions
+
+Der LMU-Sonderwert für zeitbegrenzte Sessions wird normalisiert und nicht als echte Rundenzahl angezeigt.
+
+- **Zeitrennen bleiben zeitbasiert** — Die Bridge behandelt den speziellen Gesamt-Rundenwert jetzt als nicht verfügbar und bewahrt die gemessene verbleibende Sessionzeit.
+
+## 0.1.5 — 2026-07-12
+
+### English — Persistent LMU discovery and live state
+
+Apex remembers a verified LMU path and exposes the bridge's real connection state.
+
+- **Connection status reflects the local bridge** — The selected installation survives restart, while the UI distinguishes waiting, connected, disconnected, and error states.
+
+### Deutsch — Gespeicherte LMU-Erkennung und Live-Status
+
+Apex merkt sich einen geprüften LMU-Pfad und zeigt den tatsächlichen Verbindungsstatus der Bridge.
+
+- **Der Verbindungsstatus folgt der lokalen Bridge** — Die gewählte Installation bleibt nach einem Neustart erhalten. Die Oberfläche unterscheidet Warten, Verbunden, Getrennt und Fehler.
+
+## 0.1.4 — 2026-07-12
+
+### English — Progressive in-app guidance
+
+Onboarding and contextual explanations introduce Apex without blocking experienced users.
+
+- **Guidance stays available** — Setup checks, view-specific help, and dismissible introductions can be reopened or reset from Settings.
+
+### Deutsch — Schrittweise Hilfe in der App
+
+Onboarding und kontextbezogene Erklärungen führen in Apex ein, ohne erfahrene Benutzer aufzuhalten.
+
+- **Hinweise bleiben verfügbar** — Einrichtungsprüfungen, ansichtsbezogene Hilfe und schließbare Einführungen lassen sich in den Einstellungen erneut öffnen oder zurücksetzen.
+
+## 0.1.3 — 2026-07-12
+
+### English — Consent-driven application updates
+
+Installed Windows builds can check GitHub Releases while keeping download and installation under user control.
+
+- **Two explicit update decisions** — Apex asks before downloading and again before restarting to install; automatic checks never trigger an automatic download.
+
+**Known limitations**
+
+- **Installer update path** — Automatic replacement is available to the installed Windows build; portable ZIP users download a new package manually.
+
+### Deutsch — Anwendungsupdates mit Zustimmung
+
+Installierte Windows-Builds können GitHub Releases prüfen, während Download und Installation unter Kontrolle des Benutzers bleiben.
+
+- **Zwei ausdrückliche Update-Entscheidungen** — Apex fragt vor dem Download und erneut vor dem Neustart zur Installation. Automatische Prüfungen starten niemals automatisch einen Download.
+
+**Bekannte Einschränkungen**
+
+- **Updatepfad für den Installer** — Die installierte Windows-App kann sich automatisch ersetzen; Benutzer des portablen ZIP laden ein neues Paket manuell herunter.
+
+## 0.1.2 — 2026-07-12
+
+### English — Evidence-driven LMU discovery
+
+Installation detection now reports exactly what was checked and why a candidate passed or failed.
+
+- **Steam libraries and manual paths are inspectable** — Apex checks the LMU executable or Steam manifest, shared-memory support folder, telemetry folder, and setup directory without modifying them.
+
+### Deutsch — Nachvollziehbare LMU-Erkennung
+
+Die Installationserkennung zeigt jetzt genau, was geprüft wurde und warum ein Kandidat bestanden hat oder abgelehnt wurde.
+
+- **Steam-Bibliotheken und manuelle Pfade sind prüfbar** — Apex prüft LMU-Programmdatei oder Steam-Manifest, Shared-Memory-Supportordner, Telemetrieordner und Setup-Verzeichnis, ohne sie zu verändern.
+
+## 0.1.1 — 2026-07-12
+
+### English — Release artifacts are gated
+
+Desktop pushes now require a synchronized version and verified Windows release artifacts.
+
+- **Installer, ZIP, metadata, and checksums stay together** — The pre-push gate runs tests and builds every public Windows artifact before a desktop-impacting commit can be published.
+
+### Deutsch — Release-Artefakte werden geprüft
+
+Desktop-Pushes erfordern jetzt eine synchronisierte Version und geprüfte Windows-Release-Artefakte.
+
+- **Installer, ZIP, Metadaten und Prüfsummen bleiben zusammen** — Die Pre-Push-Prüfung führt Tests aus und baut jedes öffentliche Windows-Artefakt, bevor ein Desktop-relevanter Commit veröffentlicht werden kann.
+
+## 0.1.0 — 2026-07-12
+
+### English — Public alpha foundation
+
+The first public alpha packages Apex's local-first LMU companion, bridge, diagnostics, and Windows release tooling.
+
+- **Local-first by design** — Apex has no account, analytics, or cloud runtime and reads LMU's official shared-memory mapping from a separate local process.
+
+**Known limitations**
+
+- **Alpha compatibility boundary** — The initial package proves the application and fixture contract, not every current LMU build, car, session, or hardware configuration.
+
+### Deutsch — Grundlage der öffentlichen Alpha
+
+Die erste öffentliche Alpha bündelt den lokalen LMU-Begleiter, die Bridge, Diagnose und Windows-Release-Werkzeuge.
+
+- **Von Grund auf lokal** — Apex hat kein Konto, keine Analyse und keine Cloud-Laufzeit. Es liest LMUs offizielles Shared-Memory-Mapping aus einem getrennten lokalen Prozess.
+
+**Bekannte Einschränkungen**
+
+- **Kompatibilitätsgrenze der Alpha** — Das erste Paket weist Anwendung und Fixture-Vertrag nach, aber nicht jede aktuelle LMU-Version, jedes Auto, jede Session oder Hardwarekonfiguration.

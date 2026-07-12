@@ -4,6 +4,9 @@ Apex should earn trust with evidence. A beautiful dashboard is not a race
 engineer until every number is traced to a known source, unit, sampling rate,
 and failure mode.
 
+Detailed, dependency-ordered implementation plans for every currently open
+GitHub issue live in [the open-issue roadmap](roadmap/issues/README.md).
+
 ## Alpha exit gates
 
 - Diff the bridge structs against the shared-memory header shipped with the

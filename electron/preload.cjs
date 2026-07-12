@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   exportSupportBundle: () => ipcRenderer.invoke('apex:export-support-bundle'),
   openLogsFolder: () => ipcRenderer.invoke('apex:open-logs-folder'),
   getUpdateState: () => ipcRenderer.invoke('apex:get-update-state'),
+  getWhatsNewState: () => ipcRenderer.invoke('apex:get-whats-new-state'),
+  acknowledgeWhatsNew: (version) => ipcRenderer.invoke('apex:acknowledge-whats-new', version),
   checkForUpdates: () => ipcRenderer.invoke('apex:check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('apex:download-update'),
   installUpdate: () => ipcRenderer.invoke('apex:install-update'),

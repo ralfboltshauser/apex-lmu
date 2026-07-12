@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "version": "0.1.14",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Working multi-display overlays",
+        "summary": "Apex can now place its local HUD on a selected Windows display and retain a validated layout.",
+        "highlights": [
+          { "id": "display-overlays", "title": "Choose the display that carries the HUD", "body": "The desktop app enumerates real displays, restores a safe display target, and opens a non-activating click-through overlay without capturing the screen." }
+        ],
+        "knownLimitations": [
+          { "id": "exclusive-fullscreen", "title": "Use borderless or windowed mode", "body": "Exclusive fullscreen can cover normal desktop overlay windows; Apex does not inject an in-game DLL." }
+        ]
+      },
+      "de": {
+        "title": "Funktionierende Overlays auf mehreren Bildschirmen",
+        "summary": "Apex kann sein lokales HUD jetzt auf einem ausgewählten Windows-Bildschirm platzieren und ein geprüftes Layout beibehalten.",
+        "highlights": [
+          { "id": "display-overlays", "title": "Wähle den Bildschirm für das HUD", "body": "Die Desktop-App erkennt reale Bildschirme, stellt ein sicheres Ziel wieder her und öffnet ein nicht aktivierendes, klickdurchlässiges Overlay, ohne den Bildschirm aufzuzeichnen." }
+        ],
+        "knownLimitations": [
+          { "id": "exclusive-fullscreen", "title": "Verwende den randlosen oder Fenstermodus", "body": "Exklusives Vollbild kann normale Desktop-Overlayfenster verdecken; Apex klinkt keine DLL in das Spiel ein." }
+        ]
+      }
+    },
+    {
+      "version": "0.1.13",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Raw LMU recording and replay",
+        "summary": "Record official LMU shared-memory snapshots locally and replay them through the current decoder.",
+        "highlights": [
+          { "id": "raw-recording", "title": "Reproduce integration bugs without LMU", "body": "The append-safe .apexrec format stores raw snapshots with keyframes, compressed deltas, monotonic timing, checksums, and strict reader limits." }
+        ],
+        "knownLimitations": [
+          { "id": "private-recordings", "title": "Recordings are private", "body": "Raw LMU memory can contain driver names, Steam IDs, server details, and local paths. Apex stores it locally and never uploads it." }
+        ]
+      },
+      "de": {
+        "title": "LMU-Rohdaten aufnehmen und wiedergeben",
+        "summary": "Zeichne offizielle LMU-Shared-Memory-Snapshots lokal auf und gib sie mit dem aktuellen Decoder wieder.",
+        "highlights": [
+          { "id": "raw-recording", "title": "Integrationsfehler ohne LMU reproduzieren", "body": "Das anhängesichere .apexrec-Format speichert Rohdaten mit Schlüsselbildern, komprimierten Deltas, monotoner Zeit, Prüfsummen und strengen Lesergrenzen." }
+        ],
+        "knownLimitations": [
+          { "id": "private-recordings", "title": "Aufzeichnungen sind privat", "body": "LMU-Rohdaten können Fahrernamen, Steam-IDs, Serverdetails und lokale Pfade enthalten. Apex speichert sie lokal und lädt sie niemals hoch." }
+        ]
+      }
+    },
+    {
+      "version": "0.1.12",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Reliable player identification",
+        "summary": "The bridge now identifies the LMU player before vehicle telemetry becomes available.",
+        "highlights": [
+          { "id": "player-correlation", "title": "Scoring-first sessions stay truthful", "body": "Apex first trusts LMU's player marker, then uniquely correlates the scoring header name, so session context can appear without inventing vehicle values." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Zuverlässige Spielererkennung",
+        "summary": "Die Bridge erkennt den LMU-Spieler jetzt, bevor Fahrzeugtelemetrie verfügbar ist.",
+        "highlights": [
+          { "id": "player-correlation", "title": "Sessions mit früher Wertung bleiben wahrheitsgetreu", "body": "Apex vertraut zuerst der LMU-Spielermarkierung und ordnet danach den Namen aus dem Wertungskopf eindeutig zu. So erscheint der Sessionkontext ohne erfundene Fahrzeugwerte." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.11",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Updated development toolchain",
+        "summary": "The project toolchain was upgraded with builds and tests kept reproducible.",
+        "highlights": [
+          { "id": "toolchain", "title": "Safer contributor builds", "body": "Pinned Node, npm, TypeScript, Vite, Electron, and test dependencies keep local development and CI aligned." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Aktualisierte Entwicklungswerkzeuge",
+        "summary": "Die Projektwerkzeuge wurden aktualisiert, während Builds und Tests reproduzierbar bleiben.",
+        "highlights": [
+          { "id": "toolchain", "title": "Sicherere Builds für Mitwirkende", "body": "Festgelegte Versionen von Node, npm, TypeScript, Vite, Electron und Testabhängigkeiten halten lokale Entwicklung und CI im Gleichlauf." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.10",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Automatic fuel calculation",
+        "summary": "Live measured fuel use and lap samples now feed a local finish-fuel estimate.",
+        "highlights": [
+          { "id": "fuel-calculator", "title": "Fuel planning from your own session", "body": "Apex retains bounded local samples per car and track and exposes the assumptions behind its finish projection." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Automatische Kraftstoffberechnung",
+        "summary": "Live gemessener Verbrauch und Rundenwerte speisen jetzt eine lokale Kraftstoffprognose bis ins Ziel.",
+        "highlights": [
+          { "id": "fuel-calculator", "title": "Kraftstoffplanung aus deiner eigenen Session", "body": "Apex bewahrt begrenzte lokale Stichproben pro Auto und Strecke auf und zeigt die Annahmen hinter der Zielprognose." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.9",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Pre-race session context",
+        "summary": "Track, car, class, weather, and session information can appear before driving begins.",
+        "highlights": [
+          { "id": "session-only", "title": "Garage context without fake telemetry", "body": "Scoring-only frames are accepted while fuel, controls, tyres, and wheels remain explicitly unavailable until LMU publishes vehicle telemetry." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Sessionkontext vor dem Rennstart",
+        "summary": "Strecke, Auto, Klasse, Wetter und Session können erscheinen, bevor die Fahrt beginnt.",
+        "highlights": [
+          { "id": "session-only", "title": "Garagenkontext ohne erfundene Telemetrie", "body": "Frames nur mit Wertungsdaten werden akzeptiert. Kraftstoff, Eingaben, Reifen und Räder bleiben ausdrücklich nicht verfügbar, bis LMU Fahrzeugtelemetrie liefert." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.8",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Complete English and German interface",
+        "summary": "All rendered application copy is available in English and German with structural parity checks.",
+        "highlights": [
+          { "id": "bilingual-ui", "title": "Switch language throughout Apex", "body": "A local language preference updates the interface, while the build rejects untranslated rendered strings and mismatched message structures." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Vollständige englische und deutsche Oberfläche",
+        "summary": "Alle angezeigten Anwendungstexte sind auf Englisch und Deutsch verfügbar und werden strukturell geprüft.",
+        "highlights": [
+          { "id": "bilingual-ui", "title": "Sprache in ganz Apex wechseln", "body": "Eine lokale Spracheinstellung aktualisiert die Oberfläche. Der Build lehnt nicht übersetzte sichtbare Texte und abweichende Nachrichtenstrukturen ab." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.7",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "One-click debug sharing",
+        "summary": "Prepare complete redacted diagnostics for support without sending anything automatically.",
+        "highlights": [
+          { "id": "debug-sharing", "title": "Copy, save, or draft support details", "body": "Apex can prepare local logs with common secrets and home paths redacted, then lets the user explicitly copy, save, or open an email draft." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Debug-Informationen mit einem Klick teilen",
+        "summary": "Bereite vollständige bereinigte Diagnosen für den Support vor, ohne automatisch etwas zu senden.",
+        "highlights": [
+          { "id": "debug-sharing", "title": "Supportdetails kopieren, speichern oder als Entwurf öffnen", "body": "Apex bereitet lokale Protokolle mit unkenntlich gemachten üblichen Geheimnissen und Benutzerpfaden vor. Erst der Benutzer kopiert, speichert oder öffnet ausdrücklich einen E-Mail-Entwurf." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.6",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Correct timed-session lap handling",
+        "summary": "LMU's timed-session lap sentinel is normalized instead of being displayed as a real lap count.",
+        "highlights": [
+          { "id": "timed-session", "title": "Timed races remain timed", "body": "The bridge now treats the special total-laps value as unavailable and preserves the session's measured remaining time." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Korrekte Rundenbehandlung in zeitbegrenzten Sessions",
+        "summary": "Der LMU-Sonderwert für zeitbegrenzte Sessions wird normalisiert und nicht als echte Rundenzahl angezeigt.",
+        "highlights": [
+          { "id": "timed-session", "title": "Zeitrennen bleiben zeitbasiert", "body": "Die Bridge behandelt den speziellen Gesamt-Rundenwert jetzt als nicht verfügbar und bewahrt die gemessene verbleibende Sessionzeit." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.5",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Persistent LMU discovery and live state",
+        "summary": "Apex remembers a verified LMU path and exposes the bridge's real connection state.",
+        "highlights": [
+          { "id": "live-state", "title": "Connection status reflects the local bridge", "body": "The selected installation survives restart, while the UI distinguishes waiting, connected, disconnected, and error states." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Gespeicherte LMU-Erkennung und Live-Status",
+        "summary": "Apex merkt sich einen geprüften LMU-Pfad und zeigt den tatsächlichen Verbindungsstatus der Bridge.",
+        "highlights": [
+          { "id": "live-state", "title": "Der Verbindungsstatus folgt der lokalen Bridge", "body": "Die gewählte Installation bleibt nach einem Neustart erhalten. Die Oberfläche unterscheidet Warten, Verbunden, Getrennt und Fehler." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.4",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Progressive in-app guidance",
+        "summary": "Onboarding and contextual explanations introduce Apex without blocking experienced users.",
+        "highlights": [
+          { "id": "guidance", "title": "Guidance stays available", "body": "Setup checks, view-specific help, and dismissible introductions can be reopened or reset from Settings." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Schrittweise Hilfe in der App",
+        "summary": "Onboarding und kontextbezogene Erklärungen führen in Apex ein, ohne erfahrene Benutzer aufzuhalten.",
+        "highlights": [
+          { "id": "guidance", "title": "Hinweise bleiben verfügbar", "body": "Einrichtungsprüfungen, ansichtsbezogene Hilfe und schließbare Einführungen lassen sich in den Einstellungen erneut öffnen oder zurücksetzen." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.3",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Consent-driven application updates",
+        "summary": "Installed Windows builds can check GitHub Releases while keeping download and installation under user control.",
+        "highlights": [
+          { "id": "updater", "title": "Two explicit update decisions", "body": "Apex asks before downloading and again before restarting to install; automatic checks never trigger an automatic download." }
+        ],
+        "knownLimitations": [
+          { "id": "windows-installer", "title": "Installer update path", "body": "Automatic replacement is available to the installed Windows build; portable ZIP users download a new package manually." }
+        ]
+      },
+      "de": {
+        "title": "Anwendungsupdates mit Zustimmung",
+        "summary": "Installierte Windows-Builds können GitHub Releases prüfen, während Download und Installation unter Kontrolle des Benutzers bleiben.",
+        "highlights": [
+          { "id": "updater", "title": "Zwei ausdrückliche Update-Entscheidungen", "body": "Apex fragt vor dem Download und erneut vor dem Neustart zur Installation. Automatische Prüfungen starten niemals automatisch einen Download." }
+        ],
+        "knownLimitations": [
+          { "id": "windows-installer", "title": "Updatepfad für den Installer", "body": "Die installierte Windows-App kann sich automatisch ersetzen; Benutzer des portablen ZIP laden ein neues Paket manuell herunter." }
+        ]
+      }
+    },
+    {
+      "version": "0.1.2",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Evidence-driven LMU discovery",
+        "summary": "Installation detection now reports exactly what was checked and why a candidate passed or failed.",
+        "highlights": [
+          { "id": "discovery", "title": "Steam libraries and manual paths are inspectable", "body": "Apex checks the LMU executable or Steam manifest, shared-memory support folder, telemetry folder, and setup directory without modifying them." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Nachvollziehbare LMU-Erkennung",
+        "summary": "Die Installationserkennung zeigt jetzt genau, was geprüft wurde und warum ein Kandidat bestanden hat oder abgelehnt wurde.",
+        "highlights": [
+          { "id": "discovery", "title": "Steam-Bibliotheken und manuelle Pfade sind prüfbar", "body": "Apex prüft LMU-Programmdatei oder Steam-Manifest, Shared-Memory-Supportordner, Telemetrieordner und Setup-Verzeichnis, ohne sie zu verändern." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.1",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Release artifacts are gated",
+        "summary": "Desktop pushes now require a synchronized version and verified Windows release artifacts.",
+        "highlights": [
+          { "id": "release-gate", "title": "Installer, ZIP, metadata, and checksums stay together", "body": "The pre-push gate runs tests and builds every public Windows artifact before a desktop-impacting commit can be published." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Release-Artefakte werden geprüft",
+        "summary": "Desktop-Pushes erfordern jetzt eine synchronisierte Version und geprüfte Windows-Release-Artefakte.",
+        "highlights": [
+          { "id": "release-gate", "title": "Installer, ZIP, Metadaten und Prüfsummen bleiben zusammen", "body": "Die Pre-Push-Prüfung führt Tests aus und baut jedes öffentliche Windows-Artefakt, bevor ein Desktop-relevanter Commit veröffentlicht werden kann." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
+      "version": "0.1.0",
+      "releasedAt": "2026-07-12",
+      "en": {
+        "title": "Public alpha foundation",
+        "summary": "The first public alpha packages Apex's local-first LMU companion, bridge, diagnostics, and Windows release tooling.",
+        "highlights": [
+          { "id": "public-alpha", "title": "Local-first by design", "body": "Apex has no account, analytics, or cloud runtime and reads LMU's official shared-memory mapping from a separate local process." }
+        ],
+        "knownLimitations": [
+          { "id": "alpha-evidence", "title": "Alpha compatibility boundary", "body": "The initial package proves the application and fixture contract, not every current LMU build, car, session, or hardware configuration." }
+        ]
+      },
+      "de": {
+        "title": "Grundlage der öffentlichen Alpha",
+        "summary": "Die erste öffentliche Alpha bündelt den lokalen LMU-Begleiter, die Bridge, Diagnose und Windows-Release-Werkzeuge.",
+        "highlights": [
+          { "id": "public-alpha", "title": "Von Grund auf lokal", "body": "Apex hat kein Konto, keine Analyse und keine Cloud-Laufzeit. Es liest LMUs offizielles Shared-Memory-Mapping aus einem getrennten lokalen Prozess." }
+        ],
+        "knownLimitations": [
+          { "id": "alpha-evidence", "title": "Kompatibilitätsgrenze der Alpha", "body": "Das erste Paket weist Anwendung und Fixture-Vertrag nach, aber nicht jede aktuelle LMU-Version, jedes Auto, jede Session oder Hardwarekonfiguration." }
+        ]
+      }
+    }
+  ]
+}

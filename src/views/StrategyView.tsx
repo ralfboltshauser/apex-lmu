@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Badge, Button, Card, CardHeader, Progress, Segmented, TooltipHint } from '../components/ui'
+import { NumericField } from '../components/forms/NumericField'
 import { projectRaceResources } from '../engine'
 import { defineMessages, useI18n, useMessages, type Language } from '../i18n'
 
@@ -71,15 +72,6 @@ const copy = defineMessages({
   robustness: { eyebrow: 'Robustheit', title: 'Was wird modelliert – und was nicht?', bounds: 'Analytische Grenzen', trafficTitle: 'Verkehr und Rückkehrposition', trafficDetail: 'An diesen Planer ist keine Feldprognose angeschlossen', weatherTitle: 'Wetter und Reifen-Crossover', weatherDetail: 'Die Auswahl ist illustrativ und verändert das Ergebnis nicht', fuelTitle: 'Kraftstoffstreuung', modeledRange: 'modellierte Zielbandbreite', unknown: 'Unbekannt' },
   brief: { eyebrow: 'Fahrerbriefing', title: 'Drei Zahlen merken', targetFuel: 'Zielverbrauch', pitCall: 'Boxenruf', notOptimized: 'Nicht optimiert', energyInput: 'VE-Eingabe', extraLapRisk: 'Risiko einer Zusatzrunde', noExtraLapRisk: 'Kein relevantes Risiko einer Zusatzrunde', reserveIncluded: 'Reserve enthalten.' },
 })
-
-function NumberInput({ label, value, unit, onChange, min = 0, step = 1, help }: { label: string; value: number; unit: string; onChange: (value: number) => void; min?: number; step?: number; help?: string }) {
-  return (
-    <label className="number-input">
-      <span>{label}{help && <TooltipHint>{help}</TooltipHint>}</span>
-      <div><input type="number" min={min} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /><em>{unit}</em></div>
-    </label>
-  )
-}
 
 function StrategyTimeline({ selected }: { selected: Scenario }) {
   const m = useMessages(copy)
@@ -164,17 +156,17 @@ export function StrategyView() {
             <div className="field-group">
               <label className="field-label"><span>{m.event.exampleCircuit}</span><button type="button" disabled>{m.event.exampleCircuitValue}</button></label>
               <label className="field-label"><span>{m.event.exampleCar}</span><button type="button" disabled>{m.event.exampleCarValue}</button></label>
-              <NumberInput label={m.event.raceDuration} value={duration} unit={m.units.minutes} onChange={setDuration} min={10} />
-              <NumberInput label={m.event.averageLap} value={lapTime} unit={m.units.seconds} onChange={setLapTime} min={30} step={0.1} />
+              <NumericField label={m.event.raceDuration} value={duration} unit={m.units.minutes} onCommit={setDuration} min={10} max={1440} step={1} integer />
+              <NumericField label={m.event.averageLap} value={lapTime} unit={m.units.seconds} onCommit={setLapTime} min={30} max={3600} step={0.1} />
             </div>
           </Card>
           <Card>
             <CardHeader eyebrow={m.consumption.eyebrow} title={m.consumption.title} action={<Badge tone="neutral">{m.consumption.spread}</Badge>} />
             <div className="field-group field-group--two">
-              <NumberInput label={m.consumption.fuelPerLap} value={fuelPerLap} unit={m.units.liters} onChange={setFuelPerLap} step={0.01} />
-              <NumberInput label={m.consumption.energyPerLap} value={energyPerLap} unit={m.units.percent} onChange={setEnergyPerLap} step={0.01} help={m.consumption.energyHelp} />
-              <NumberInput label={m.consumption.tankCapacity} value={tankCapacity} unit={m.units.liters} onChange={setTankCapacity} />
-              <NumberInput label={m.consumption.pitLoss} value={pitLoss} unit={m.units.seconds} onChange={setPitLoss} step={0.1} />
+              <NumericField label={m.consumption.fuelPerLap} value={fuelPerLap} unit={m.units.liters} onCommit={setFuelPerLap} min={0.01} max={1000} step={0.01} />
+              <NumericField label={m.consumption.energyPerLap} value={energyPerLap} unit={m.units.percent} onCommit={setEnergyPerLap} min={0} max={100} step={0.01} help={<TooltipHint>{m.consumption.energyHelp}</TooltipHint>} />
+              <NumericField label={m.consumption.tankCapacity} value={tankCapacity} unit={m.units.liters} onCommit={setTankCapacity} min={1} max={1000} step={0.1} />
+              <NumericField label={m.consumption.pitLoss} value={pitLoss} unit={m.units.seconds} onCommit={setPitLoss} min={0} max={3600} step={0.1} />
             </div>
             <div className="model-quality"><div><span>{m.consumption.confidence} <TooltipHint>{m.consumption.confidenceHelp}</TooltipHint></span><strong>{modelConfidence}{m.units.percent}</strong></div><Progress value={modelConfidence} tone="positive" /><small>{m.consumption.confidenceDetail}</small></div>
           </Card>

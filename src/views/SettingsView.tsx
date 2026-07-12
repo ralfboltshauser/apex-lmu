@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, CardHeader, Segmented } from '../components/ui'
+import { ReleaseHistory } from '../components/ReleaseNotes'
 import { useI18n, useMessages } from '../i18n'
 import { formatMessage, settingsMessages } from '../i18n/view-resources'
 
@@ -355,6 +356,8 @@ export function SettingsView() {
             <CardHeader eyebrow={m.about.languageEyebrow} title={m.about.languageTitle} description={m.about.languageDescription} action={<Languages size={19} />} />
             <Segmented value={language} onChange={setLanguage} ariaLabel={m.about.languageAria} options={[{ value: 'en', label: m.about.english }, { value: 'de', label: m.about.german }]} />
           </Card>}
+
+          {activeSection === 'about' && <ReleaseHistory />}
 
           {activeSection === 'about' &&
           <Card>

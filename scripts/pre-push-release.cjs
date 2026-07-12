@@ -65,6 +65,11 @@ if (previousVersion === currentVersion) {
   process.exit(1)
 }
 
+console.log('pre-push: validating the pushed bilingual release-note source of truth…')
+process.env.APEX_RELEASE_NOTES_REVISION = pushedHead
+runNpm('release-notes:check')
+delete process.env.APEX_RELEASE_NOTES_REVISION
+
 const commonGitDirValue = git(['rev-parse', '--git-common-dir'])
 const commonGitDir = path.isAbsolute(commonGitDirValue)
   ? commonGitDirValue

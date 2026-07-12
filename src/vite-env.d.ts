@@ -53,6 +53,8 @@ interface ApexDesktopApi {
   exportSupportBundle(): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
   openLogsFolder(): Promise<string>
   getUpdateState(): Promise<ApexUpdateState>
+  getWhatsNewState(): Promise<ApexWhatsNewState>
+  acknowledgeWhatsNew(version: string): Promise<{ ok: boolean; reason?: string; alreadyAcknowledged?: boolean; state?: ApexWhatsNewState }>
   checkForUpdates(): Promise<ApexUpdateState>
   downloadUpdate(): Promise<{ ok: boolean; reason?: string }>
   installUpdate(): Promise<{ ok: boolean; reason?: string }>
@@ -93,6 +95,7 @@ interface ApexDesktopApi {
 }
 
 interface ApexUpdateState { status: 'development' | 'unsupported' | 'idle' | 'checking' | 'available' | 'up-to-date' | 'downloading' | 'downloaded' | 'error'; currentVersion: string; availableVersion: string | null; progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null; message: string; releaseNotes: string; releaseUrl: string; error?: { message: string; stack: string; code: string } }
+interface ApexWhatsNewState { schemaVersion: 1; currentVersion: string; firstSeenVersion: string; lastAcknowledgedVersion: string | null }
 interface ApexRecordingState { status: 'idle' | 'starting' | 'recording' | 'stopping' | 'replaying' | 'complete' | 'error'; path: string | null; frames: number; bytes: number; durationSeconds: number; message: string }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }

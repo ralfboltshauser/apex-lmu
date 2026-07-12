@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { Shell, type ViewId } from './components/Shell'
+import { WhatsNewDialog } from './components/ReleaseNotes'
 import { Badge, Button } from './components/ui'
 import { HomeView } from './views/HomeView'
 import { LiveView } from './views/LiveView'
@@ -24,6 +25,7 @@ import { SettingsView } from './views/SettingsView'
 import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, updateFuelTracker, type LiveFuelEstimate, type TelemetryFrame } from './core'
 import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
+import { pendingReleaseNotes, type ReleaseNote } from './release-notes'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
@@ -183,6 +185,7 @@ export default function App() {
   const [tick, setTick] = useState(0)
   const [onboarding, setOnboarding] = useState(() => window.localStorage.getItem('apex:onboarded') !== 'true')
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [whatsNew, setWhatsNew] = useState<readonly ReleaseNote[]>([])
   const demoAdapter = useRef(new MockTelemetryAdapter({ autoTick: true, stepMs: 80, seed: 963 }))
   const desktopAdapter = useRef(new DesktopTelemetryAdapter())
   const fuelTracker = useRef(emptyFuelTracker())
@@ -205,6 +208,27 @@ export default function App() {
   const completeOnboarding = () => {
     window.localStorage.setItem('apex:onboarded', 'true')
     setOnboarding(false)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    void window.apexDesktop?.getWhatsNewState()
+      .then((state) => { if (!cancelled) setWhatsNew(pendingReleaseNotes(state)) })
+      .catch((error) => void window.apexDesktop?.reportError({ message: error instanceof Error ? error.message : String(error), context: 'whats-new-state' }))
+    return () => { cancelled = true }
+  }, [])
+
+  const acknowledgeWhatsNew = async (openHistory: boolean) => {
+    const version = whatsNew[0]?.version
+    if (!version || !window.apexDesktop) return
+    const result = await window.apexDesktop.acknowledgeWhatsNew(version)
+    if (!result.ok) throw new Error(result.reason || 'Unable to acknowledge release notes')
+    if (openHistory) {
+      window.localStorage.setItem('apex:settings-section', 'about')
+      setView('settings')
+      window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'about' })))
+    }
+    setWhatsNew([])
   }
 
   const toggleDemo = () => {
@@ -363,6 +387,7 @@ export default function App() {
         {renderView()}
       </Shell>
       {onboarding && <Onboarding onComplete={completeOnboarding} onDemo={() => setDemoRunning(true)} />}
+      {!onboarding && whatsNew.length > 0 && <WhatsNewDialog releases={whatsNew} onDone={() => acknowledgeWhatsNew(false)} onViewAll={() => acknowledgeWhatsNew(true)} />}
       <div className="toast-region" aria-live="polite">
         {toasts.map((toast) => <div className="toast" key={toast.id}><div><Check size={15} /></div><span><strong>{toast.title}</strong><small>{toast.body}</small></span><button type="button" aria-label={appCopy.common.dismiss} onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}><X size={14} /></button></div>)}
       </div>
