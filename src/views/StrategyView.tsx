@@ -1,96 +1,92 @@
 import {
   AlertTriangle,
-  ArrowRight,
-  BatteryCharging,
-  Check,
-  ChevronDown,
   Clock3,
-  CloudRain,
-  CloudSun,
-  Droplets,
   Flag,
   Fuel,
   Gauge,
   Info,
-  Milestone,
-  Plus,
   RotateCcw,
   Save,
   ShieldCheck,
-  Sparkles,
   Timer,
-  Users,
-  Wind,
-  Zap,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Badge, Button, Card, CardHeader, Progress, Segmented, TooltipHint } from '../components/ui'
 import { NumericField } from '../components/forms/NumericField'
-import { projectRaceResources } from '../engine'
+import { Badge, Button, Card, CardHeader, TooltipHint } from '../components/ui'
+import {
+  generateTimedStrategyCandidates,
+  type StrategyCandidate,
+} from '../engine'
 import { defineMessages, useI18n, useMessages, type Language } from '../i18n'
 
-type Scenario = 'balanced' | 'safe' | 'attack'
-
-const scenarios = {
-  balanced: { stops: 2, total: '2:03:41', margin: 2.1, first: 21, second: 42, save: 0, color: 'accent' },
-  safe: { stops: 2, total: '2:03:58', margin: 5.4, first: 20, second: 40, save: 0, color: 'blue' },
-  attack: { stops: 3, total: '2:03:26', margin: 1.3, first: 16, second: 32, save: 0, color: 'warning' },
+const defaults = {
+  duration: 120,
+  lapTime: 124.1,
+  expectedFuelPerLap: 3.46,
+  planningFuelPerLap: 3.46,
+  currentFuel: 75,
+  tankCapacity: 75,
+  reserve: 0.6,
+  pitLoss: 48.2,
+  refuelRate: 2,
 } as const
 
 function formatNumber(value: number, language: Language, digits: number) {
-  return new Intl.NumberFormat(language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)
+  return new Intl.NumberFormat(language, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)
+}
+
+function candidateDistance(candidate: StrategyCandidate) {
+  return candidate.stints.reduce((total, stint) => total + stint.lapEquivalents, 0)
 }
 
 const copy = defineMessages({
-  scenarios: { balanced: { label: 'Balanced', risk: 'Low' }, safe: { label: 'Safety margin', risk: 'Very low' }, attack: { label: 'Track position', risk: 'Medium' } },
-  units: { minutes: 'min', seconds: 's', liters: 'L', percent: '%' },
-  resources: { fuel: 'Fuel', virtualEnergy: 'Virtual energy' },
-  timeline: { pit: 'Pit', start: 'Start', finish: 'Finish', stint: 'Stint', medium: 'Medium', laps: 'laps', driver: 'Driver' },
-  heading: { eyebrow: 'Race strategy', title: 'Build the plan. Stress-test the finish.', description: 'A transparent strategy model with ranges, assumptions, and what-if scenarios.', reset: 'Reset', saveUnavailable: 'Save unavailable' },
-  provenance: { badge: 'Mixed alpha model', description: 'Lap count, fuel, VE, uncertainty, and finish-boundary risk are calculated from your inputs. Stint cards, pit windows, traffic, tyres, drivers, and weather remain illustrative.' },
-  event: { eyebrow: 'Event', title: 'Race assumptions', help: 'Inputs are stored only in this local plan.', exampleCircuit: 'Example circuit', exampleCircuitValue: 'Spa-Francorchamps', exampleCar: 'Example car', exampleCarValue: 'Porsche 963', raceDuration: 'Race duration', averageLap: 'Average lap' },
-  consumption: { eyebrow: 'Consumption', title: 'Manual pace model', spread: '6-point synthetic spread', fuelPerLap: 'Fuel / lap', energyPerLap: 'Virtual energy / lap', energyHelp: "LMU's regulated virtual-energy allocation consumed per lap.", tankCapacity: 'Tank capacity', pitLoss: 'Pit loss', confidence: 'Model confidence', confidenceHelp: 'Input stability and finish-boundary evidence—not the probability that this strategy wins.', confidenceDetail: 'Calculated locally from consumption variance, pace stability and race-boundary risk.' },
-  conditions: { eyebrow: 'Conditions', title: 'Weather model', aria: 'Weather model', dry: 'Dry', variable: 'Variable', dryExample: 'Dry example', variableExample: 'Variable example', calculationNote: 'Weather does not alter the alpha calculation yet', rainUnavailable: 'Rain transitions unavailable' },
-  verdict: { eyebrow: 'Calculated resource result', fuelStop: 'fuel stop', fuelStops: 'fuel stops', required: 'required at minimum', projectedLaps: 'projected laps require', includingReserve: 'including the configured reserve. Stint timing and traffic are not yet optimized.', modelConfidence: 'model confidence' },
-  card: { recommended: 'Recommended', illustrative: 'illustrative', stops: 'stops', margin: 'margin', risk: 'risk' },
-  plan: { plan: 'Plan', minutes: 'min', laps: 'laps', stop: 'Stop', window: 'Window', fuelAdded: 'Fuel added', tyres: 'Tyres', driver: 'Driver', rejoin: 'Rejoin', lap: 'Lap', newTyres: 'New', mediumCode: 'M', clear: 'clear', traffic: 'traffic' },
-  robustness: { eyebrow: 'Robustness', title: 'What is and is not modeled?', bounds: 'Analytical bounds', trafficTitle: 'Traffic and rejoin position', trafficDetail: 'No field forecast is connected to this planner', weatherTitle: 'Weather and tyre crossover', weatherDetail: 'The selector is illustrative and does not change the result', fuelTitle: 'Fuel variation', modeledRange: 'modeled finish range', unknown: 'Unknown' },
-  brief: { eyebrow: 'Driver brief', title: 'Remember three numbers', targetFuel: 'Target fuel', pitCall: 'Pit call', notOptimized: 'Not optimized', energyInput: 'VE input', extraLapRisk: 'extra-lap boundary risk', noExtraLapRisk: 'No material extra-lap boundary risk', reserveIncluded: 'reserve included.' },
+  units: { minutes: 'min', seconds: 's', liters: 'L', laps: 'laps', lap: 'lap' },
+  heading: { eyebrow: 'Race strategy', title: 'Build a plan you can verify.', description: 'Every displayed stop, stint and fuel target now comes from the selected calculation.', reset: 'Reset', saveUnavailable: 'Save unavailable' },
+  provenance: { badge: 'Manual fuel model', description: 'All active inputs are manual assumptions. No measured LMU laps are connected here yet, so Apex reports feasibility—not a probability of winning.', source: 'Source: manual', evidence: 'One manual value; no synthetic samples or confidence percentage.' },
+  event: { eyebrow: 'Race', title: 'Distance assumptions', help: 'A timed race finishes at the first modeled line crossing after zero. Pit time is coupled back into the projected lap count.', duration: 'Race duration', lapTime: 'Average lap time' },
+  fuel: { eyebrow: 'Fuel', title: 'Capacity and consumption', expectedRate: 'Expected fuel / lap', planningRate: 'Planning fuel / lap', planningHelp: 'The conservative rate used to prove that every stint fits. Raising the expected rate also raises this value when necessary.', current: 'Start fuel', capacity: 'Tank capacity', reserve: 'Finish reserve' },
+  service: { eyebrow: 'Pit service', title: 'Time assumptions', pitLoss: 'Pit-lane loss', pitLossHelp: 'Time lost entering, traversing and exiting the pit lane, excluding refuelling.', refuelRate: 'Refuel rate', refuelUnit: 'L/s', concurrency: 'Fuel-only service; no tyre or driver timing is assumed.' },
+  verdict: { eyebrow: 'Recommended fuel-only baseline', stop: 'stop', stops: 'stops', stints: 'stints', for: 'for', rationale: 'Maximizes projected completed laps, then minimizes modeled pit cost and fuel-range pressure.', minimum: 'minimum feasible', planningDemand: 'planning fuel demand', expectedDemand: 'expected fuel demand', infeasible: 'No feasible fuel plan', infeasibleDetail: 'The tank has no usable range after the configured reserve, or the current assumptions cannot cover one stint. Adjust capacity, start fuel, reserve, or planning consumption.' },
+  alternatives: { eyebrow: 'Feasible plans', title: 'Calculated alternatives', description: 'Only non-invented candidates are shown. Select one to update every detail below.', recommended: 'Recommended', fewerLaps: 'fewer projected laps', sameDistance: 'same projected distance', pitCost: 'pit cost', finishFuel: 'expected finish fuel', noAlternative: 'No non-dominated alternative is supported by these assumptions.' },
+  plan: { eyebrow: 'Selected plan', title: 'Fuel stint schedule', projected: 'projected', stop: 'Stop', afterLap: 'After lap', fuelAdded: 'Fuel added', exitTarget: 'Exit target', totalCost: 'Total pit cost', start: 'Start', finish: 'Finish', stint: 'Stint', uses: 'planning use' },
+  explanation: { eyebrow: 'Why this changed', title: 'Cause and effect', distance: 'Pit time is included in the timed-race distance. More pit time can reduce the number of completed laps.', fuel: 'The planning rate and reserve constrain every stint; expected consumption only estimates finish fuel.', objective: 'Objective: maximize completed laps, then minimize modeled time and risk. Stable stop count breaks ties.' },
+  unsupported: { eyebrow: 'Outside this model', title: 'Explicitly not modeled', traffic: 'Traffic and rejoin position', weather: 'Weather and tyre crossover', tyres: 'Tyre inventory, degradation and compounds', drivers: 'Driver rules and swap timing', energy: 'Virtual Energy allocation', note: 'These factors cannot change or decorate this plan until verified inputs and rules are connected.', unavailable: 'Not modeled' },
+  brief: { eyebrow: 'Driver brief', title: 'Calculated fuel calls', target: 'Planning rate', firstStop: 'First stop', finish: 'Expected finish', noStop: 'No stop', afterLap: 'after lap', reserve: 'The conservative schedule protects the configured finish reserve.' },
 }, {
-  scenarios: { balanced: { label: 'Ausgewogen', risk: 'Niedrig' }, safe: { label: 'Sicherheitsreserve', risk: 'Sehr niedrig' }, attack: { label: 'Streckenposition', risk: 'Mittel' } },
-  units: { minutes: 'min', seconds: 's', liters: 'L', percent: '%' },
-  resources: { fuel: 'Kraftstoff', virtualEnergy: 'Virtuelle Energie' },
-  timeline: { pit: 'Stopp', start: 'Start', finish: 'Ziel', stint: 'Stint', medium: 'Medium', laps: 'Runden', driver: 'Fahrer' },
-  heading: { eyebrow: 'Rennstrategie', title: 'Baue den Plan. Prüfe das Ziel unter Belastung.', description: 'Ein transparentes Strategiemodell mit Bandbreiten, Annahmen und Was-wäre-wenn-Szenarien.', reset: 'Zurücksetzen', saveUnavailable: 'Speichern nicht verfügbar' },
-  provenance: { badge: 'Gemischtes Alpha-Modell', description: 'Rundenzahl, Kraftstoff, VE, Unsicherheit und Zielgrenzenrisiko werden aus deinen Eingaben berechnet. Stint-Karten, Boxenfenster, Verkehr, Reifen, Fahrer und Wetter bleiben illustrativ.' },
-  event: { eyebrow: 'Event', title: 'Rennannahmen', help: 'Eingaben werden nur in diesem lokalen Plan gespeichert.', exampleCircuit: 'Beispielstrecke', exampleCircuitValue: 'Spa-Francorchamps', exampleCar: 'Beispielfahrzeug', exampleCarValue: 'Porsche 963', raceDuration: 'Renndauer', averageLap: 'Durchschnittsrunde' },
-  consumption: { eyebrow: 'Verbrauch', title: 'Manuelles Tempomodell', spread: 'Synthetische Streuung aus 6 Punkten', fuelPerLap: 'Kraftstoff / Runde', energyPerLap: 'Virtuelle Energie / Runde', energyHelp: 'Die pro Runde verbrauchte, regulierte Zuteilung virtueller Energie in LMU.', tankCapacity: 'Tankkapazität', pitLoss: 'Boxenzeitverlust', confidence: 'Modellkonfidenz', confidenceHelp: 'Stabilität der Eingaben und Belege zur Zielgrenze – nicht die Gewinnwahrscheinlichkeit dieser Strategie.', confidenceDetail: 'Lokal aus Verbrauchsstreuung, Tempostabilität und Zielgrenzenrisiko berechnet.' },
-  conditions: { eyebrow: 'Bedingungen', title: 'Wettermodell', aria: 'Wettermodell', dry: 'Trocken', variable: 'Wechselhaft', dryExample: 'Trockenes Beispiel', variableExample: 'Wechselhaftes Beispiel', calculationNote: 'Das Wetter beeinflusst die Alpha-Berechnung noch nicht', rainUnavailable: 'Regenübergänge nicht verfügbar' },
-  verdict: { eyebrow: 'Berechnetes Ressourcenergebnis', fuelStop: 'Tankstopp', fuelStops: 'Tankstopps', required: 'mindestens erforderlich', projectedLaps: 'prognostizierte Runden benötigen', includingReserve: 'einschließlich der eingestellten Reserve. Stint-Zeitpunkte und Verkehr sind noch nicht optimiert.', modelConfidence: 'Modellkonfidenz' },
-  card: { recommended: 'Empfohlen', illustrative: 'illustrativ', stops: 'Stopps', margin: 'Reserve', risk: 'Risiko' },
-  plan: { plan: 'Plan', minutes: 'Min.', laps: 'Runden', stop: 'Stopp', window: 'Fenster', fuelAdded: 'Kraftstoff', tyres: 'Reifen', driver: 'Fahrer', rejoin: 'Rückkehr', lap: 'Runde', newTyres: 'Neu', mediumCode: 'M', clear: 'frei', traffic: 'Verkehr' },
-  robustness: { eyebrow: 'Robustheit', title: 'Was wird modelliert – und was nicht?', bounds: 'Analytische Grenzen', trafficTitle: 'Verkehr und Rückkehrposition', trafficDetail: 'An diesen Planer ist keine Feldprognose angeschlossen', weatherTitle: 'Wetter und Reifen-Crossover', weatherDetail: 'Die Auswahl ist illustrativ und verändert das Ergebnis nicht', fuelTitle: 'Kraftstoffstreuung', modeledRange: 'modellierte Zielbandbreite', unknown: 'Unbekannt' },
-  brief: { eyebrow: 'Fahrerbriefing', title: 'Drei Zahlen merken', targetFuel: 'Zielverbrauch', pitCall: 'Boxenruf', notOptimized: 'Nicht optimiert', energyInput: 'VE-Eingabe', extraLapRisk: 'Risiko einer Zusatzrunde', noExtraLapRisk: 'Kein relevantes Risiko einer Zusatzrunde', reserveIncluded: 'Reserve enthalten.' },
+  units: { minutes: 'min', seconds: 's', liters: 'L', laps: 'Runden', lap: 'Runde' },
+  heading: { eyebrow: 'Rennstrategie', title: 'Baue einen überprüfbaren Plan.', description: 'Jeder angezeigte Stopp, Stint und jedes Kraftstoffziel stammt jetzt aus der ausgewählten Berechnung.', reset: 'Zurücksetzen', saveUnavailable: 'Speichern nicht verfügbar' },
+  provenance: { badge: 'Manuelles Kraftstoffmodell', description: 'Alle aktiven Eingaben sind manuelle Annahmen. Hier sind noch keine gemessenen LMU-Runden verbunden; Apex bewertet deshalb Machbarkeit – nicht die Gewinnwahrscheinlichkeit.', source: 'Quelle: manuell', evidence: 'Ein manueller Wert; keine synthetischen Stichproben oder Konfidenzprozente.' },
+  event: { eyebrow: 'Rennen', title: 'Distanzannahmen', help: 'Ein Zeitrennen endet bei der ersten modellierten Ziellinienüberfahrt nach null. Die Boxenzeit fließt zurück in die prognostizierte Rundenzahl.', duration: 'Renndauer', lapTime: 'Durchschnittliche Rundenzeit' },
+  fuel: { eyebrow: 'Kraftstoff', title: 'Kapazität und Verbrauch', expectedRate: 'Erwarteter Kraftstoff / Runde', planningRate: 'Planungsverbrauch / Runde', planningHelp: 'Der konservative Wert, mit dem geprüft wird, ob jeder Stint passt. Ein höherer Erwartungswert erhöht diesen Wert bei Bedarf ebenfalls.', current: 'Startkraftstoff', capacity: 'Tankkapazität', reserve: 'Zielreserve' },
+  service: { eyebrow: 'Boxenservice', title: 'Zeitannahmen', pitLoss: 'Boxengassenverlust', pitLossHelp: 'Zeitverlust für Einfahrt, Durchfahrt und Ausfahrt ohne Betankung.', refuelRate: 'Betankungsrate', refuelUnit: 'L/s', concurrency: 'Nur Kraftstoffservice; keine Reifen- oder Fahrerzeit wird angenommen.' },
+  verdict: { eyebrow: 'Empfohlene reine Kraftstoffbasis', stop: 'Stopp', stops: 'Stopps', stints: 'Stints', for: 'für', rationale: 'Maximiert die prognostizierten gefahrenen Runden und minimiert danach modellierte Boxenzeit und Reichweitendruck.', minimum: 'mindestens machbar', planningDemand: 'Kraftstoffbedarf der Planung', expectedDemand: 'erwarteter Kraftstoffbedarf', infeasible: 'Kein machbarer Kraftstoffplan', infeasibleDetail: 'Nach der konfigurierten Reserve hat der Tank keine nutzbare Reichweite oder die aktuellen Annahmen decken keinen Stint ab. Passe Kapazität, Startkraftstoff, Reserve oder Planungsverbrauch an.' },
+  alternatives: { eyebrow: 'Machbare Pläne', title: 'Berechnete Alternativen', description: 'Es werden nur nicht erfundene Kandidaten gezeigt. Eine Auswahl aktualisiert alle Details darunter.', recommended: 'Empfohlen', fewerLaps: 'weniger prognostizierte Runden', sameDistance: 'gleiche prognostizierte Distanz', pitCost: 'Boxenkosten', finishFuel: 'erwarteter Zielkraftstoff', noAlternative: 'Diese Annahmen stützen keine nicht dominierte Alternative.' },
+  plan: { eyebrow: 'Ausgewählter Plan', title: 'Kraftstoff-Stintplan', projected: 'prognostiziert', stop: 'Stopp', afterLap: 'Nach Runde', fuelAdded: 'Kraftstoffmenge', exitTarget: 'Ausfahrtsziel', totalCost: 'Gesamte Boxenkosten', start: 'Start', finish: 'Ziel', stint: 'Stint', uses: 'Planungsverbrauch' },
+  explanation: { eyebrow: 'Warum sich das ändert', title: 'Ursache und Wirkung', distance: 'Die Boxenzeit ist in der Distanz des Zeitrennens enthalten. Mehr Boxenzeit kann die Anzahl gefahrener Runden verringern.', fuel: 'Planungsverbrauch und Reserve begrenzen jeden Stint; der erwartete Verbrauch schätzt nur den Zielkraftstoff.', objective: 'Ziel: gefahrene Runden maximieren, danach modellierte Zeit und Risiko minimieren. Eine stabile Stoppzahl entscheidet Gleichstände.' },
+  unsupported: { eyebrow: 'Außerhalb dieses Modells', title: 'Explizit nicht modelliert', traffic: 'Verkehr und Rückkehrposition', weather: 'Wetter und Reifen-Crossover', tyres: 'Reifenbestand, Abbau und Mischungen', drivers: 'Fahrerregeln und Wechselzeit', energy: 'Zuteilung virtueller Energie', note: 'Diese Faktoren dürfen den Plan nicht verändern oder ausschmücken, bevor verifizierte Eingaben und Regeln verbunden sind.', unavailable: 'Nicht modelliert' },
+  brief: { eyebrow: 'Fahrerbriefing', title: 'Berechnete Kraftstoffangaben', target: 'Planungsverbrauch', firstStop: 'Erster Stopp', finish: 'Erwartetes Ziel', noStop: 'Kein Stopp', afterLap: 'nach Runde', reserve: 'Der konservative Ablauf schützt die konfigurierte Zielreserve.' },
 })
 
-function StrategyTimeline({ selected }: { selected: Scenario }) {
+function StrategyTimeline({ candidate, language }: { candidate: StrategyCandidate; language: Language }) {
   const m = useMessages(copy)
-  const strategy = scenarios[selected]
+  const totalLaps = candidateDistance(candidate)
+  let cumulative = 0
   return (
-    <div className="strategy-timeline">
-      <div className="strategy-timeline__track">
-        <span className="stint stint--one" style={{ width: `${strategy.first / 60 * 100}%` }} />
-        <span className="stop" style={{ left: `${strategy.first / 60 * 100}%` }}><i /><b>{m.timeline.pit} 1</b></span>
-        <span className="stint stint--two" style={{ left: `${strategy.first / 60 * 100}%`, width: `${(strategy.second - strategy.first) / 60 * 100}%` }} />
-        <span className="stop" style={{ left: `${strategy.second / 60 * 100}%` }}><i /><b>{m.timeline.pit} 2</b></span>
-        <span className="stint stint--three" style={{ left: `${strategy.second / 60 * 100}%`, width: `${(60 - strategy.second) / 60 * 100}%` }} />
-        {strategy.stops === 3 && <span className="stop stop--third" style={{ left: '80%' }}><i /><b>{m.timeline.pit} 3</b></span>}
+    <div className="strategy-timeline strategy-timeline--calculated">
+      <div className="strategy-timeline__track" aria-label={`${candidate.stints.length} ${m.verdict.stints}`}>
+        {candidate.stints.map((stint, index) => {
+          const left = cumulative / totalLaps * 100
+          cumulative += stint.lapEquivalents
+          return <span key={stint.index} className="stint" style={{ left: `${left}%`, width: `${stint.lapEquivalents / totalLaps * 100}%` }} data-stint={index % 3} />
+        })}
+        {candidate.pitStops.map((stop) => <span key={stop.index} className="stop" style={{ left: `${stop.afterLapEquivalentsFromNow / totalLaps * 100}%` }}><i /><b>{m.plan.stop} {stop.index}</b></span>)}
       </div>
-      <div className="strategy-timeline__axis"><span>{m.timeline.start}</span><span>30 {m.units.minutes}</span><span>60 {m.units.minutes}</span><span>90 {m.units.minutes}</span><span>{m.timeline.finish}</span></div>
+      <div className="strategy-timeline__axis"><span>{m.plan.start}</span><span>{formatNumber(totalLaps / 2, language, totalLaps % 2 ? 1 : 0)} {m.units.laps}</span><span>{totalLaps} {m.units.laps} · {m.plan.finish}</span></div>
       <div className="strategy-timeline__stints">
-        <div><i className="stint-one" /><span><strong>{m.timeline.stint} 1 · {m.timeline.medium}</strong><small>{strategy.first} {m.timeline.laps} · 72.4 {m.units.liters} · {m.timeline.driver} A</small></span></div>
-        <div><i className="stint-two" /><span><strong>{m.timeline.stint} 2 · {m.timeline.medium}</strong><small>{strategy.second - strategy.first} {m.timeline.laps} · 70.1 {m.units.liters} · {m.timeline.driver} B</small></span></div>
-        <div><i className="stint-three" /><span><strong>{m.timeline.stint} 3 · {m.timeline.medium}</strong><small>{60 - strategy.second} {m.timeline.laps} · 66.8 {m.units.liters} · {m.timeline.driver} A</small></span></div>
+        {candidate.stints.map((stint) => <div key={stint.index}><i data-stint={(stint.index - 1) % 3} /><span><strong>{m.plan.stint} {stint.index}</strong><small>{stint.lapEquivalents} {m.units.laps} · {formatNumber(stint.conservativeFuelUseLitres, language, 1)} {m.units.liters} {m.plan.uses}</small></span></div>)}
       </div>
     </div>
   )
@@ -99,45 +95,45 @@ function StrategyTimeline({ selected }: { selected: Scenario }) {
 export function StrategyView() {
   const m = useMessages(copy)
   const { language } = useI18n()
-  const [selectedScenario, setSelectedScenario] = useState<Scenario>('balanced')
-  const [duration, setDuration] = useState(120)
-  const [fuelPerLap, setFuelPerLap] = useState(3.46)
-  const [energyPerLap, setEnergyPerLap] = useState(4.61)
-  const [lapTime, setLapTime] = useState(124.1)
-  const [tankCapacity, setTankCapacity] = useState(75)
-  const [pitLoss, setPitLoss] = useState(48.2)
-  const [weather, setWeather] = useState<'dry' | 'variable'>('dry')
-  const strategy = scenarios[selectedScenario]
-  const projection = useMemo(() => projectRaceResources({
-    race: {
-      kind: 'timed',
-      durationSeconds: duration * 60,
-      elapsedSeconds: 0,
-      currentLapProgress: 0,
-      lapTimeSamplesSeconds: [lapTime + 0.31, lapTime - 0.17, lapTime + 0.08, lapTime - 0.22, lapTime + 0.14, lapTime - 0.04],
-      finishRule: 'line-after-zero',
-    },
-    fuel: {
-      name: m.resources.fuel,
-      unit: m.units.liters,
-      currentAmount: 1000,
-      reserveAmount: 0.6,
-      perLapSamples: [fuelPerLap, fuelPerLap + 0.05, fuelPerLap - 0.04, fuelPerLap + 0.02, fuelPerLap - 0.01, fuelPerLap + 0.03],
-    },
-    virtualEnergy: {
-      name: m.resources.virtualEnergy,
-      unit: m.units.percent,
-      currentAmount: 1000,
-      reserveAmount: 0,
-      perLapSamples: [energyPerLap, energyPerLap + 0.08, energyPerLap - 0.06, energyPerLap + 0.03, energyPerLap - 0.02],
-    },
-  }), [duration, energyPerLap, fuelPerLap, lapTime, m.resources.fuel, m.resources.virtualEnergy, m.units.liters, m.units.percent])
-  const projectedLaps = Math.ceil(projection.race.expectedLapEquivalents)
-  const totalFuel = projection.fuel.requiredToFinish.expected
-  const modelConfidence = Math.round(projection.confidence.score * 100)
-  const stopCount = Math.max(0, Math.ceil(totalFuel / Math.max(1, tankCapacity)) - 1)
+  const [duration, setDuration] = useState<number>(defaults.duration)
+  const [lapTime, setLapTime] = useState<number>(defaults.lapTime)
+  const [expectedFuelPerLap, setExpectedFuelPerLap] = useState<number>(defaults.expectedFuelPerLap)
+  const [planningFuelPerLap, setPlanningFuelPerLap] = useState<number>(defaults.planningFuelPerLap)
+  const [currentFuel, setCurrentFuel] = useState<number>(defaults.currentFuel)
+  const [tankCapacity, setTankCapacity] = useState<number>(defaults.tankCapacity)
+  const [reserve, setReserve] = useState<number>(defaults.reserve)
+  const [pitLoss, setPitLoss] = useState<number>(defaults.pitLoss)
+  const [refuelRate, setRefuelRate] = useState<number>(defaults.refuelRate)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const result = useMemo(() => generateTimedStrategyCandidates({
+    durationSeconds: duration * 60,
+    currentFuelLitres: currentFuel,
+    tankCapacityLitres: tankCapacity,
+    fuel: { mean: expectedFuelPerLap, conservative: planningFuelPerLap },
+    fuelReserveLitres: reserve,
+    averageLapTimeSeconds: lapTime,
+    pitLaneLossSeconds: pitLoss,
+    refuelLitresPerSecond: refuelRate,
+    serviceConcurrency: 'parallel',
+  }), [currentFuel, duration, expectedFuelPerLap, lapTime, pitLoss, planningFuelPerLap, refuelRate, reserve, tankCapacity])
+  const recommended = result.recommended
+  const selected = result.candidates.find((candidate) => candidate.id === selectedId) ?? recommended
+  const projectedLaps = selected ? candidateDistance(selected) : result.projectedLapCount
+  const expectedDemand = projectedLaps * expectedFuelPerLap + reserve
+  const planningDemand = projectedLaps * planningFuelPerLap + reserve
+
   const reset = () => {
-    setSelectedScenario('balanced'); setDuration(120); setFuelPerLap(3.46); setEnergyPerLap(4.61); setLapTime(124.1); setTankCapacity(75); setPitLoss(48.2); setWeather('dry')
+    setDuration(defaults.duration)
+    setLapTime(defaults.lapTime)
+    setExpectedFuelPerLap(defaults.expectedFuelPerLap)
+    setPlanningFuelPerLap(defaults.planningFuelPerLap)
+    setCurrentFuel(defaults.currentFuel)
+    setTankCapacity(defaults.tankCapacity)
+    setReserve(defaults.reserve)
+    setPitLoss(defaults.pitLoss)
+    setRefuelRate(defaults.refuelRate)
+    setSelectedId(null)
   }
 
   return (
@@ -147,88 +143,99 @@ export function StrategyView() {
         <div className="page-heading__actions"><Button variant="secondary" icon={<RotateCcw size={16} />} onClick={reset}>{m.heading.reset}</Button><Button icon={<Save size={16} />} disabled>{m.heading.saveUnavailable}</Button></div>
       </div>
 
-      <div className="data-provenance-banner"><Badge tone="accent">{m.provenance.badge}</Badge><span>{m.provenance.description}</span></div>
+      <div className="data-provenance-banner"><Badge tone="warning">{m.provenance.badge}</Badge><span>{m.provenance.description}</span></div>
 
       <div className="strategy-layout">
         <aside className="strategy-inputs">
           <Card>
             <CardHeader eyebrow={m.event.eyebrow} title={m.event.title} action={<TooltipHint>{m.event.help}</TooltipHint>} />
             <div className="field-group">
-              <label className="field-label"><span>{m.event.exampleCircuit}</span><button type="button" disabled>{m.event.exampleCircuitValue}</button></label>
-              <label className="field-label"><span>{m.event.exampleCar}</span><button type="button" disabled>{m.event.exampleCarValue}</button></label>
-              <NumericField label={m.event.raceDuration} value={duration} unit={m.units.minutes} onCommit={setDuration} min={10} max={1440} step={1} integer />
-              <NumericField label={m.event.averageLap} value={lapTime} unit={m.units.seconds} onCommit={setLapTime} min={30} max={3600} step={0.1} />
+              <NumericField label={m.event.duration} value={duration} unit={m.units.minutes} onCommit={setDuration} min={10} max={1440} step={1} integer />
+              <NumericField label={m.event.lapTime} value={lapTime} unit={m.units.seconds} onCommit={setLapTime} min={30} max={3600} step={0.1} />
             </div>
+            <small className="strategy-source-note">{m.provenance.source}</small>
           </Card>
           <Card>
-            <CardHeader eyebrow={m.consumption.eyebrow} title={m.consumption.title} action={<Badge tone="neutral">{m.consumption.spread}</Badge>} />
+            <CardHeader eyebrow={m.fuel.eyebrow} title={m.fuel.title} action={<Badge tone="neutral">{m.provenance.source}</Badge>} />
             <div className="field-group field-group--two">
-              <NumericField label={m.consumption.fuelPerLap} value={fuelPerLap} unit={m.units.liters} onCommit={setFuelPerLap} min={0.01} max={1000} step={0.01} />
-              <NumericField label={m.consumption.energyPerLap} value={energyPerLap} unit={m.units.percent} onCommit={setEnergyPerLap} min={0} max={100} step={0.01} help={<TooltipHint>{m.consumption.energyHelp}</TooltipHint>} />
-              <NumericField label={m.consumption.tankCapacity} value={tankCapacity} unit={m.units.liters} onCommit={setTankCapacity} min={1} max={1000} step={0.1} />
-              <NumericField label={m.consumption.pitLoss} value={pitLoss} unit={m.units.seconds} onCommit={setPitLoss} min={0} max={3600} step={0.1} />
+              <NumericField label={m.fuel.expectedRate} value={expectedFuelPerLap} unit={m.units.liters} onCommit={(value) => { setExpectedFuelPerLap(value); if (value > planningFuelPerLap) setPlanningFuelPerLap(value) }} min={0.01} max={1000} step={0.01} />
+              <NumericField label={m.fuel.planningRate} value={planningFuelPerLap} unit={m.units.liters} onCommit={setPlanningFuelPerLap} min={expectedFuelPerLap} max={1000} step={0.01} help={<TooltipHint>{m.fuel.planningHelp}</TooltipHint>} />
+              <NumericField label={m.fuel.current} value={currentFuel} unit={m.units.liters} onCommit={setCurrentFuel} min={reserve} max={tankCapacity} step={0.1} />
+              <NumericField label={m.fuel.capacity} value={tankCapacity} unit={m.units.liters} onCommit={(value) => { setTankCapacity(value); if (currentFuel > value) setCurrentFuel(value); if (reserve > value) setReserve(value) }} min={1} max={1000} step={0.1} />
+              <NumericField label={m.fuel.reserve} value={reserve} unit={m.units.liters} onCommit={setReserve} min={0} max={Math.min(currentFuel, tankCapacity)} step={0.1} />
             </div>
-            <div className="model-quality"><div><span>{m.consumption.confidence} <TooltipHint>{m.consumption.confidenceHelp}</TooltipHint></span><strong>{modelConfidence}{m.units.percent}</strong></div><Progress value={modelConfidence} tone="positive" /><small>{m.consumption.confidenceDetail}</small></div>
+            <small className="strategy-source-note">{m.provenance.evidence}</small>
           </Card>
           <Card>
-            <CardHeader eyebrow={m.conditions.eyebrow} title={m.conditions.title} />
-            <Segmented value={weather} onChange={setWeather} ariaLabel={m.conditions.aria} options={[{ value: 'dry', label: m.conditions.dry }, { value: 'variable', label: m.conditions.variable }]} />
-            <div className="weather-summary"><CloudSun size={23} /><div><strong>{weather === 'dry' ? m.conditions.dryExample : m.conditions.variableExample}</strong><span>{m.conditions.calculationNote}</span></div></div>
-            <button type="button" className="add-condition" disabled><Plus size={14} /> {m.conditions.rainUnavailable}</button>
+            <CardHeader eyebrow={m.service.eyebrow} title={m.service.title} />
+            <div className="field-group field-group--two">
+              <NumericField label={m.service.pitLoss} value={pitLoss} unit={m.units.seconds} onCommit={setPitLoss} min={0} max={3600} step={0.1} help={<TooltipHint>{m.service.pitLossHelp}</TooltipHint>} />
+              <NumericField label={m.service.refuelRate} value={refuelRate} unit={m.service.refuelUnit} onCommit={setRefuelRate} min={0.01} max={100} step={0.01} />
+            </div>
+            <small className="strategy-source-note">{m.service.concurrency}</small>
           </Card>
         </aside>
 
         <div className="strategy-results">
-          <Card className="strategy-verdict">
-            <div className="strategy-verdict__icon"><Sparkles size={20} /></div>
-            <div><div className="eyebrow">{m.verdict.eyebrow}</div><h2>{stopCount} {stopCount === 1 ? m.verdict.fuelStop : m.verdict.fuelStops} {m.verdict.required}</h2><p>{projectedLaps} {m.verdict.projectedLaps} {formatNumber(totalFuel, language, 1)} {m.units.liters} {m.verdict.includingReserve}</p></div>
-            <Badge tone={modelConfidence >= 80 ? 'positive' : 'warning'}>{modelConfidence}{m.units.percent} {m.verdict.modelConfidence}</Badge>
-          </Card>
+          {recommended && <Card className="strategy-verdict">
+            <div className="strategy-verdict__icon"><ShieldCheck size={20} /></div>
+            <div><div className="eyebrow">{m.verdict.eyebrow}</div><h2>{recommended.stopCount} {recommended.stopCount === 1 ? m.verdict.stop : m.verdict.stops} · {recommended.stints.length} {m.verdict.stints} · {projectedLaps} {m.units.laps}</h2><p>{m.verdict.rationale}</p></div>
+            <Badge tone="positive">{result.minimumStops} {result.minimumStops === 1 ? m.verdict.stop : m.verdict.stops} {m.verdict.minimum}</Badge>
+            <div className="strategy-verdict__metrics"><span><b>{formatNumber(expectedDemand, language, 1)} {m.units.liters}</b>{m.verdict.expectedDemand}</span><span><b>{formatNumber(planningDemand, language, 1)} {m.units.liters}</b>{m.verdict.planningDemand}</span><span><b>{formatNumber(recommended.projectedPitTimeSeconds, language, 1)} {m.units.seconds}</b>{m.alternatives.pitCost}</span></div>
+          </Card>}
+          {!recommended && <Card className="strategy-verdict strategy-verdict--infeasible">
+            <div className="strategy-verdict__icon"><AlertTriangle size={20} /></div>
+            <div><div className="eyebrow">{m.verdict.eyebrow}</div><h2>{m.verdict.infeasible}</h2><p>{m.verdict.infeasibleDetail}</p></div>
+          </Card>}
 
-          <div className="scenario-grid">
-            {(Object.entries(scenarios) as Array<[Scenario, typeof scenarios[Scenario]]>).map(([id, scenario]) => (
-              <button key={id} type="button" className={`scenario-card ${selectedScenario === id ? 'is-selected' : ''}`} onClick={() => setSelectedScenario(id)}>
-                <div className="scenario-card__top"><span className={`scenario-card__radio ${selectedScenario === id ? 'is-selected' : ''}`} /> <strong>{m.scenarios[id].label}</strong>{id === 'balanced' && <Badge tone="accent">{m.card.recommended}</Badge>}</div>
-                <div className="scenario-card__time">{scenario.total}<span>{m.card.illustrative}</span></div>
-                <div className="scenario-card__stats"><span><b>{scenario.stops}</b> {m.card.stops}</span><span><b>+{formatNumber(scenario.margin, language, 1)} {m.units.liters}</b> {m.card.margin}</span><span><b>{m.scenarios[id].risk}</b> {m.card.risk}</span></div>
-              </button>
-            ))}
-          </div>
-
-          <Card className="plan-card">
-            <CardHeader
-              eyebrow={`${m.plan.plan} ${selectedScenario === 'balanced' ? 'A' : selectedScenario === 'safe' ? 'B' : 'C'}`}
-              title={m.scenarios[selectedScenario].label}
-              action={<div className="plan-summary"><span><Timer size={14} /> {duration} {m.plan.minutes}</span><span><Flag size={14} /> {projectedLaps} {m.plan.laps}</span><span><Fuel size={14} /> {formatNumber(totalFuel, language, 1)} {m.units.liters}</span></div>}
-            />
-            <StrategyTimeline selected={selectedScenario} />
-            <div className="pit-table">
-              <div className="pit-table__head"><span>{m.plan.stop}</span><span>{m.plan.window}</span><span>{m.plan.fuelAdded}</span><span>{m.plan.tyres}</span><span>{m.plan.driver}</span><span>{m.plan.rejoin}</span></div>
-              <div><strong>01</strong><span>{m.plan.lap} {strategy.first - 1}–{strategy.first + 1}</span><span>+70.1 {m.units.liters}</span><span><i className="tyre tyre--m">{m.plan.mediumCode}</i> {m.plan.newTyres}</span><span>A → B</span><Badge tone="positive">P5 · {m.plan.clear}</Badge></div>
-              <div><strong>02</strong><span>{m.plan.lap} {strategy.second - 1}–{strategy.second + 1}</span><span>+66.8 {m.units.liters}</span><span><i className="tyre tyre--m">{m.plan.mediumCode}</i> {m.plan.newTyres}</span><span>B → A</span><Badge tone="warning">P7 · {m.plan.traffic}</Badge></div>
+          <Card className="strategy-candidates">
+            <CardHeader eyebrow={m.alternatives.eyebrow} title={m.alternatives.title} description={m.alternatives.description} />
+            <div className="scenario-grid" role="list">
+              {result.candidates.map((candidate) => {
+                const isRecommended = candidate.id === recommended?.id
+                const isSelected = candidate.id === selected?.id
+                const lapDelta = (recommended ? candidateDistance(recommended) : 0) - candidateDistance(candidate)
+                return <button key={candidate.id} type="button" role="listitem" aria-pressed={isSelected} className={`scenario-card ${isSelected ? 'is-selected' : ''}`} onClick={() => setSelectedId(candidate.id)}>
+                  <div className="scenario-card__top"><span className={`scenario-card__radio ${isSelected ? 'is-selected' : ''}`} /><strong>{candidate.stopCount} {candidate.stopCount === 1 ? m.verdict.stop : m.verdict.stops}</strong>{isRecommended && <Badge tone="accent">{m.alternatives.recommended}</Badge>}</div>
+                  <div className="scenario-card__time">{candidateDistance(candidate)}<span>{m.units.laps}</span></div>
+                  <div className="scenario-card__stats"><span><b>{candidate.stints.length}</b> {m.verdict.stints}</span><span><b>{formatNumber(candidate.projectedPitTimeSeconds, language, 1)} {m.units.seconds}</b> {m.alternatives.pitCost}</span><span><b>{formatNumber(candidate.expectedFuelAtFinishLitres, language, 1)} {m.units.liters}</b> {m.alternatives.finishFuel}</span></div>
+                  {!isRecommended && <small className="scenario-card__delta">{lapDelta > 0 ? `−${lapDelta} ${m.alternatives.fewerLaps}` : m.alternatives.sameDistance}</small>}
+                </button>
+              })}
             </div>
+            {result.candidates.length === 1 && <div className="strategy-empty-alternative"><Info size={15} /><span>{m.alternatives.noAlternative}</span></div>}
           </Card>
+
+          {selected && <Card className="plan-card">
+            <CardHeader eyebrow={m.plan.eyebrow} title={m.plan.title} action={<div className="plan-summary"><span><Timer size={14} /> {duration} {m.units.minutes}</span><span><Flag size={14} /> {projectedLaps} {m.units.laps}</span><span><Fuel size={14} /> {selected.stopCount} {selected.stopCount === 1 ? m.verdict.stop : m.verdict.stops}</span></div>} />
+            <StrategyTimeline candidate={selected} language={language} />
+            <div className="pit-table">
+              <div className="pit-table__head"><span>{m.plan.stop}</span><span>{m.plan.afterLap}</span><span>{m.plan.fuelAdded}</span><span>{m.plan.exitTarget}</span><span>{m.plan.totalCost}</span></div>
+              {selected.pitStops.map((stop) => <div key={stop.index}><strong>{String(stop.index).padStart(2, '0')}</strong><span>{stop.estimatedRaceLap}</span><span>+{formatNumber(stop.maximumFuelToAddLitres, language, 1)} {m.units.liters}</span><span>{formatNumber(stop.targetFuelOnExitLitres, language, 1)} {m.units.liters}</span><span>{formatNumber(stop.totalPitCostSeconds, language, 1)} {m.units.seconds}</span></div>)}
+            </div>
+          </Card>}
 
           <div className="strategy-bottom-grid">
-            <Card className="uncertainty-card">
-              <CardHeader eyebrow={m.robustness.eyebrow} title={m.robustness.title} action={<Badge tone="neutral">{m.robustness.bounds}</Badge>} />
-              <div className="risk-list">
-                <div><i className="risk-list__icon risk-list__icon--warning"><Users size={15} /></i><span><strong>{m.robustness.trafficTitle}</strong><small>{m.robustness.trafficDetail}</small></span><em>{m.robustness.unknown}</em></div>
-                <div><i className="risk-list__icon risk-list__icon--blue"><CloudRain size={15} /></i><span><strong>{m.robustness.weatherTitle}</strong><small>{m.robustness.weatherDetail}</small></span><em>{m.robustness.unknown}</em></div>
-                <div><i className="risk-list__icon risk-list__icon--positive"><Fuel size={15} /></i><span><strong>{m.robustness.fuelTitle}</strong><small>{formatNumber(projection.fuel.requiredToFinish.optimistic, language, 1)}–{formatNumber(projection.fuel.requiredToFinish.conservative, language, 1)} {m.units.liters} {m.robustness.modeledRange}</small></span><em>{modelConfidence}{m.units.percent}</em></div>
-              </div>
+            <Card>
+              <CardHeader eyebrow={m.explanation.eyebrow} title={m.explanation.title} />
+              <div className="strategy-explanation"><span><Clock3 size={15} /><b>{m.explanation.distance}</b></span><span><Fuel size={15} /><b>{m.explanation.fuel}</b></span><span><Gauge size={15} /><b>{m.explanation.objective}</b></span></div>
             </Card>
-
             <Card className="race-brief-card">
               <CardHeader eyebrow={m.brief.eyebrow} title={m.brief.title} />
               <div className="brief-numbers">
-                <div><span>{m.brief.targetFuel}</span><strong>≤ 3.55</strong><small>{m.units.liters} / {m.plan.lap.toLowerCase()}</small></div>
-                <div><span>{m.brief.pitCall}</span><strong>—</strong><small>{m.brief.notOptimized}</small></div>
-                <div><span>{m.brief.energyInput}</span><strong>{formatNumber(energyPerLap, language, 2)}</strong><small>{m.units.percent} / {m.plan.lap.toLowerCase()}</small></div>
+                <div><span>{m.brief.target}</span><strong>{formatNumber(planningFuelPerLap, language, 2)}</strong><small>{m.units.liters} / {m.units.lap}</small></div>
+                <div><span>{m.brief.firstStop}</span><strong>{selected?.pitStops[0]?.estimatedRaceLap ?? '—'}</strong><small>{selected?.pitStops[0] ? m.brief.afterLap : m.brief.noStop}</small></div>
+                <div><span>{m.brief.finish}</span><strong>{formatNumber(selected?.expectedFuelAtFinishLitres ?? currentFuel, language, 1)}</strong><small>{m.units.liters}</small></div>
               </div>
-              <div className="brief-callout"><ShieldCheck size={16} /><span>{projection.race.extraLapRisk?.possible ? `${Math.round(projection.race.extraLapRisk.probability * 100)}${m.units.percent} ${m.brief.extraLapRisk}` : m.brief.noExtraLapRisk}; 0.6 {m.units.liters} {m.brief.reserveIncluded}</span></div>
+              <div className="brief-callout"><ShieldCheck size={16} /><span>{m.brief.reserve}</span></div>
             </Card>
           </div>
+
+          <Card className="unsupported-card">
+            <CardHeader eyebrow={m.unsupported.eyebrow} title={m.unsupported.title} action={<Badge tone="warning">{m.unsupported.unavailable}</Badge>} />
+            <div className="unsupported-grid">{[m.unsupported.traffic, m.unsupported.weather, m.unsupported.tyres, m.unsupported.drivers, m.unsupported.energy].map((label) => <span key={label}><AlertTriangle size={14} /><b>{label}</b><em>{m.unsupported.unavailable}</em></span>)}</div>
+            <p>{m.unsupported.note}</p>
+          </Card>
         </div>
       </div>
     </div>

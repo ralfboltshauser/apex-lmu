@@ -1,6 +1,8 @@
 import { clamp, finiteOrThrow, nonNegativeOrThrow, round, sum } from './common';
 import { scoreConfidence, type ConfidenceScore } from './confidence';
 
+const MAX_GENERATED_STOPS = 512;
+
 /** Structurally compatible with the rate returned by projectResource(). */
 export interface ConsumptionRate {
   readonly mean: number;
@@ -89,6 +91,17 @@ export interface StrategyResult {
   readonly rejected: readonly RejectedStrategy[];
 }
 
+export interface TimedStrategyInput extends Omit<StrategyInput, 'remainingLapEquivalents'> {
+  readonly durationSeconds: number;
+  /** Number of materially distinct stop-count candidates to retain. */
+  readonly maximumAlternatives?: number;
+}
+
+export interface TimedStrategyResult extends StrategyResult {
+  readonly projectedLapCount: number;
+  readonly finishRule: 'line-after-zero';
+}
+
 function riskLabel(score: number): StrategyRisk {
   if (score < 0.3) return 'low';
   if (score < 0.55) return 'medium';
@@ -125,6 +138,29 @@ function balancedStints(total: number, maxima: readonly number[]): number[] | un
   return result;
 }
 
+/**
+ * Pit calls happen at line crossings, so a race-start plan with a whole-lap
+ * distance must also use whole-lap stints. Fractional distances remain valid
+ * for an in-progress race where the current lap is already partly complete.
+ */
+function balancedRaceStints(total: number, maxima: readonly number[]): number[] | undefined {
+  if (!Number.isInteger(total)) return balancedStints(total, maxima);
+  const capacities = maxima.map((maximum) => Math.floor(maximum + 1e-9));
+  if (sum(capacities) < total) return undefined;
+
+  const result = capacities.map(() => 0);
+  for (let lap = 0; lap < total; lap += 1) {
+    let selected = -1;
+    for (let index = 0; index < result.length; index += 1) {
+      if (result[index] >= capacities[index]) continue;
+      if (selected === -1 || result[index] < result[selected]) selected = index;
+    }
+    if (selected === -1) return undefined;
+    result[selected] += 1;
+  }
+  return result;
+}
+
 function tyreLossForStint(ageAtStart: number, distance: number, degradation: number): number {
   // Integral of degradation * age over a possibly fractional stint.
   return degradation * (ageAtStart * distance + (distance ** 2) / 2);
@@ -152,6 +188,13 @@ function minimumFeasibleStops(input: StrategyInput): number {
     : Math.max(0, tyreMaximum - (input.tyres?.currentAgeLaps ?? 0));
   const firstRange = Math.min(fuelFirstRange, firstTyreRange);
   const fullRange = Math.min(fuelFullRange, tyreMaximum ?? Number.POSITIVE_INFINITY);
+  if (Number.isInteger(input.remainingLapEquivalents)) {
+    const firstWholeLaps = Math.floor(firstRange + 1e-9);
+    const fullWholeLaps = Math.floor(fullRange + 1e-9);
+    if (input.remainingLapEquivalents <= firstWholeLaps) return 0;
+    if (fullWholeLaps <= 0) return Number.POSITIVE_INFINITY;
+    return Math.ceil((input.remainingLapEquivalents - firstWholeLaps) / fullWholeLaps);
+  }
   if (input.remainingLapEquivalents <= firstRange + 1e-9) return 0;
   if (fullRange <= 0) return Number.POSITIVE_INFINITY;
   return Math.ceil((input.remainingLapEquivalents - firstRange) / fullRange);
@@ -184,9 +227,9 @@ function validateInput(input: StrategyInput): void {
   }
   if (
     input.maximumStops !== undefined
-    && (!Number.isInteger(input.maximumStops) || input.maximumStops < 0)
+    && (!Number.isInteger(input.maximumStops) || input.maximumStops < 0 || input.maximumStops > MAX_GENERATED_STOPS)
   ) {
-    throw new RangeError('maximumStops must be a non-negative integer');
+    throw new RangeError(`maximumStops must be an integer between 0 and ${MAX_GENERATED_STOPS}`);
   }
   if (input.tyres) {
     nonNegativeOrThrow(input.tyres.currentAgeLaps ?? 0, 'tyres.currentAgeLaps');
@@ -381,7 +424,17 @@ export function generateStrategyCandidates(input: StrategyInput): StrategyResult
       }],
     };
   }
-  const maximumStops = input.maximumStops ?? Math.min(6, minimumStops + 2);
+  const maximumStops = input.maximumStops ?? minimumStops + 2;
+  if (maximumStops > MAX_GENERATED_STOPS) {
+    return {
+      minimumStops,
+      candidates: [],
+      rejected: [{
+        stopCount: minimumStops,
+        reason: `The plan requires more than ${MAX_GENERATED_STOPS} stops and is outside the operational bound.`,
+      }],
+    };
+  }
   const reserve = input.fuelReserveLitres ?? 0;
   const fuelFirstMaximum = Math.max(0, input.currentFuelLitres - reserve) / input.fuel.conservative;
   const fuelFullMaximum = Math.max(0, input.tankCapacityLitres - reserve) / input.fuel.conservative;
@@ -396,7 +449,7 @@ export function generateStrategyCandidates(input: StrategyInput): StrategyResult
 
   for (let stops = Math.max(0, minimumStops); stops <= maximumStops; stops += 1) {
     const maxima = [firstMaximum, ...Array.from({ length: stops }, () => fullMaximum)];
-    const stintDistances = balancedStints(input.remainingLapEquivalents, maxima);
+    const stintDistances = balancedRaceStints(input.remainingLapEquivalents, maxima);
     if (!stintDistances) {
       rejected.push({
         stopCount: stops,
@@ -419,4 +472,84 @@ export function generateStrategyCandidates(input: StrategyInput): StrategyResult
     left.rankingCostSeconds - right.rankingCostSeconds || left.stopCount - right.stopCount,
   );
   return { minimumStops, candidates, recommended: candidates[0], rejected };
+}
+
+/**
+ * Solve a timed race and its pit cost together. A valid line-after-zero plan
+ * must cross the line at or after zero while its previous crossing is before
+ * zero. Exhaustive integer-lap search avoids a fixed-point oscillation at that
+ * boundary and is bounded by the no-stop lap count.
+ */
+export function generateTimedStrategyCandidates(input: TimedStrategyInput): TimedStrategyResult {
+  nonNegativeOrThrow(input.durationSeconds, 'durationSeconds');
+  if (input.averageLapTimeSeconds <= 0) {
+    throw new RangeError('averageLapTimeSeconds must be greater than zero');
+  }
+  const maximumAlternatives = input.maximumAlternatives ?? 3;
+  if (!Number.isInteger(maximumAlternatives) || maximumAlternatives < 1) {
+    throw new RangeError('maximumAlternatives must be a positive integer');
+  }
+
+  const noStopLapCount = Math.max(1, Math.ceil(input.durationSeconds / input.averageLapTimeSeconds));
+  const noStopResult = generateStrategyCandidates({
+    ...input,
+    remainingLapEquivalents: noStopLapCount,
+    maximumStops: undefined,
+  });
+  const upperStopCount = Number.isFinite(noStopResult.minimumStops)
+    ? noStopResult.minimumStops + maximumAlternatives - 1
+    : maximumAlternatives - 1;
+  if (upperStopCount > MAX_GENERATED_STOPS) {
+    return {
+      minimumStops: noStopResult.minimumStops,
+      candidates: [],
+      rejected: noStopResult.rejected,
+      projectedLapCount: noStopLapCount,
+      finishRule: 'line-after-zero',
+    };
+  }
+  const byStopCount = new Map<number, StrategyCandidate>();
+  const rejected: RejectedStrategy[] = [];
+
+  for (let lapCount = noStopLapCount; lapCount >= 1; lapCount -= 1) {
+    const result = generateStrategyCandidates({
+      ...input,
+      remainingLapEquivalents: lapCount,
+      maximumStops: upperStopCount,
+    });
+    rejected.push(...result.rejected);
+    for (const candidate of result.candidates) {
+      const finalCrossing = candidate.projectedRaceTimeSeconds;
+      const previousCrossing = finalCrossing - input.averageLapTimeSeconds;
+      if (finalCrossing + 1e-7 < input.durationSeconds) continue;
+      if (previousCrossing >= input.durationSeconds - 1e-7) continue;
+      const current = byStopCount.get(candidate.stopCount);
+      if (!current || candidate.rankingCostSeconds < current.rankingCostSeconds) {
+        byStopCount.set(candidate.stopCount, candidate);
+      }
+    }
+  }
+
+  const candidateDistance = (candidate: StrategyCandidate) =>
+    sum(candidate.stints.map((stint) => stint.lapEquivalents));
+  const candidates = [...byStopCount.values()]
+    // In a timed race, completing more laps outranks merely crossing the finish
+    // line sooner. Only compare time/risk costs between equal-distance plans.
+    .sort((left, right) =>
+      candidateDistance(right) - candidateDistance(left)
+      || left.rankingCostSeconds - right.rankingCostSeconds
+      || left.stopCount - right.stopCount)
+    .slice(0, maximumAlternatives);
+  const minimumStops = candidates.length > 0
+    ? Math.min(...candidates.map((candidate) => candidate.stopCount))
+    : noStopResult.minimumStops;
+  const recommended = candidates[0];
+  return {
+    minimumStops,
+    candidates,
+    recommended,
+    rejected,
+    projectedLapCount: recommended?.stints.reduce((total, stint) => total + stint.lapEquivalents, 0) ?? noStopLapCount,
+    finishRule: 'line-after-zero',
+  };
 }

@@ -3,7 +3,7 @@ title: "Trustworthy, explainable strategy planner"
 issue: 8
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/8"
 issue_state: "open"
-implementation_status: "not-started"
+implementation_status: "implemented-locally-release-pending"
 plan_order: 6
 phase: 1
 workstream: "race-strategy"
@@ -18,7 +18,7 @@ blocks: [3]
 parallel_with: [13, 6]
 source_updated_at: "2026-07-12T12:38:02Z"
 source_commit: "9660be5"
-last_verified: "2026-07-12"
+last_verified: "2026-07-13"
 ---
 
 # Issue #8 — trustworthy, explainable strategy planner
@@ -31,6 +31,44 @@ plans, explains why one wins, shows what could invalidate it, and labels every
 input as measured, manual, configured, assumed, or unavailable. It never renders
 credible-looking pit windows, traffic, weather, tyre, driver, or rejoin claims
 that are disconnected from the model.
+
+## Implementation evidence — 2026-07-13
+
+The local implementation branch now resolves the screenshot's correctness
+failure with a deliberately fuel-only planner:
+
+- `StrategyView` imports the deterministic strategy engine; the hard-coded
+  recommendation, scenario times, normalized 60-lap timeline, fuel additions,
+  tyre/driver assignments, and P5/P7 rejoin claims are removed.
+- Duration, average lap, expected/planning consumption, start fuel, tank,
+  reserve, pit-lane loss, and refuel rate are the only active inputs. Each is
+  visibly labeled as manual evidence.
+- `generateTimedStrategyCandidates` exhaustively couples pit cost back into the
+  integer timed-race lap count. Ranking maximizes completed laps before
+  comparing modeled time/risk, avoiding the false conclusion that losing a lap
+  is a faster strategy.
+- Every candidate uses integer-lap stints. Its stop count, stints, timeline,
+  fuel additions, exit targets, pit cost, finish fuel, and driver brief all
+  derive from the same immutable candidate.
+- Weather, traffic/rejoin, tyres, driver rules, and Virtual Energy are displayed
+  only in an explicit `Not modeled` list and have no interactive controls.
+- A single manual rate no longer manufactures synthetic samples or a confidence
+  percentage.
+- The issue fixture (240 min, 124.1 s/lap, 4 L/lap, 75 L tank) produces a
+  six-stop/seven-stint plan. With the supplied pit/refuel assumptions it
+  projects 113 completed laps because the timed solver correctly accounts for
+  pit time, rather than the old disconnected 117-lap estimate.
+
+Focused validation passes engine golden/property/invariant tests, renderer
+candidate-selection and contradiction regressions, empty-field retention,
+EN/DE parity, TypeScript, and a production renderer build. The result was also
+inspected at 1600×1100 with no horizontal overflow. Full repository, Windows,
+and packaged release gates remain part of the shared release pass.
+
+Live measured rates, VE policy, tyre/service semantics, traffic prediction, and
+durable saved plans are future capability slices, not incomplete hidden parts
+of this manual fuel model. They remain gated until verified data and rules
+exist.
 
 ## The issue screenshot is a correctness failure
 
