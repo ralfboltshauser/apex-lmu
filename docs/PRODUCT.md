@@ -51,6 +51,12 @@ defines how to validate the result.
 
 ## Overlays
 
-Layouts are composed from reusable widgets. The default is intentionally small.
-Editor controls do not appear in the click-through race window. Performance and
-renderer state remain visible before opening the overlay.
+The desktop app enumerates connected displays and opens the HUD inactive at the
+selected display's exact bounds. The selection, opacity and supported widget
+choices are validated and stored locally, then applied to the live click-through
+window. Relative scoring remains available before player vehicle telemetry;
+fuel, delta and controls show unavailable until LMU publishes measured values.
+
+No screen-capture permission, injected DLL or elevation is used. Borderless and
+windowed LMU are the supported composition modes. A true exclusive-fullscreen
+surface may cover ordinary desktop overlays.

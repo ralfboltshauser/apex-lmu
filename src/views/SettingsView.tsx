@@ -285,6 +285,11 @@ export function SettingsView() {
             </div>
             {discovery && <details className="discovery-details"><summary>{formatMessage(m.connection.discovery, { count: discovery.attempts.length })}</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
+          <Card>
+            <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Monitor size={19} />} />
+            <p className="diagnostics-intro">{m.overlay.copy}</p>
+            <div className="support-privacy"><Info size={15} /><span><strong>{m.overlay.fullscreen}</strong></span></div>
+          </Card>
           </>}
 
           {activeSection === 'diagnostics' &&
