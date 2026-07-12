@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Info,
   LockKeyhole,
+  Mail,
   Monitor,
   RefreshCw,
   ShieldCheck,
@@ -48,6 +49,8 @@ export function SettingsView() {
   const [diagnosing, setDiagnosing] = useState(false)
   const [report, setReport] = useState<ApexDiagnosticReport | null>(null)
   const [showLogs, setShowLogs] = useState(false)
+  const [sharing, setSharing] = useState<'copy' | 'email' | 'save' | null>(null)
+  const [supportFeedback, setSupportFeedback] = useState('')
   const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about' | 'diagnostics'>(() => {
     const stored = window.localStorage.getItem('apex:settings-section')
     return stored === 'data' || stored === 'about' || stored === 'diagnostics' ? stored : 'connection'
@@ -128,8 +131,41 @@ export function SettingsView() {
   }
 
   const exportBundle = async () => {
-    const result = await window.apexDesktop?.exportSupportBundle()
-    if (result?.ok) setShowLogs(true)
+    if (!window.apexDesktop) return
+    setSharing('save')
+    setSupportFeedback('')
+    try {
+      const result = await window.apexDesktop.exportSupportBundle()
+      if (result.ok) setSupportFeedback('Debug file saved. Attach the .txt file anywhere you message the developer.')
+    } catch (error) {
+      setSupportFeedback(`Could not save the debug file: ${error instanceof Error ? error.message : String(error)}`)
+    } finally { setSharing(null) }
+  }
+
+  const copySupport = async () => {
+    if (!window.apexDesktop) return
+    setSharing('copy')
+    setSupportFeedback('')
+    try {
+      await window.apexDesktop.copySupportBundle()
+      setSupportFeedback('Complete redacted debug logs copied. Paste them directly into your message.')
+    } catch (error) {
+      setSupportFeedback(`Could not copy the debug logs: ${error instanceof Error ? error.message : String(error)}`)
+    } finally { setSharing(null) }
+  }
+
+  const emailSupport = async () => {
+    if (!window.apexDesktop) return
+    setSharing('email')
+    setSupportFeedback('')
+    try {
+      const result = await window.apexDesktop.emailSupportBundle()
+      setSupportFeedback(result.includedInBody
+        ? 'Email draft opened with the complete redacted logs included.'
+        : 'Email draft opened and the complete logs were copied. Press Ctrl+V at the marked line before sending.')
+    } catch (error) {
+      setSupportFeedback(`The logs were prepared, but the email draft could not open: ${error instanceof Error ? error.message : String(error)}`)
+    } finally { setSharing(null) }
   }
 
   const goTo = (section: 'connection' | 'data' | 'about' | 'diagnostics') => {
@@ -215,16 +251,19 @@ export function SettingsView() {
             <p className="diagnostics-intro">Checks are read-only. The bridge self-test does not need LMU and proves that the bundled executable and local protocol can start. A live connection still requires Windows, LMU running, and a drivable session.</p>
             <div className="diagnostic-actions">
               <Button icon={<RefreshCw size={14} />} onClick={() => void runDiagnostics()} disabled={!window.apexDesktop || diagnosing}>{diagnosing ? 'Running checks…' : 'Run all checks'}</Button>
-              <Button variant="secondary" icon={<Download size={14} />} onClick={() => void exportBundle()} disabled={!window.apexDesktop}>Export support bundle</Button>
+              <Button variant="secondary" icon={<Mail size={14} />} onClick={() => void emailSupport()} disabled={!window.apexDesktop || sharing !== null}>{sharing === 'email' ? 'Opening email…' : 'Email debug logs'}</Button>
+              <Button variant="secondary" icon={<Clipboard size={14} />} onClick={() => void copySupport()} disabled={!window.apexDesktop || sharing !== null}>{sharing === 'copy' ? 'Copying…' : 'Copy debug logs'}</Button>
+              <Button variant="secondary" icon={<Download size={14} />} onClick={() => void exportBundle()} disabled={!window.apexDesktop || sharing !== null}>{sharing === 'save' ? 'Saving…' : 'Save debug file'}</Button>
               <Button variant="secondary" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openLogsFolder()} disabled={!window.apexDesktop}>Open logs folder</Button>
             </div>
+            {supportFeedback && <p className="diagnostics-intro" role="status" aria-live="polite">{supportFeedback}</p>}
             {report && <div className="diagnostic-results">{report.checks.map((check) => <details key={check.id} className={`diagnostic-result is-${check.status}`} open={check.status !== 'pass'}>
               <summary><StatusIcon value={check.status === 'pass'} /><span><strong>{check.title}</strong><small>{check.summary}</small></span><Badge tone={check.status === 'pass' ? 'positive' : check.status === 'blocked' ? 'neutral' : 'warning'}>{check.status}</Badge></summary>
               {(check.fixes.length > 0 || check.details) && <div className="diagnostic-result__body">{check.fixes.length > 0 && <ol>{check.fixes.map((fix) => <li key={fix}>{fix}</li>)}</ol>}{check.details && <pre>{check.details}</pre>}</div>}
             </details>)}</div>}
             <div className="log-disclosure"><button type="button" className="text-button" onClick={() => setShowLogs((value) => !value)}>{showLogs ? 'Hide full logs' : 'Show full logs'}</button><span>Logs exclude telemetry frames and setup contents.</span></div>
-            {showLogs && <div className="log-viewer"><div><strong>apex.log.jsonl</strong><Button variant="secondary" size="sm" icon={<Clipboard size={13} />} onClick={() => void navigator.clipboard.writeText(report?.logs || 'No logs recorded.')}>Copy</Button></div><pre>{report?.logs || 'No diagnostic events have been recorded yet.'}</pre></div>}
-            <div className="support-privacy"><ShieldCheck size={15} /><span><strong>Safe to review before sending</strong>The JSON bundle contains app/system metadata, check results and Apex logs. Home paths and common secrets are redacted. It contains no telemetry frames, setup files, passwords, or account data.</span></div>
+            {showLogs && <div className="log-viewer"><div><strong>apex.log.jsonl</strong><Button variant="secondary" size="sm" icon={<Clipboard size={13} />} onClick={() => void copySupport()}>Copy debug logs</Button></div><pre>{report?.logs || 'No diagnostic events have been recorded yet.'}</pre></div>}
+            <div className="support-privacy"><ShieldCheck size={15} /><span><strong>Safe to review before sending</strong>The debug file contains app/system metadata, check results and Apex logs. Home paths and common secrets are redacted. It contains no telemetry frames, setup files, passwords, or account data. Apex never sends anything automatically.</span></div>
           </Card>
           }
 
