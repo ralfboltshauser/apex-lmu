@@ -18,6 +18,8 @@ interface ApexDesktopApi {
   openDataFolder(): Promise<string>
   runDiagnostics(): Promise<ApexDiagnosticReport>
   getDiagnostics(): Promise<ApexDiagnosticReport>
+  copySupportBundle(): Promise<{ ok: boolean; characters: number }>
+  emailSupportBundle(): Promise<{ ok: boolean; copied: boolean; includedInBody: boolean; characters: number }>
   exportSupportBundle(): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
   openLogsFolder(): Promise<string>
   getUpdateState(): Promise<ApexUpdateState>

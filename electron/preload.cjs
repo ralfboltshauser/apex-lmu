@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   openDataFolder: () => ipcRenderer.invoke('apex:open-data-folder'),
   runDiagnostics: () => ipcRenderer.invoke('apex:run-diagnostics'),
   getDiagnostics: () => ipcRenderer.invoke('apex:get-diagnostics'),
+  copySupportBundle: () => ipcRenderer.invoke('apex:copy-support-bundle'),
+  emailSupportBundle: () => ipcRenderer.invoke('apex:email-support-bundle'),
   exportSupportBundle: () => ipcRenderer.invoke('apex:export-support-bundle'),
   openLogsFolder: () => ipcRenderer.invoke('apex:open-logs-folder'),
   getUpdateState: () => ipcRenderer.invoke('apex:get-update-state'),

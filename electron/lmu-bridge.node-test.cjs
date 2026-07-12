@@ -110,3 +110,25 @@ test('runSelfTest reports synchronous process launch failures', () => {
   assert.equal(broadcasts[0].state, 'error')
   assert.equal(broadcasts[0].message, 'launch denied')
 })
+
+test('records useful live status transitions without logging telemetry frames', async () => {
+  const child = new FakeChild()
+  const entries = []
+  const manager = new LmuBridgeManager({
+    app: { isPackaged: false },
+    broadcast: () => {},
+    logger: { record: (...entry) => { entries.push(entry) } },
+    runtime: { platform: 'win32', fileExists: () => true, spawn: () => child },
+  })
+
+  manager.start()
+  child.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'lmu-shared-memory', type: 'status', state: 'invalid-data', message: 'LMU maximum lap count is invalid' })}\n`)
+  child.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'lmu-shared-memory', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  await waitForImmediate()
+
+  const status = entries.find((entry) => entry[2] === 'status')
+  assert.ok(status)
+  assert.equal(status[0], 'warning')
+  assert.match(status[3], /maximum lap count/)
+  assert.equal(entries.filter((entry) => entry[2] === 'status').length, 1)
+})

@@ -80,6 +80,10 @@ class DiagnosticsService {
       logs: await this.readLogs(),
     }
   }
+
+  async buildSupportText(extra = {}) {
+    return `${JSON.stringify(await this.buildSupportBundle(extra), null, 2)}\n`
+  }
 }
 
 module.exports = { DiagnosticsService, redact, serializeError }

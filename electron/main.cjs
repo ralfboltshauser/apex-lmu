@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs/promises')
 const { LmuBridgeManager } = require('./lmu-bridge.cjs')
@@ -7,6 +7,7 @@ const { safeInstallSetup } = require('./setup-manager.cjs')
 const { DiagnosticsService, serializeError } = require('./diagnostics.cjs')
 const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
 const { UpdateManager } = require('./updater.cjs')
+const { buildSupportMailto } = require('./support-mail.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
@@ -149,14 +150,31 @@ ipcMain.handle('apex:download-update', () => updateManager?.download())
 ipcMain.handle('apex:install-update', () => updateManager?.install())
 ipcMain.handle('apex:open-releases', () => shell.openExternal('https://github.com/ralfboltshauser/apex-lmu/releases'))
 ipcMain.handle('apex:report-renderer-error', (_event, input = {}) => diagnostics.record('error', 'renderer', 'reported-error', String(input.message || 'Renderer error'), { stack: String(input.stack || ''), context: String(input.context || '') }).then(() => ({ ok: true })))
-ipcMain.handle('apex:export-support-bundle', async () => {
+async function getSupportText() {
   const report = await diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() })
-  const bundle = await diagnostics.buildSupportBundle({ report })
+  return diagnostics.buildSupportText({ report })
+}
+ipcMain.handle('apex:copy-support-bundle', async () => {
+  const text = await getSupportText()
+  clipboard.writeText(text)
+  await diagnostics.record('info', 'support', 'bundle-copied', 'Redacted support bundle copied to the clipboard.', { characters: text.length })
+  return { ok: true, characters: text.length }
+})
+ipcMain.handle('apex:email-support-bundle', async () => {
+  const text = await getSupportText()
+  clipboard.writeText(text)
+  const draft = buildSupportMailto({ bundleText: text, version: app.getVersion(), platform: process.platform })
+  await shell.openExternal(draft.url)
+  await diagnostics.record('info', 'support', 'email-draft-opened', 'Support email draft opened; redacted bundle copied to the clipboard.', { characters: text.length, includedInBody: draft.includedInBody })
+  return { ok: true, copied: true, includedInBody: draft.includedInBody, characters: text.length }
+})
+ipcMain.handle('apex:export-support-bundle', async () => {
+  const text = await getSupportText()
   const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
-  const result = await dialog.showSaveDialog({ title: 'Export Apex support bundle', defaultPath: `apex-support-${stamp}.json`, filters: [{ name: 'JSON support bundle', extensions: ['json'] }] })
+  const result = await dialog.showSaveDialog({ title: 'Save Apex debug file', defaultPath: `apex-debug-${stamp}.txt`, filters: [{ name: 'Text debug file', extensions: ['txt'] }] })
   if (result.canceled || !result.filePath) return { ok: false, canceled: true }
-  await fs.writeFile(result.filePath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8')
-  await diagnostics.record('info', 'support', 'bundle-exported', 'Support bundle exported.', { path: result.filePath })
+  await fs.writeFile(result.filePath, text, 'utf8')
+  await diagnostics.record('info', 'support', 'bundle-exported', 'Redacted debug file saved.', { path: result.filePath })
   return { ok: true, path: result.filePath }
 })
 

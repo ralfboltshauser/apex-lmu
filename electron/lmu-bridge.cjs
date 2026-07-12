@@ -124,6 +124,12 @@ class LmuBridgeManager {
           this.broadcast(this.statusMessage('self-test', runId, 'error', 'Bridge self-test emitted an uncorrelated frame.'))
           return
         }
+        if (parsed.type === 'status') {
+          const level = ['error', 'invalid-data', 'missing', 'stopped'].includes(parsed.state) ? 'warning' : 'info'
+          this.log(level, 'status', parsed.message || parsed.state || 'Bridge status changed.', {
+            mode, runId, state: parsed.state, gameVersion: parsed.gameVersion,
+          })
+        }
         this.broadcast(parsed)
       } catch (error) {
         this.log('error', 'invalid-frame', 'Bridge emitted invalid JSON.', { line, error: error.message })
