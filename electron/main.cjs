@@ -5,6 +5,7 @@ const { LmuBridgeManager } = require('./lmu-bridge.cjs')
 const { inspectTelemetryDatabase } = require('./telemetry-import.cjs')
 const { safeInstallSetup } = require('./setup-manager.cjs')
 const { DiagnosticsService, serializeError } = require('./diagnostics.cjs')
+const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 let bridgeManager
@@ -116,6 +117,16 @@ ipcMain.handle('apex:path-exists', async (_event, candidatePath) => {
   } catch {
     return false
   }
+})
+ipcMain.handle('apex:discover-lmu', async () => {
+  const result = await discoverLmu()
+  await diagnostics.record(result.found ? 'info' : 'warning', 'discovery', result.found ? 'lmu-found' : 'lmu-not-found', result.found ? 'LMU installation discovered.' : 'LMU installation was not discovered automatically.', result)
+  return result
+})
+ipcMain.handle('apex:inspect-lmu-path', async (_event, candidatePath) => {
+  const result = await inspectLmuPath(candidatePath)
+  await diagnostics.record(result.status === 'found' ? 'info' : 'warning', 'discovery', 'manual-path-inspected', `Manual LMU path inspection: ${result.status}.`, result)
+  return result
 })
 ipcMain.handle('apex:open-data-folder', () => shell.openPath(app.getPath('userData')))
 ipcMain.handle('apex:get-diagnostics', () => diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() }))

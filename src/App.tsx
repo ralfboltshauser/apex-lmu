@@ -31,6 +31,8 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
   const [detectedPath, setDetectedPath] = useState('')
   const [detectionMessage, setDetectionMessage] = useState('Search common Steam library locations')
   const [systemReport, setSystemReport] = useState<ApexDiagnosticReport | null>(null)
+  const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
+  const [manualPath, setManualPath] = useState('')
 
   const detect = async () => {
     setChecking(true)
@@ -40,12 +42,12 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
         setDetectionMessage('Automatic detection is available in the desktop app')
         return
       }
-      const environment = await window.apexDesktop.getEnvironment()
-      const exists = Boolean(environment.defaultLmuPath)
-        && await window.apexDesktop.pathExists(`${environment.defaultLmuPath}\\Support\\SharedMemoryInterface`)
-      setFound(exists)
-      setDetectedPath(exists ? environment.defaultLmuPath : '')
-      setDetectionMessage(exists ? environment.defaultLmuPath : 'Not found in the default Steam library')
+      const result = await window.apexDesktop.discoverLmu()
+      setDiscovery(result)
+      setFound(Boolean(result.found))
+      setDetectedPath(result.found?.candidate || '')
+      setManualPath(result.found?.candidate || manualPath)
+      setDetectionMessage(result.found ? `Found via ${result.found.source.replaceAll('-', ' ')}` : `Checked ${result.attempts.length} candidate location${result.attempts.length === 1 ? '' : 's'}; LMU was not confirmed`)
     } finally {
       setChecking(false)
     }
@@ -54,10 +56,20 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
   const chooseInstallation = async () => {
     const selected = await window.apexDesktop?.chooseDirectory('Choose the Le Mans Ultimate installation')
     if (!selected) return
-    const exists = await window.apexDesktop!.pathExists(`${selected.replace(/[\\/]+$/, '')}\\Support\\SharedMemoryInterface`)
-    setFound(exists)
-    setDetectedPath(exists ? selected : '')
-    setDetectionMessage(exists ? selected : 'That folder is not accessible')
+    setManualPath(selected)
+    await inspectManualPath(selected)
+  }
+
+  const inspectManualPath = async (value = manualPath) => {
+    if (!window.apexDesktop || !value.trim()) return
+    setChecking(true)
+    try {
+      const attempt = await window.apexDesktop.inspectLmuPath(value)
+      setFound(attempt.status === 'found')
+      setDetectedPath(attempt.status === 'found' ? attempt.candidate : '')
+      setDetectionMessage(attempt.status === 'found' ? 'LMU installation confirmed manually' : attempt.status === 'invalid' ? 'Folder exists, but no LMU executable was found' : 'That folder does not exist or is not accessible')
+      setDiscovery((current) => ({ found: attempt.status === 'found' ? attempt : null, attempts: [...(current?.attempts || []), attempt], trace: [...(current?.trace || []), `Manual inspection: ${attempt.candidate} → ${attempt.status}.`], expectations: current?.expectations || { appId: '2399420', manifest: 'steamapps\\appmanifest_2399420.acf', installFolder: 'steamapps\\common\\<installdir>', executables: ['Le Mans Ultimate.exe', 'LMU.exe'] } }))
+    } finally { setChecking(false) }
   }
 
   const verifySystem = async () => {
@@ -104,7 +116,8 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
             {!found && <Button variant="secondary" size="sm" onClick={() => void detect()}>{checking ? 'Searching…' : 'Detect'}</Button>}
             {found && <Badge tone="positive">Interface found</Badge>}
           </div>
-          {!found && detectionMessage !== 'Search common Steam library locations' && window.apexDesktop && <button type="button" className="text-button" onClick={() => void chooseInstallation()}>Choose the installation folder</button>}
+          {!found && discovery && <div className="manual-path"><label htmlFor="lmu-path">LMU installation folder</label><div><input id="lmu-path" value={manualPath} onChange={(event) => setManualPath(event.target.value)} placeholder="C:\\…\\steamapps\\common\\Le Mans Ultimate" onKeyDown={(event) => { if (event.key === 'Enter') void inspectManualPath() }} /><Button variant="secondary" size="sm" onClick={() => void inspectManualPath()} disabled={!manualPath.trim() || checking}>Check</Button><Button variant="secondary" size="sm" onClick={() => void chooseInstallation()}>Browse</Button></div><small>Steam → Library → right-click LMU → Properties → Installed Files → Browse. Paste or choose the folder containing Le Mans Ultimate.exe.</small></div>}
+          {discovery && <details className="discovery-details"><summary>What Apex checked and expected</summary><div><p>Steam app ID <code>{discovery.expectations.appId}</code>. Apex reads Steam’s registry location, every <code>libraryfolders.vdf</code>, then <code>{discovery.expectations.manifest}</code>.</p>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: expected {check.expected}{check.optional ? ' (optional)' : ''}</small>)}{attempt.fixes.map((fix) => <small key={fix}>Fix: {fix}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           <div className="connection-facts"><div><i><Check size={12} /></i><span><strong>Live telemetry</strong>Official shared memory</span></div><div><i><Check size={12} /></i><span><strong>Recorded sessions</strong>Native DuckDB files</span></div><div><i><Check size={12} /></i><span><strong>Setup management</strong>Backups before every write</span></div></div>
           {found && <div className="onboarding-system-check"><Button variant="secondary" size="sm" onClick={() => void verifySystem()} disabled={checking}>{checking ? 'Testing bridge…' : 'Run system check'}</Button>{systemReport && <span className={systemReport.checks.some((item) => item.status === 'fail') ? 'is-warning' : 'is-pass'}>{systemReport.checks.filter((item) => item.status === 'pass').length}/{systemReport.checks.length} checks passed</span>}</div>}
           {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>Fix: {item.fixes[0]}</small>}</div>)}

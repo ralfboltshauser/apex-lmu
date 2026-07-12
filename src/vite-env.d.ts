@@ -13,6 +13,8 @@ interface ApexDesktopApi {
   chooseDirectory(title: string): Promise<string | null>
   chooseFile(options?: { title?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>
   pathExists(candidatePath: string): Promise<boolean>
+  discoverLmu(): Promise<ApexLmuDiscovery>
+  inspectLmuPath(candidatePath: string): Promise<ApexLmuAttempt>
   openDataFolder(): Promise<string>
   runDiagnostics(): Promise<ApexDiagnosticReport>
   getDiagnostics(): Promise<ApexDiagnosticReport>
@@ -36,6 +38,10 @@ interface ApexDesktopApi {
   openOverlay(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
 }
+
+interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
+interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }
+interface ApexLmuDiscovery { found: ApexLmuAttempt | null; attempts: ApexLmuAttempt[]; trace: string[]; expectations: { appId: string; manifest: string; installFolder: string; executables: string[] } }
 
 interface ApexDiagnosticCheck { id: string; status: 'pass' | 'fail' | 'blocked'; title: string; summary: string; fixes: string[]; details: string }
 interface ApexDiagnosticReport { generatedAt: string; checks: ApexDiagnosticCheck[]; logs: string }

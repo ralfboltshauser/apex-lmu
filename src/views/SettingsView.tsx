@@ -22,6 +22,7 @@ import { Badge, Button, Card, CardHeader } from '../components/ui'
 
 type DiagnosticResult = {
   installation: boolean
+  executable: boolean
   sharedMemoryInterface: boolean
   telemetryFolder: boolean
   setupFolder: boolean
@@ -44,20 +45,20 @@ export function SettingsView() {
   const [report, setReport] = useState<ApexDiagnosticReport | null>(null)
   const [showLogs, setShowLogs] = useState(false)
   const [activeSection, setActiveSection] = useState<'connection' | 'data' | 'about'>('connection')
+  const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
-      setDiagnostics({ installation: false, sharedMemoryInterface: false, telemetryFolder: false, setupFolder: false })
+      setDiagnostics({ installation: false, executable: false, sharedMemoryInterface: false, telemetryFolder: false, setupFolder: false })
       return
     }
     const root = installationPath.replace(/[\\/]+$/, '')
-    const [installation, sharedMemoryInterface, telemetryFolder, setupFolder] = await Promise.all([
-      window.apexDesktop.pathExists(root),
-      window.apexDesktop.pathExists(`${root}\\Support\\SharedMemoryInterface`),
+    const [inspection, telemetryFolder, setupFolder] = await Promise.all([
+      window.apexDesktop.inspectLmuPath(root),
       window.apexDesktop.pathExists(`${root}\\UserData\\Telemetry`),
       window.apexDesktop.pathExists(`${root}\\UserData\\player\\Settings`),
     ])
-    setDiagnostics({ installation, sharedMemoryInterface, telemetryFolder, setupFolder })
+    setDiagnostics({ installation: inspection.status === 'found', executable: Boolean(inspection.executable), sharedMemoryInterface: Boolean(inspection.sharedMemoryPath), telemetryFolder, setupFolder })
   }
 
   useEffect(() => {
@@ -70,6 +71,16 @@ export function SettingsView() {
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
   }, [])
+
+  const autoDetectLmu = async () => {
+    if (!window.apexDesktop) return
+    setDiagnosing(true)
+    try {
+      const result = await window.apexDesktop.discoverLmu()
+      setDiscovery(result)
+      if (result.found) { setLmuPath(result.found.candidate); await inspectPath(result.found.candidate) }
+    } finally { setDiagnosing(false) }
+  }
 
   const chooseLmu = async () => {
     const selected = await window.apexDesktop?.chooseDirectory('Choose the Le Mans Ultimate installation')
@@ -98,9 +109,9 @@ export function SettingsView() {
     document.getElementById(`settings-${section}`)?.scrollIntoView({ block: 'start' })
   }
 
-  const ready = Boolean(environment?.platform === 'win32' && environment.bridgeAvailable && diagnostics?.installation && diagnostics.sharedMemoryInterface)
+  const ready = Boolean(environment?.platform === 'win32' && environment.bridgeAvailable && diagnostics?.installation)
   const checked = diagnostics !== null
-  const sharedMemoryReady = environment && diagnostics ? environment.bridgeAvailable && diagnostics.sharedMemoryInterface : null
+  const sharedMemoryReady = environment && diagnostics ? environment.bridgeAvailable && diagnostics.installation : null
   const healthTitle = ready ? 'LMU integration is ready' : checked ? 'LMU needs attention' : 'Check this PC before racing'
   const healthCopy = ready
     ? 'Apex can start its local bridge when a driving session appears.'
@@ -141,12 +152,14 @@ export function SettingsView() {
 
           <Card>
             <CardHeader eyebrow="Game connection" title="Le Mans Ultimate" action={<StatusBadge value={diagnostics?.installation ?? null} available="Found" />} />
-            <div className="path-field"><div><FolderOpen size={16} /><span><small>Installation folder</small><strong>{lmuPath || 'No folder selected'}</strong></span></div><Button variant="secondary" size="sm" onClick={() => void chooseLmu()} disabled={!window.apexDesktop}>Change</Button></div>
+            <div className="path-field"><div><FolderOpen size={16} /><span><small>Installation folder</small><strong>{lmuPath || 'No folder selected'}</strong></span></div><Button variant="secondary" size="sm" onClick={() => void autoDetectLmu()} disabled={!window.apexDesktop || diagnosing}>Auto-detect</Button><Button variant="secondary" size="sm" onClick={() => void chooseLmu()} disabled={!window.apexDesktop}>Browse</Button></div>
             <div className="integration-checks">
-              <div><StatusIcon value={sharedMemoryReady} /><span><strong>Official shared-memory path</strong><small>Bundled bridge + game interface directory</small></span><StatusBadge value={sharedMemoryReady} available="Found" /></div>
+              <div><StatusIcon value={sharedMemoryReady} /><span><strong>LMU executable or Steam manifest</strong><small>Steam app 2399420 · secondary libraries supported</small></span><StatusBadge value={sharedMemoryReady} available="Confirmed" /></div>
+              <div><StatusIcon value={diagnostics?.sharedMemoryInterface ?? null} /><span><strong>Shared-memory support folder</strong><small>Useful layout signal; absence does not mean LMU is missing</small></span><StatusBadge value={diagnostics?.sharedMemoryInterface ?? null} available="Present" /></div>
               <div><StatusIcon value={diagnostics?.telemetryFolder ?? null} /><span><strong>Native DuckDB recordings</strong><small>Read-only inspection from UserData\Telemetry</small></span><StatusBadge value={diagnostics?.telemetryFolder ?? null} available="Folder found" /></div>
               <div><StatusIcon value={diagnostics?.setupFolder ?? null} /><span><strong>Setup directory</strong><small>Backups before every user-initiated write</small></span><StatusBadge value={diagnostics?.setupFolder ?? null} available="Folder found" /></div>
             </div>
+            {discovery && <details className="discovery-details"><summary>Show automatic discovery log ({discovery.attempts.length} candidate paths)</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
 
           <Card id="settings-diagnostics" className="diagnostics-card">

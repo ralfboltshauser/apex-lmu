@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   chooseDirectory: (title) => ipcRenderer.invoke('apex:choose-directory', title),
   chooseFile: (options) => ipcRenderer.invoke('apex:choose-file', options),
   pathExists: (candidatePath) => ipcRenderer.invoke('apex:path-exists', candidatePath),
+  discoverLmu: () => ipcRenderer.invoke('apex:discover-lmu'),
+  inspectLmuPath: (candidatePath) => ipcRenderer.invoke('apex:inspect-lmu-path', candidatePath),
   openDataFolder: () => ipcRenderer.invoke('apex:open-data-folder'),
   runDiagnostics: () => ipcRenderer.invoke('apex:run-diagnostics'),
   getDiagnostics: () => ipcRenderer.invoke('apex:get-diagnostics'),

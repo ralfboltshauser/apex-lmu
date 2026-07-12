@@ -55,6 +55,8 @@ If connection or setup fails, open **Settings → Diagnostics**:
 
 Support bundles contain Apex version/system metadata, diagnostic results, and Apex process/bridge logs. They exclude telemetry frames and setup contents, redact the user's home directory and common secret fields, and are plain JSON so they can be reviewed before sharing.
 
+LMU discovery uses Steam app ID `2399420`. Apex reads Steam's registry location, parses `steamapps/libraryfolders.vdf` for secondary libraries, and confirms the installation through `appmanifest_2399420.acf` and the game executable. If automatic discovery fails, onboarding and Settings show every attempted path and expectation; use Steam's **Properties → Installed Files → Browse** action to paste or choose the exact game folder manually. The discovery trace is also included in local diagnostic logs and support bundles.
+
 ## What works today
 
 | Area | Current behavior |
