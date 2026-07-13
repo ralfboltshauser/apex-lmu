@@ -2,6 +2,28 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.4 — 2026-07-13
+
+### English — Clear overlay display-mode guidance
+
+The Overlays tab now turns the Alt+Tab-only visibility symptom into an explicit LMU display-mode fix.
+
+- **Know exactly what to change in LMU** — If the HUD appears after Alt+Tab but vanishes when LMU is focused, Apex now tells you to select Borderless (recommended) or Windowed and reopen the overlay.
+
+**Known limitations**
+
+- **Exclusive fullscreen cannot compose the local overlay** — Apex remains local and injection-free, so it cannot draw a normal desktop window over a true exclusive-fullscreen game surface.
+
+### Deutsch — Klare Hinweise zum Anzeigemodus für Overlays
+
+Der Overlays-Tab übersetzt das Sichtbarkeitsproblem nach Alt+Tab jetzt in eine konkrete Einstellung für den LMU-Anzeigemodus.
+
+- **Du weißt genau, was du in LMU ändern musst** — Wenn das HUD nach Alt+Tab erscheint, aber bei fokussiertem LMU verschwindet, fordert Apex dich jetzt auf, Randlos (Borderless, empfohlen) oder Fenstermodus zu wählen und das Overlay erneut zu öffnen.
+
+**Bekannte Einschränkungen**
+
+- **Exklusives Vollbild kann das lokale Overlay nicht darstellen** — Apex bleibt lokal und frei von Injektionen. Deshalb kann es ein normales Desktop-Fenster nicht über einer echten exklusiven Vollbildoberfläche zeichnen.
+
 ## 0.2.3 — 2026-07-13
 
 ### English — Complete laps stay available in Analysis
