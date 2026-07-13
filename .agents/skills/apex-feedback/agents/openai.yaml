@@ -1,0 +1,4 @@
+interface:
+  display_name: "Apex Feedback"
+  short_description: "Work through Apex user feedback safely"
+  default_prompt: "Use $apex-feedback to inspect and address the selected Apex feedback."

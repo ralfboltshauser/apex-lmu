@@ -5,4 +5,5 @@ export * from './fuel-plan';
 export * from './strategy';
 export * from './telemetry';
 export * from './track-geometry';
+export * from './lap-playback';
 export * from './setup';

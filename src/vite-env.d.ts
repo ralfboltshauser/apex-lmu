@@ -38,6 +38,15 @@ interface ApexOverlayState {
   fallbackFrom: string | null
 }
 
+type ApexFeedbackStatus = 'new' | 'acknowledged' | 'investigating' | 'needs_user_answer' | 'user_answered' | 'in_progress' | 'resolved' | 'dismissed' | 'duplicate' | 'reopened'
+interface ApexFeedbackImage { dataUrl: string; width: number; height: number }
+interface ApexFeedbackElementContext { feedbackId?: string; selector: string; tagName: string; role?: string; accessibleName?: string; cssClasses?: string; selectedText?: string; nearbyText?: string; rect: { x: number; y: number; width: number; height: number } }
+interface ApexFeedbackContext { view: string; appVersion: string; language: 'en' | 'de'; platform: string; source?: 'live' | 'demo' | 'offline'; screen: { width: number; height: number; scaleFactor: number }; viewport: { width: number; height: number }; element: ApexFeedbackElementContext; redactionVersion: 1 }
+interface ApexFeedbackMessage { id: string; actor: 'human' | 'agent' | 'system'; kind: 'comment' | 'question' | 'answer' | 'status' | 'resolution'; body: string; createdAt: string }
+interface ApexFeedbackAttachment { id: string; kind: 'selected-area' | 'full-window'; mediaType: string; width: number; height: number; bytes: number; sha256: string; createdAt: string }
+interface ApexFeedbackItem { id: string; reference: string; clientRequestId?: string; status: ApexFeedbackStatus; revision: number; firstMessage: string; view?: string; appVersion?: string; language?: string; platform?: string; context?: ApexFeedbackContext; messages?: ApexFeedbackMessage[]; attachments?: ApexFeedbackAttachment[]; resolutionSummary?: string | null; duplicateOf?: string | null; createdAt: string; updatedAt: string; resolvedAt?: string | null; syncState?: 'queued' | 'synced' }
+interface ApexFeedbackState { status: 'ready' | 'syncing' | 'error'; pending: number; unread: number; needsAnswer: number; items: ApexFeedbackItem[] }
+
 interface ApexDesktopApi {
   getEnvironment(): Promise<ApexEnvironment>
   chooseDirectory(title: string): Promise<string | null>
@@ -61,6 +70,15 @@ interface ApexDesktopApi {
   getAnalysisSessions(): Promise<ApexAnalysisSessionSummary[]>
   getAnalysisLap(sessionId: string, lapId: string): Promise<ApexAnalysisLapPayload | null>
   getAnalysisHealth(): Promise<ApexAnalysisHealth>
+  getFeedbackState(): Promise<ApexFeedbackState>
+  listFeedback(): Promise<ApexFeedbackItem[]>
+  getFeedback(feedbackId: string): Promise<ApexFeedbackItem | null>
+  submitFeedback(input: { comment: string; context: Omit<ApexFeedbackContext, 'appVersion' | 'platform' | 'screen' | 'redactionVersion'>; selectedArea?: ApexFeedbackImage | null; fullWindow?: ApexFeedbackImage | null }): Promise<ApexFeedbackItem | null>
+  replyFeedback(feedbackId: string, body: string, expectedRevision: number): Promise<ApexFeedbackItem | null>
+  reopenFeedback(feedbackId: string, expectedRevision: number): Promise<ApexFeedbackItem | null>
+  markFeedbackRead(feedbackId: string): Promise<ApexFeedbackState>
+  syncFeedback(): Promise<ApexFeedbackState>
+  captureFeedback(input: { rect: ApexFeedbackElementContext['rect'] }): Promise<{ selectedArea: ApexFeedbackImage; fullWindow: ApexFeedbackImage }>
   checkForUpdates(): Promise<ApexUpdateState>
   downloadUpdate(): Promise<{ ok: boolean; reason?: string }>
   installUpdate(): Promise<{ ok: boolean; reason?: string }>
@@ -96,6 +114,9 @@ interface ApexDesktopApi {
   onTelemetryMessage(callback: (message: unknown) => void): () => void
   onRecordingState(callback: (state: ApexRecordingState) => void): () => void
   onAnalysisSessionsChanged(callback: (state: { schemaVersion: 1; revision: number; kind: 'sample' | 'lap' | 'session' | 'status' }) => void): () => void
+  onFeedbackChanged(callback: (state: ApexFeedbackState) => void): () => void
+  onFeedbackShortcut(callback: () => void): () => void
+  onOpenFeedbackThread(callback: (feedbackId: string) => void): () => void
   onUpdateState(callback: (state: ApexUpdateState) => void): () => void
   onDisplaysChanged(callback: (displays: ApexDisplay[]) => void): () => void
   onOverlayState(callback: (state: ApexOverlayState) => void): () => void
@@ -113,12 +134,13 @@ type ApexAnalysisSource = 'live' | 'recording-replay'
 type ApexAnalysisSessionState = 'active' | 'interrupted' | 'finished'
 type ApexAnalysisLapState = 'current' | 'complete' | 'incomplete'
 type ApexAnalysisLapQuality = 'clean' | 'limited' | 'ineligible'
-type ApexAnalysisLapReason = 'ai-control' | 'coverage-low' | 'incomplete' | 'lap-counter-jump' | 'missing-sample' | 'pit' | 'position-discontinuity' | 'remote-control' | 'replay-control' | 'sample-compacted' | 'sequence-gap' | 'source-interrupted' | 'telemetry-gap' | 'time-reset' | 'unknown-control'
-interface ApexAnalysisLapSummary { id: string; number: number; state: ApexAnalysisLapState; quality: ApexAnalysisLapQuality; reasons: ApexAnalysisLapReason[]; lapTimeMs: number | null; coverage: number; maximumGapM: number; sampleCount: number; samplesAvailable: boolean }
+type ApexAnalysisLapReason = 'ai-control' | 'coverage-low' | 'incomplete' | 'lap-counter-jump' | 'lap-invalidated' | 'missing-sample' | 'pit' | 'position-discontinuity' | 'remote-control' | 'replay-control' | 'sample-compacted' | 'sample-overflow' | 'sequence-gap' | 'source-interrupted' | 'telemetry-gap' | 'time-reset' | 'unknown-control'
+interface ApexAnalysisLapSummary { id: string; number: number; state: ApexAnalysisLapState; quality: ApexAnalysisLapQuality; reasons: ApexAnalysisLapReason[]; lapTimeMs: number | null; coverage: number; maximumGapM: number; sampleCount: number; samplesAvailable: boolean; replayable?: boolean; referenceEligible?: boolean; trackModelEligible?: boolean; payloadHash?: string }
 interface ApexAnalysisSessionSummary { schemaVersion: 1; qualityPolicyVersion: string; revision: number; id: string; source: ApexAnalysisSource; state: ApexAnalysisSessionState; startedAt: string; endedAt: string | null; track: { name: string; layout: string; lengthM: number }; car: { id: number; name: string; class: string }; laps: ApexAnalysisLapSummary[]; currentLapId: string | null; interruptionCount: number; sourceSegmentCount: number }
-interface ApexAnalysisSample { distanceM: number; x: number; z: number; brake: number; throttle: number; steering: number; speedKph: number; elapsedSeconds: number; lapElapsedSeconds: number }
-interface ApexAnalysisLapPayload { schemaVersion: 1; session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] | null }
-interface ApexAnalysisHealth { schemaVersion: 1; qualityPolicyVersion: string; revision: number; memoryBudgetBytes: number; telemetryFrames: number; statuses: number; sessions: number; completedLaps: number; incompleteLaps: number; evictedLapPayloads: number }
+interface ApexAnalysisSample { distanceM: number; rawDistanceM?: number; distanceIndexM?: number; x: number; y?: number; z: number; brake: number; throttle: number; steering: number; clutch?: number; gear?: number; rpm?: number; pathLateralM?: number | null; trackEdgeM?: number | null; countLapFlag?: number | null; speedKph: number; elapsedSeconds: number; lapElapsedSeconds: number }
+interface ApexTrackModel { schemaVersion: 1; algorithmVersion: string; trackKey: string; trackLengthM: number; binSizeM: number; coverage: number; published: boolean; lateralSign: number; seamGapM: number; maximumJumpM: number; sourceHash: string; geometryHash: string; points: Array<{ distanceM: number; x: number; y: number; z: number; observations: number; spreadM: number; confidence: number }> }
+interface ApexAnalysisLapPayload { schemaVersion: 1; session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] | null; payloadHash?: string; trackModel?: ApexTrackModel | null; personalBest?: { session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] } | null }
+interface ApexAnalysisHealth { schemaVersion: 1; qualityPolicyVersion: string; revision: number; memoryBudgetBytes: number; telemetryFrames: number; statuses: number; sessions: number; completedLaps: number; incompleteLaps: number; evictedLapPayloads: number; storage?: { status: string; path?: string; message?: string } }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
 interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }

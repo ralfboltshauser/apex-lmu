@@ -553,6 +553,9 @@ type decodedVehicleScoring struct {
 	ID           int32
 	IsPlayer     bool
 	ControlOwner string
+	PathLateralM float64
+	TrackEdgeM   float64
+	CountLapFlag uint8
 	Opponent     opponent
 	Driver       string
 	Name         string
@@ -577,6 +580,14 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 		return decodedVehicleScoring{}, err
 	}
 	lapDistance, err := view.bounded64(base+104, "vehicle lap distance", -1, 1e8)
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
+	pathLateral, err := view.bounded64(base+112, "vehicle path lateral", -1000, 1000)
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
+	trackEdge, err := view.bounded64(base+120, "vehicle track edge", -1000, 1000)
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
@@ -636,9 +647,16 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
+	countLapFlag, err := view.u8(base + 506)
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
+	if countLapFlag > 2 {
+		return decodedVehicleScoring{}, fmt.Errorf("LMU count-lap flag is invalid: %d", countLapFlag)
+	}
 
 	return decodedVehicleScoring{
-		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), Driver: driver, Name: name, Class: class,
+		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), PathLateralM: pathLateral, TrackEdgeM: trackEdge, CountLapFlag: countLapFlag, Driver: driver, Name: name, Class: class,
 		Opponent: opponent{
 			ID: id, Driver: driver, Name: name, Class: class, Position: place, Laps: laps,
 			LapDistanceM: lapDistance, WorldPositionM: worldPosition, BestLapSeconds: bestLap, LastLapSeconds: lastLap,
@@ -655,6 +673,9 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.ControlOwner = score.ControlOwner
 	player.Position = score.Opponent.Position
 	player.LapDistanceM = score.Opponent.LapDistanceM
+	player.PathLateralM = score.PathLateralM
+	player.TrackEdgeM = score.TrackEdgeM
+	player.CountLapFlag = score.CountLapFlag
 	player.BestLapSeconds = score.Opponent.BestLapSeconds
 	player.LastLapSeconds = score.Opponent.LastLapSeconds
 	player.TimeBehindLeaderSec = score.Opponent.BehindLeaderSec

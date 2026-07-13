@@ -23,6 +23,15 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getAnalysisSessions: () => ipcRenderer.invoke('apex:get-analysis-sessions'),
   getAnalysisLap: (sessionId, lapId) => ipcRenderer.invoke('apex:get-analysis-lap', sessionId, lapId),
   getAnalysisHealth: () => ipcRenderer.invoke('apex:get-analysis-health'),
+  getFeedbackState: () => ipcRenderer.invoke('apex:get-feedback-state'),
+  listFeedback: () => ipcRenderer.invoke('apex:list-feedback'),
+  getFeedback: (feedbackId) => ipcRenderer.invoke('apex:get-feedback', feedbackId),
+  submitFeedback: (input) => ipcRenderer.invoke('apex:submit-feedback', input),
+  replyFeedback: (feedbackId, body, expectedRevision) => ipcRenderer.invoke('apex:reply-feedback', feedbackId, body, expectedRevision),
+  reopenFeedback: (feedbackId, expectedRevision) => ipcRenderer.invoke('apex:reopen-feedback', feedbackId, expectedRevision),
+  markFeedbackRead: (feedbackId) => ipcRenderer.invoke('apex:mark-feedback-read', feedbackId),
+  syncFeedback: () => ipcRenderer.invoke('apex:sync-feedback'),
+  captureFeedback: (input) => ipcRenderer.invoke('apex:capture-feedback', input),
   checkForUpdates: () => ipcRenderer.invoke('apex:check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('apex:download-update'),
   installUpdate: () => ipcRenderer.invoke('apex:install-update'),
@@ -60,6 +69,21 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, state) => callback(state)
     ipcRenderer.on('apex:analysis-sessions-changed', listener)
     return () => ipcRenderer.removeListener('apex:analysis-sessions-changed', listener)
+  },
+  onFeedbackChanged: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:feedback-changed', listener)
+    return () => ipcRenderer.removeListener('apex:feedback-changed', listener)
+  },
+  onFeedbackShortcut: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('apex:feedback-shortcut', listener)
+    return () => ipcRenderer.removeListener('apex:feedback-shortcut', listener)
+  },
+  onOpenFeedbackThread: (callback) => {
+    const listener = (_event, feedbackId) => callback(feedbackId)
+    ipcRenderer.on('apex:open-feedback-thread', listener)
+    return () => ipcRenderer.removeListener('apex:open-feedback-thread', listener)
   },
   onUpdateState: (callback) => {
     const listener = (_event, state) => callback(state)

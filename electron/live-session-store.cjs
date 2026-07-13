@@ -6,7 +6,7 @@ const COVERAGE_BIN_M = 12
 const CLEAN_COVERAGE = 0.97
 const LIMITED_COVERAGE = 0.8
 const MAX_FINAL_SAMPLES = 4096
-const MAX_CURRENT_SAMPLES = 32768
+const MAX_CURRENT_SAMPLES = 500000
 const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024
 
 function finite(value) { return typeof value === 'number' && Number.isFinite(value) }
@@ -86,11 +86,12 @@ function classifyLap(lap, trackLengthM) {
 }
 
 class LiveSessionStore {
-  constructor({ logger = null, makeId = crypto.randomUUID, memoryBudgetBytes = DEFAULT_MEMORY_BUDGET, now = () => new Date() } = {}) {
+  constructor({ logger = null, makeId = crypto.randomUUID, memoryBudgetBytes = DEFAULT_MEMORY_BUDGET, now = () => new Date(), onLapFinalized = null } = {}) {
     this.logger = logger
     this.makeId = makeId
     this.memoryBudgetBytes = memoryBudgetBytes
     this.now = now
+    this.onLapFinalized = onLapFinalized
     this.sessions = []
     this.active = null
     this.revision = 0
@@ -213,11 +214,12 @@ class LiveSessionStore {
       const plausible = Math.max(20, (sample.speedKph / 3.6) * delta * 3 + 5)
       if (movement > plausible && !boundary) { lap.reasons.add('position-discontinuity'); return }
     }
+    sample.distanceIndexM = last ? Math.max(last.distanceIndexM, sample.rawDistanceM) : Math.max(0, sample.rawDistanceM)
     lap.samples.push(sample)
     lap.lastSequence = message.sequence
     if (lap.samples.length > MAX_CURRENT_SAMPLES) {
-      lap.samples = compactSamples(lap.samples, Math.floor(MAX_CURRENT_SAMPLES / 2))
-      lap.reasons.add('sample-compacted')
+      lap.samples.shift()
+      lap.reasons.add('sample-overflow')
     }
   }
 
@@ -248,10 +250,16 @@ class LiveSessionStore {
     const elapsed = sessionElapsed(message)
     if (!position || !finite(position.x) || !finite(position.z) || !finite(distanceM) || distanceM < 0 || distanceM > this.active.track.lengthM * 1.05 || !finite(elapsed)) return null
     return {
-      distanceM, x: position.x, z: position.z,
+      distanceM, rawDistanceM: distanceM, distanceIndexM: distanceM, x: position.x, y: finite(position.y) ? position.y : 0, z: position.z,
       brake: clamp(finite(message.player.brake) ? message.player.brake : 0, 0, 1),
       throttle: clamp(finite(message.player.throttle) ? message.player.throttle : 0, 0, 1),
       steering: clamp(finite(message.player.steering) ? message.player.steering : 0, -1, 1),
+      clutch: clamp(finite(message.player.clutch) ? message.player.clutch : 0, 0, 1),
+      gear: Number.isSafeInteger(message.player.gear) ? message.player.gear : 0,
+      rpm: Math.max(0, finite(message.player.rpm) ? message.player.rpm : 0),
+      pathLateralM: finite(message.player.pathLateralM) ? message.player.pathLateralM : null,
+      trackEdgeM: finite(message.player.trackEdgeM) ? message.player.trackEdgeM : null,
+      countLapFlag: Number.isSafeInteger(message.player.countLapFlag) && message.player.countLapFlag >= 0 && message.player.countLapFlag <= 2 ? message.player.countLapFlag : null,
       speedKph: Math.max(0, finite(message.player.speedKph) ? message.player.speedKph : 0),
       elapsedSeconds: elapsed,
       lapElapsedSeconds: Math.max(0, elapsed - (lapStart(message) ?? elapsed)),
@@ -275,8 +283,8 @@ class LiveSessionStore {
     lap.state = state
     lap.endedAt = this.active.updatedAt
     if (state !== 'complete') lap.reasons.add('incomplete')
-    lap.samples = compactSamples(lap.samples)
-    lap.sampleCount = lap.samples.length
+    const fullSamples = lap.samples.map((sample) => ({ ...sample }))
+    lap.sampleCount = fullSamples.length
     lap.lapTimeMs = state === 'complete' && finite(officialLapTimeMs)
       ? Math.max(0, officialLapTimeMs)
       : state === 'complete' && lap.samples.length > 1
@@ -287,11 +295,42 @@ class LiveSessionStore {
     lap.coverage = classified.coverage
     lap.maximumGapM = classified.maximumGapM
     lap.finalReasons = classified.reasons
+    const observedCountFlags = fullSamples.map((sample) => sample.countLapFlag).filter((value) => value !== null)
+    const countLapValid = observedCountFlags.length === 0 || observedCountFlags.filter((value) => value === 2).length / observedCountFlags.length >= 0.98
+    if (!countLapValid) {
+      lap.finalReasons = [...new Set([...lap.finalReasons, 'lap-invalidated'])].sort()
+      lap.quality = lap.samples.length > 1 && lap.coverage >= LIMITED_COVERAGE ? 'limited' : 'ineligible'
+    }
+    lap.replayable = fullSamples.length > 1
+    lap.referenceEligible = lap.state === 'complete' && lap.quality === 'clean' && countLapValid
+    lap.trackModelEligible = lap.referenceEligible && fullSamples.some((sample) => sample.pathLateralM !== null)
+    const finalized = {
+      schemaVersion: SCHEMA_VERSION,
+      qualityPolicyVersion: QUALITY_POLICY_VERSION,
+      session: {
+        id: this.active.id, source: this.active.source, state: this.active.state, startedAt: this.active.startedAt, updatedAt: this.active.updatedAt,
+        trackKey: this.active.trackKey, track: { ...this.active.track }, car: { ...this.active.car }, interruptionCount: this.active.interruptionCount,
+      },
+      lap: {
+        id: lap.id, number: lap.number, state: lap.state, startedAt: lap.startedAt, endedAt: lap.endedAt, lapTimeMs: lap.lapTimeMs,
+        quality: lap.quality, reasons: [...lap.finalReasons], coverage: lap.coverage, maximumGapM: lap.maximumGapM, sampleCount: lap.sampleCount,
+        replayable: lap.replayable, referenceEligible: lap.referenceEligible, trackModelEligible: lap.trackModelEligible,
+      },
+      samples: fullSamples,
+    }
+    lap.samples = compactSamples(fullSamples)
     this.active.laps.push(lap)
     this.active.currentLap = null
     if (state === 'complete') this.health.completedLaps += 1
     else this.health.incompleteLaps += 1
     this.record('info', 'analysis-lap-finalized', 'In-memory analysis lap finalized.', { sessionId: this.active.id, lapNumber: lap.number, state, quality: lap.quality, reasons: lap.finalReasons, coverageBucket: Math.round(lap.coverage * 20) * 5, sampleCount: lap.samples.length })
+    if (this.onLapFinalized) {
+      try {
+        Promise.resolve(this.onLapFinalized(finalized)).catch((error) => this.record('error', 'lap-persist-failed', 'A finalized analysis lap could not be persisted.', { error: error instanceof Error ? error.message : String(error), lapId: lap.id }))
+      } catch (error) {
+        this.record('error', 'lap-persist-failed', 'A finalized analysis lap could not be queued for persistence.', { error: error instanceof Error ? error.message : String(error), lapId: lap.id })
+      }
+    }
     this.enforceMemoryBudget()
   }
 
@@ -305,7 +344,7 @@ class LiveSessionStore {
   }
 
   enforceMemoryBudget() {
-    const bytes = () => this.sessions.reduce((total, session) => total + session.laps.reduce((lapTotal, lap) => lapTotal + (lap.samples?.length ?? 0) * 9 * 8, 0) + (session.currentLap?.samples?.length ?? 0) * 9 * 8, 0)
+    const bytes = () => this.sessions.reduce((total, session) => total + session.laps.reduce((lapTotal, lap) => lapTotal + (lap.samples?.length ?? 0) * 18 * 8, 0) + (session.currentLap?.samples?.length ?? 0) * 18 * 8, 0)
     if (bytes() <= this.memoryBudgetBytes) return
     const clean = this.sessions.flatMap((session) => session.laps.filter((lap) => lap.quality === 'clean' && lap.samples).map((lap) => ({ session, lap })))
     const pinned = new Set(clean.slice(-3).map(({ lap }) => lap.id))
@@ -339,7 +378,7 @@ class LiveSessionStore {
     const first = lap.samples?.[0]
     const last = lap.samples?.at(-1)
     const lapTimeMs = lap.lapTimeMs !== undefined ? lap.lapTimeMs : lap.state === 'complete' && first && last ? Math.max(0, (last.elapsedSeconds - first.elapsedSeconds) * 1000) : null
-    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length) }
+    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length), replayable: lap.replayable ?? Boolean(lap.samples?.length > 1), referenceEligible: lap.referenceEligible ?? false, trackModelEligible: lap.trackModelEligible ?? false }
   }
 
   getLap(sessionId, lapId) {

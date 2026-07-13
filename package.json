@@ -3,7 +3,8 @@
   "version": "0.2.3",
   "private": true,
   "workspaces": [
-    "apps/website"
+    "apps/website",
+    "apps/feedback-api"
   ],
   "packageManager": "npm@11.16.0",
   "description": "Local-first, open-source telemetry, strategy, setup and race engineering companion for Le Mans Ultimate.",
@@ -34,7 +35,9 @@
     "build:desktop:win:all": "node scripts/build-windows-zip.cjs nsis zip",
     "preview": "vite preview --host 0.0.0.0",
     "dev:site": "npm run dev --workspace=apex-lmu-site",
+    "dev:feedback-api": "npm run dev --workspace=apex-lmu-feedback-api",
     "build:site": "npm run build --workspace=apex-lmu-site",
+    "build:feedback-api": "npm run build --workspace=apex-lmu-feedback-api",
     "preview:site": "npm run preview --workspace=apex-lmu-site",
     "typecheck:site": "npm run typecheck --workspace=apex-lmu-site",
     "test": "vitest run",
@@ -44,6 +47,7 @@
     "test:bridge": "cd bridge && go test -buildvcs=false ./...",
     "test:release-notes": "node --test scripts/release-notes.node-test.cjs",
     "test:scripts": "node --test scripts/*.node-test.cjs",
+    "test:feedback-api": "npm run test --workspace=apex-lmu-feedback-api",
     "test:recording-replay": "node scripts/assert-recording-replay.cjs",
     "test:e2e:windows:replay": "node scripts/e2e-recording-replay.cjs",
     "test:all": "npm run i18n:check && npm run release-notes:check && npm test && npm run test:desktop && npm run test:electron:sqlite && npm run test:scripts && npm run test:bridge",
@@ -52,6 +56,9 @@
     "i18n:check": "node scripts/check-i18n.cjs",
     "release-notes:check": "node scripts/check-release-notes.cjs",
     "release-notes:write": "node scripts/check-release-notes.cjs --write",
+    "feedback": "node --env-file-if-exists=.env.local scripts/apex-feedback.mjs",
+    "feedback:db:generate": "npm run db:generate --workspace=apex-lmu-feedback-api",
+    "feedback:db:migrate": "npm run db:migrate --workspace=apex-lmu-feedback-api",
     "hooks:install": "node scripts/install-hooks.cjs",
     "prepare": "node scripts/install-hooks.cjs",
     "release:publish": "node scripts/publish-release.cjs"

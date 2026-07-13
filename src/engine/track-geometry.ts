@@ -50,6 +50,12 @@ export interface MeasuredSessionRecord {
   readonly layoutName: string
   readonly trackLengthM: number
   readonly laps: readonly MeasuredLapRecord[]
+  readonly trackModel?: {
+    readonly published: boolean
+    readonly coverage: number
+    readonly geometryHash: string
+    readonly points: readonly { distanceM: number; x: number; y?: number; z: number }[]
+  } | null
 }
 
 export interface BrakeZoneOptions {
@@ -176,10 +182,11 @@ export function buildMeasuredTrackSnapshot(session: MeasuredSessionRecord, selec
   const completed = session.laps.filter((lap) => lap.state === 'complete')
   const routeLaps = completed.filter((lap) => lap.quality === 'clean' && lap.samples.length > 1).slice(-3)
   const routeSource = routeLaps.length > 0 ? routeLaps.map((lap) => lap.samples) : [selected.samples]
-  const route = aggregateRoute(routeSource, session.trackLengthM, binSizeM)
+  const learnedRoute = session.trackModel?.published ? session.trackModel.points.map((point) => ({ distanceM: point.distanceM, x: point.x, z: point.z, brake: 0, speedKph: 0, elapsedSeconds: 0 })) : null
+  const route = learnedRoute?.length ? learnedRoute : aggregateRoute(routeSource, session.trackLengthM, binSizeM)
   const totalBins = Math.max(1, Math.ceil(session.trackLengthM / binSizeM))
-  const coverage = Math.min(1, route.length / totalBins)
-  const state = route.length === 0 ? 'empty' : routeLaps.length > 0 && coverage >= 0.82 ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
+  const coverage = learnedRoute ? session.trackModel!.coverage : Math.min(1, route.length / totalBins)
+  const state = route.length === 0 ? 'empty' : learnedRoute ? 'complete' : routeLaps.length > 0 && coverage >= 0.82 ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
   return {
     sessionId: session.id,
     trackName: session.trackName,
@@ -192,6 +199,6 @@ export function buildMeasuredTrackSnapshot(session: MeasuredSessionRecord, selec
     selectedLapNumber: selected.number,
     selectedLap: selected.samples,
     brakeZones: detectBrakeZones(selected.samples),
-    geometryFingerprint: fingerprint(route),
+    geometryFingerprint: learnedRoute ? session.trackModel!.geometryHash : fingerprint(route),
   }
 }

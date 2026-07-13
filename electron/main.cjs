@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, session, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, screen, session, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs/promises')
 const { LmuBridgeManager } = require('./lmu-bridge.cjs')
@@ -13,6 +13,8 @@ const { WhatsNewService } = require('./whats-new.cjs')
 const { readE2EConfig } = require('./e2e-config.cjs')
 const { StatsDatabase } = require('./stats-database.cjs')
 const { LiveSessionStore } = require('./live-session-store.cjs')
+const { FeedbackService } = require('./feedback-service.cjs')
+const { TelemetryDatabase } = require('./telemetry-database.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 const e2eConfig = readE2EConfig()
@@ -26,6 +28,11 @@ let whatsNewService
 let statsDatabase
 let statsError = null
 let liveSessionStore
+let feedbackService
+let telemetryDatabase
+let telemetryDatabaseError = null
+let quitFlushStarted = false
+let quitFlushComplete = false
 const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -57,6 +64,11 @@ function createWindow() {
   })
   window.webContents.on('render-process-gone', (_event, details) => void diagnostics?.record('error', 'renderer', 'process-gone', 'Renderer process stopped.', details))
   window.webContents.on('did-fail-load', (_event, code, description, url) => void diagnostics?.record('error', 'renderer', 'load-failed', description, { code, url }))
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control || !input.shift || String(input.key).toLowerCase() !== 'f') return
+    event.preventDefault()
+    window.webContents.send('apex:feedback-shortcut')
+  })
 
   if (isDevelopment) {
     window.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -142,12 +154,63 @@ ipcMain.handle('apex:acknowledge-whats-new', (_event, version) => whatsNewServic
 ipcMain.handle('apex:get-lifetime-stats', () => statsDatabase ? statsDatabase.getStats() : { status: 'error', message: statsError || 'Lifetime database is unavailable.', totalDistanceMm: 0, trackedSince: null, vehicles: [] })
 ipcMain.handle('apex:get-lifetime-stats-health', () => statsDatabase ? statsDatabase.getHealth() : { status: 'error', message: statsError || 'Lifetime database is unavailable.' })
 ipcMain.handle('apex:backup-lifetime-stats', () => statsDatabase ? statsDatabase.createBackup().then((backup) => ({ ok: true, backup })).catch((error) => ({ ok: false, reason: error.message })) : { ok: false, reason: statsError || 'unavailable' })
-ipcMain.handle('apex:get-analysis-sessions', () => liveSessionStore?.listSessions() ?? [])
-ipcMain.handle('apex:get-analysis-lap', (_event, sessionId, lapId) => {
-  if (typeof sessionId !== 'string' || typeof lapId !== 'string' || !/^[a-z0-9-]{1,96}$/i.test(sessionId) || !/^[a-z0-9-]{1,96}$/i.test(lapId)) return null
-  return liveSessionStore?.getLap(sessionId, lapId) ?? null
+ipcMain.handle('apex:get-analysis-sessions', () => {
+  const sessions = new Map((telemetryDatabase?.listSessions() ?? []).map((entry) => [entry.id, entry]))
+  for (const entry of liveSessionStore?.listSessions() ?? []) sessions.set(entry.id, entry)
+  return [...sessions.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt))
 })
-ipcMain.handle('apex:get-analysis-health', () => liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 })
+ipcMain.handle('apex:get-analysis-lap', async (_event, sessionId, lapId) => {
+  if (typeof sessionId !== 'string' || typeof lapId !== 'string' || !/^[a-z0-9-]{1,96}$/i.test(sessionId) || !/^[a-z0-9-]{1,96}$/i.test(lapId)) return null
+  await telemetryDatabase?.flush()
+  return telemetryDatabase?.getLap(sessionId, lapId) ?? liveSessionStore?.getLap(sessionId, lapId) ?? null
+})
+ipcMain.handle('apex:get-analysis-health', () => ({ ...(liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }), storage: telemetryDatabase?.getHealth() ?? { status: 'error', message: telemetryDatabaseError || 'unavailable' } }))
+ipcMain.handle('apex:get-feedback-state', () => feedbackService?.getState() ?? { status: 'ready', pending: 0, unread: 0, needsAnswer: 0, items: [] })
+ipcMain.handle('apex:list-feedback', () => feedbackService?.list() ?? [])
+ipcMain.handle('apex:get-feedback', (_event, feedbackId) => typeof feedbackId === 'string' && feedbackId.length <= 96 ? feedbackService?.get(feedbackId) ?? null : null)
+ipcMain.handle('apex:submit-feedback', async (_event, input = {}) => {
+  if (!feedbackService || !mainWindow || mainWindow.isDestroyed()) throw new Error('Feedback service is unavailable')
+  const display = screen.getDisplayMatching(mainWindow.getBounds())
+  const context = {
+    ...input.context,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    screen: { width: display.size.width, height: display.size.height, scaleFactor: display.scaleFactor },
+    redactionVersion: 1,
+  }
+  return feedbackService.submit({ ...input, context })
+})
+ipcMain.handle('apex:reply-feedback', (_event, feedbackId, body, expectedRevision) => {
+  if (typeof feedbackId !== 'string' || feedbackId.length > 96 || typeof body !== 'string') throw new Error('Feedback reply is invalid')
+  return feedbackService.reply(feedbackId, body, expectedRevision)
+})
+ipcMain.handle('apex:reopen-feedback', (_event, feedbackId, expectedRevision) => {
+  if (typeof feedbackId !== 'string' || feedbackId.length > 96) throw new Error('Feedback ID is invalid')
+  return feedbackService.reopen(feedbackId, expectedRevision)
+})
+ipcMain.handle('apex:mark-feedback-read', (_event, feedbackId) => typeof feedbackId === 'string' && feedbackId.length <= 96 ? feedbackService.markRead(feedbackId) : feedbackService.getState())
+ipcMain.handle('apex:sync-feedback', () => feedbackService.sync())
+ipcMain.handle('apex:capture-feedback', async (_event, input = {}) => {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Apex window is unavailable')
+  const content = mainWindow.getContentBounds()
+  const rect = input.rect || {}
+  const selectedRect = {
+    x: Math.max(0, Math.min(content.width - 1, Math.floor(Number(rect.x) || 0))),
+    y: Math.max(0, Math.min(content.height - 1, Math.floor(Number(rect.y) || 0))),
+    width: Math.max(1, Math.min(content.width, Math.ceil(Number(rect.width) || 1))),
+    height: Math.max(1, Math.min(content.height, Math.ceil(Number(rect.height) || 1))),
+  }
+  selectedRect.width = Math.min(selectedRect.width, content.width - selectedRect.x)
+  selectedRect.height = Math.min(selectedRect.height, content.height - selectedRect.y)
+  const [fullImage, selectedImage] = await Promise.all([mainWindow.webContents.capturePage(), mainWindow.webContents.capturePage(selectedRect)])
+  const encode = (image, maximumWidth) => {
+    const original = image.getSize()
+    const resized = original.width > maximumWidth ? image.resize({ width: maximumWidth, quality: 'good' }) : image
+    const size = resized.getSize()
+    return { dataUrl: `data:image/jpeg;base64,${resized.toJPEG(80).toString('base64')}`, width: size.width, height: size.height }
+  }
+  return { fullWindow: encode(fullImage, 1920), selectedArea: encode(selectedImage, 1200) }
+})
 ipcMain.handle('apex:check-for-updates', () => updateManager?.check(false))
 ipcMain.handle('apex:download-update', () => updateManager?.download())
 ipcMain.handle('apex:install-update', () => updateManager?.install())
@@ -223,7 +286,17 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
-  liveSessionStore = new LiveSessionStore({ logger: diagnostics })
+  try { telemetryDatabase = await TelemetryDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics, persistReplay: Boolean(e2eConfig) }) }
+  catch (error) { telemetryDatabaseError = error.message; void diagnostics.record('error', 'telemetry-history', 'open-failed', 'Local lap history was preserved but could not be opened.', { error: error.message }) }
+  liveSessionStore = new LiveSessionStore({
+    logger: diagnostics,
+    onLapFinalized: async (event) => {
+      const result = await telemetryDatabase?.enqueueFinalized(event)
+      if (!result?.written) return result
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:analysis-sessions-changed', { schemaVersion: 1, revision: liveSessionStore?.revision ?? 0, kind: 'lap' })
+      return result
+    },
+  })
   whatsNewService = new WhatsNewService({ userDataPath: app.getPath('userData'), currentVersion: app.getVersion(), logger: diagnostics })
   try { statsDatabase = await StatsDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics }) }
   catch (error) { statsError = error.message; void diagnostics.record('error', 'lifetime-stats', 'open-failed', 'Lifetime statistics database was preserved but could not be opened.', { error: error.message }) }
@@ -254,7 +327,7 @@ app.whenReady().then(async () => {
     broadcast: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:update-state', state)
     },
-    beforeInstall: async () => { statsDatabase?.close({ requireDurable: true }) },
+    beforeInstall: async () => { await telemetryDatabase?.close({ requireDurable: true }); statsDatabase?.close({ requireDurable: true }) },
   })
   session.defaultSession.setPermissionCheckHandler(() => false)
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -272,6 +345,26 @@ app.whenReady().then(async () => {
     },
   })
   await overlayManager.initialize()
+  const openFeedbackThread = (feedbackId) => {
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+    mainWindow.webContents.send('apex:open-feedback-thread', feedbackId)
+  }
+  feedbackService = new FeedbackService({
+    app,
+    safeStorage,
+    logger: diagnostics,
+    broadcast: (channel, payload) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload) },
+    notify: ({ feedbackId, body }) => {
+      if (!Notification.isSupported()) return
+      const notification = new Notification({ title: 'Apex for LMU', body: body || 'Feedback updated' })
+      notification.on('click', () => openFeedbackThread(feedbackId))
+      notification.show()
+    },
+  })
+  await feedbackService.initialize().catch((error) => void diagnostics.record('warning', 'feedback', 'initialize-failed', 'Feedback synchronization will retry later.', { error: error.message }))
   createWindow()
   if (!e2eConfig) updateManager.start()
   app.on('activate', () => {
@@ -284,12 +377,25 @@ process.on('unhandledRejection', (reason) => void diagnostics?.record('error', '
 
 app.on('window-all-closed', () => {
   bridgeManager?.stop()
+  feedbackService?.stop()
   void overlayManager?.shutdown()
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
-  try { statsDatabase?.close() }
-  catch (error) { void diagnostics?.record('error', 'lifetime-stats', 'close-failed', 'Lifetime database close failed during app shutdown.', { error: error.message }) }
-  void overlayManager?.shutdown()
+app.on('before-quit', (event) => {
+  if (quitFlushComplete) return
+  event.preventDefault()
+  if (quitFlushStarted) return
+  quitFlushStarted = true
+  bridgeManager?.stop()
+  feedbackService?.stop()
+  void (async () => {
+    try { await telemetryDatabase?.close() }
+    catch (error) { void diagnostics?.record('error', 'telemetry-history', 'close-failed', 'Local lap history close failed during app shutdown.', { error: error.message }) }
+    try { statsDatabase?.close() }
+    catch (error) { void diagnostics?.record('error', 'lifetime-stats', 'close-failed', 'Lifetime database close failed during app shutdown.', { error: error.message }) }
+    await overlayManager?.shutdown()
+    quitFlushComplete = true
+    app.quit()
+  })()
 })
