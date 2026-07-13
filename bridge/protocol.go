@@ -81,6 +81,9 @@ type vehicle struct {
 	Lap                 int32           `json:"lap"`
 	Sector              int32           `json:"sector"`
 	LapDistanceM        float64         `json:"lapDistanceM"`
+	PathLateralM        float64         `json:"pathLateralM"`
+	TrackEdgeM          float64         `json:"trackEdgeM"`
+	CountLapFlag        uint8           `json:"countLapFlag"`
 	SpeedKph            float64         `json:"speedKph"`
 	RPM                 float64         `json:"rpm"`
 	MaximumRPM          float64         `json:"maximumRpm"`

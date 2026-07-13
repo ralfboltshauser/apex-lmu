@@ -11,6 +11,8 @@ import {
   Layers3,
   LifeBuoy,
   HelpCircle,
+  MessageSquarePlus,
+  MessagesSquare,
   Radio,
   Settings,
   SlidersHorizontal,
@@ -21,10 +23,12 @@ import { DiscoveryPrompt, GuideDrawer, useViewGuides } from './GuideDrawer'
 import { appMessages } from '../i18n/appMessages'
 import { useMessages } from '../i18n'
 import { LanguageToggle } from '../i18n/LanguageToggle'
+import { feedbackMessages } from '../feedback/messages'
+import { useFeedback } from '../feedback/FeedbackProvider'
 
-export type ViewId = 'home' | 'live' | 'fuel' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'settings'
+export type ViewId = 'home' | 'live' | 'fuel' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'feedback' | 'settings'
 
-const primaryNavigation: Array<{ id: Exclude<ViewId, 'settings'>; icon: typeof Gauge; shortcut?: string }> = [
+const primaryNavigation: Array<{ id: Exclude<ViewId, 'settings' | 'feedback'>; icon: typeof Gauge; shortcut?: string }> = [
   { id: 'home', icon: Gauge },
   { id: 'live', icon: Radio, shortcut: 'L' },
   { id: 'fuel', icon: Fuel, shortcut: 'F' },
@@ -50,6 +54,8 @@ export function Shell({
   children: ReactNode
 }) {
   const messages = useMessages(appMessages)
+  const feedbackCopy = useMessages(feedbackMessages)
+  const feedback = useFeedback()
   const m = messages.shell
   const guides = useViewGuides()
   const [guideOpen, setGuideOpen] = useState(false)
@@ -102,6 +108,11 @@ export function Shell({
           })}
 
           <div className="nav-section-label nav-section-label--secondary">{m.system}</div>
+          <button type="button" className={`nav-item ${view === 'feedback' ? 'is-active' : ''}`} aria-current={view === 'feedback' ? 'page' : undefined} onClick={() => onViewChange('feedback')}>
+            <MessagesSquare size={17} strokeWidth={1.8} aria-hidden="true" />
+            <span>{feedbackCopy.navigation}</span>
+            {(feedback.state.unread > 0 || feedback.state.needsAnswer > 0) && <span className="nav-item__count">{Math.max(feedback.state.unread, feedback.state.needsAnswer)}</span>}
+          </button>
           <button type="button" className="nav-item" onClick={() => openSettings('connection')}>
             <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>{m.navigation.settings}</span>
@@ -137,6 +148,7 @@ export function Shell({
           </div>
           <div className="topbar__actions">
             <LanguageToggle />
+            <Button variant="secondary" size="sm" icon={<MessageSquarePlus size={15} />} title={feedbackCopy.shortcut} onClick={feedback.startSelection}>{feedbackCopy.giveFeedback}</Button>
             <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} onClick={openGuide}>{m.learnView}</Button>
             <div className={`connection-pill ${connected ? 'is-live' : ''}`}>
               <span className="connection-pill__pulse" />

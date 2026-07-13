@@ -1,4 +1,4 @@
-import { useId, type CSSProperties, type KeyboardEvent } from "react";
+import { useId, useMemo, type CSSProperties, type KeyboardEvent } from "react";
 import { formatMessage, useMessages } from "../../i18n";
 import { visualMessages } from "../../i18n/visualMessages";
 import "./visuals.css";
@@ -30,11 +30,19 @@ export interface TrackSegment {
   color?: string;
 }
 
+export interface TrackTrace {
+  id: string;
+  points: readonly TrackPoint[];
+  color?: string;
+  className?: string;
+}
+
 export interface CircuitTrackMapProps {
   points?: readonly TrackPoint[];
   cars?: readonly TrackCar[];
   activeSegment?: TrackSegment;
   segments?: readonly TrackSegment[];
+  traces?: readonly TrackTrace[];
   trackLengthM?: number;
   closed?: boolean;
   emptyMessage?: string;
@@ -98,8 +106,8 @@ function normalizePath(points: readonly TrackPoint[]): TrackPoint[] {
   }));
 }
 
-function projectPoint(point: TrackPoint, source: readonly TrackPoint[], normalized: readonly TrackPoint[]) {
-  if (source.length < 2 || normalized.length < 2) return normalized[0] ?? { x: WIDTH / 2, y: HEIGHT / 2 };
+function projection(source: readonly TrackPoint[], normalized: readonly TrackPoint[]) {
+  if (source.length < 2 || normalized.length < 2) return (_point: TrackPoint) => normalized[0] ?? { x: WIDTH / 2, y: HEIGHT / 2 };
   const minX = Math.min(...source.map((value) => value.x));
   const maxX = Math.max(...source.map((value) => value.x));
   const minY = Math.min(...source.map((value) => value.y));
@@ -108,10 +116,10 @@ function projectPoint(point: TrackPoint, source: readonly TrackPoint[], normaliz
   const normalizedMaxX = Math.max(...normalized.map((value) => value.x));
   const normalizedMinY = Math.min(...normalized.map((value) => value.y));
   const normalizedMaxY = Math.max(...normalized.map((value) => value.y));
-  return {
+  return (point: TrackPoint) => ({
     x: normalizedMinX + (point.x - minX) / Math.max(1, maxX - minX) * (normalizedMaxX - normalizedMinX),
     y: normalizedMinY + (point.y - minY) / Math.max(1, maxY - minY) * (normalizedMaxY - normalizedMinY),
-  };
+  });
 }
 
 function pathMetrics(points: readonly TrackPoint[]) {
@@ -198,6 +206,7 @@ export function CircuitTrackMap({
   cars = [],
   activeSegment,
   segments = activeSegment ? [activeSegment] : [],
+  traces = [],
   trackLengthM,
   closed = true,
   emptyMessage,
@@ -211,7 +220,9 @@ export function CircuitTrackMap({
   const m = useMessages(visualMessages).circuit;
   const resolvedCircuitName = circuitName ?? m.defaultTitle;
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const normalized = normalizePath(points);
+  const normalized = useMemo(() => normalizePath(points), [points]);
+  const projectPoint = useMemo(() => projection(points, normalized), [points, normalized]);
+  const renderedTraces = useMemo(() => traces.map((trace) => ({ ...trace, d: renderedPath(trace.points.map(projectPoint), false) })), [traces, projectPoint]);
   if (normalized.length < 2) {
     return <section className={`visual-card circuit-map ${className}`.trim()} aria-label={ariaLabel ?? resolvedCircuitName}>
       <header className="visual-header circuit-map-header"><div className="visual-title-group"><span className="visual-eyebrow">{m.trackPosition}</span><h3 className="visual-title">{resolvedCircuitName}</h3>{layoutName && <span className="visual-subtitle">{layoutName}</span>}</div></header>
@@ -278,6 +289,8 @@ export function CircuitTrackMap({
           <path className="circuit-track-line" d={circuitPath} />
           <path className="circuit-track-center" d={circuitPath} />
 
+          {renderedTraces.map((trace) => <path key={trace.id} className={`circuit-lap-trace ${trace.className ?? ''}`.trim()} d={trace.d} stroke={trace.color ?? '#f5f7fb'} />)}
+
           {segments.map((segment, index) => (
             <g key={`${segment.from}-${segment.to}-${index}`}>
               <path
@@ -305,7 +318,7 @@ export function CircuitTrackMap({
 
           {cars.map((car) => {
             const progress = car.progress ?? (trackLengthM && car.distanceM !== undefined ? car.distanceM / trackLengthM : 0);
-            const position = car.position ? projectPoint(car.position, points, normalized) : resolveProgress(progress);
+            const position = car.position ? projectPoint(car.position) : resolveProgress(progress);
             const color = car.color ?? (car.selected ? "#f0445d" : "#f5f7fb");
             const style = { "--car-color": color } as CSSProperties;
             return (
@@ -313,6 +326,7 @@ export function CircuitTrackMap({
                 className="circuit-car"
                 data-selected={car.selected || undefined}
                 key={car.id}
+                data-car-id={car.id}
                 transform={`translate(${position.x} ${position.y})`}
                 style={style}
                 role={onCarSelect ? "button" : undefined}

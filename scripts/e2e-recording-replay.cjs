@@ -16,6 +16,9 @@ function fail(message) { throw new Error(`Windows desktop replay E2E: ${message}
 function exact(actual, expected, label) { if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`) }
 function between(value, range, label) { if (!Number.isFinite(value) || value < range[0] || value > range[1]) fail(`${label} ${value} outside ${range.join('..')}`) }
 function atLeast(value, minimum, label) { if (!Number.isFinite(value) || value < minimum) fail(`${label} ${value} below ${minimum}`) }
+async function checkpoint(label, promise) {
+  try { return await promise } catch (error) { fail(`${label}: ${error instanceof Error ? error.message : String(error)}`) }
+}
 
 async function fixtureHash() { return crypto.createHash('sha256').update(await fs.readFile(fixturePath)).digest('hex') }
 
@@ -163,29 +166,29 @@ async function main() {
     await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.destroy(), zOrderFixture.competitorId)
     const started = await page.evaluate(() => window.apexDesktop.startReplayForTest())
     if (!started.ok || started.runId !== runId) fail(`replay did not start: ${JSON.stringify(started)}`)
-    const trackVisible = page.getByText(manifest.expected.track, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })
-    const carVisible = page.getByText(manifest.expected.car, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })
-    const overlayReplayVisible = overlayPage.getByText('REPLAY', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
-    const overlayMeasuredFuel = overlayPage.waitForFunction(() => document.querySelector('.race-overlay__fuel strong')?.textContent?.includes('L'), null, { timeout: 90000 })
+    const trackVisible = checkpoint('live track identity did not appear', page.getByText(manifest.expected.track, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 }))
+    const carVisible = checkpoint('live car identity did not appear', page.getByText(manifest.expected.car, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 }))
+    const overlayReplayVisible = checkpoint('overlay replay state did not appear', overlayPage.getByText('REPLAY', { exact: true }).waitFor({ state: 'visible', timeout: 90000 }))
+    const overlayMeasuredFuel = checkpoint('overlay measured fuel did not appear', overlayPage.waitForFunction(() => document.querySelector('.race-overlay__fuel strong')?.textContent?.includes('L'), null, { timeout: 90000 }))
     const overlayLiveState = Promise.all([overlayReplayVisible, overlayMeasuredFuel]).then(async () => ({
       opacity: await overlayPage.locator('.race-overlay').evaluate((element) => getComputedStyle(element).opacity),
       deltaWidgets: await overlayPage.locator('.overlay-slot--delta').count(),
       fuelWidgets: await overlayPage.locator('.overlay-slot--fuel').count(),
     }))
-    const measuredRouteVisible = page.getByText('Locally reconstructed driven line', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
-    const measuredRouteComplete = page.waitForFunction(({ brakeZones, coverage }) => {
+    const measuredRouteVisible = checkpoint('measured route description did not appear', page.getByText('Locally reconstructed driven line', { exact: true }).waitFor({ state: 'visible', timeout: 90000 }))
+    const measuredRouteComplete = checkpoint('durable measured route did not publish', page.waitForFunction(({ brakeZones, coverage }) => {
       const badge = document.querySelector('.live-measured-map-card .badge')?.textContent ?? ''
       const percent = Number.parseInt(badge.match(/(\d+)%/)?.[1] ?? '', 10)
       return document.querySelectorAll('.measured-brake-zones li').length === brakeZones
         && badge.includes('Measured route')
         && Number.isFinite(percent)
         && percent >= coverage
-    }, { brakeZones: manifest.expected.measuredRoute.brakeZones, coverage: manifest.expected.measuredRoute.minimumCoveragePercent }, { timeout: 90000 })
+    }, { brakeZones: manifest.expected.measuredRoute.brakeZones, coverage: manifest.expected.measuredRoute.minimumCoveragePercent }, { timeout: 90000 }))
     const measuredLiveState = Promise.all([measuredRouteVisible, measuredRouteComplete]).then(async () => ({
       brakeZones: await page.locator('.measured-brake-zones li').count(),
       badge: await page.locator('.live-measured-map-card .badge').textContent(),
     }))
-    await page.waitForFunction(() => ['complete', 'error'].includes(window.__apexReplaySummary.recordingStatus), null, { timeout: 120000 })
+    await checkpoint('raw recording replay did not complete', page.waitForFunction(() => ['complete', 'error'].includes(window.__apexReplaySummary.recordingStatus), null, { timeout: 120000 }))
     const [, , liveOverlay, measuredLive] = await Promise.all([trackVisible, carVisible, overlayLiveState, measuredLiveState])
     exact(liveOverlay.opacity, '0.61', 'live overlay opacity')
     exact(liveOverlay.deltaWidgets, 0, 'disabled overlay widget count')
@@ -202,7 +205,8 @@ async function main() {
     const lifetimeAfter = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
     exact(lifetimeAfter.totalDistanceMm, 0, 'lifetime distance after replay')
     await page.locator('button.nav-item').filter({ hasText: 'Analyze' }).click()
-    await page.getByText('Measured braking by lap distance', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
+    await checkpoint('durable lap replay analysis did not load', page.getByText('Lap replay and comparison', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('synchronized analysis trace did not load', page.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await page.locator('.measured-zone-list li').count(), manifest.expected.measuredRoute.brakeZones, 'measured analysis brake zones')
     await overlayPage.locator('.overlay-waiting').waitFor({ state: 'visible', timeout: 10000 })
     const overlayClosed = await page.evaluate(() => window.apexDesktop.closeOverlay())

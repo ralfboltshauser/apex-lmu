@@ -104,7 +104,7 @@ export function FuelCalculatorView({ live }: { live: LiveFuelEstimate | null }) 
   const spread = `${number(Math.min(...samples), language, 2)}–${number(Math.max(...samples), language, 2)}`
   const stopsLabel = plan.pitStops === 0 ? m.result.noStops : plan.pitStops === 1 ? m.result.oneStop : m.result.manyStops.replace('{count}', String(plan.pitStops))
 
-  return <div className="view view--fuel">
+  return <div className="view view--fuel" data-feedback-redact={mode === 'automatic' ? 'measured-fuel-model' : undefined}>
     <div className="page-heading">
       <div><div className="eyebrow">{m.heading.eyebrow}</div><h1>{m.heading.title}</h1><p>{m.heading.description}</p></div>
       <Button variant="secondary" icon={<RotateCcw size={15} />} onClick={() => setInputs(defaults)}>{m.heading.reset}</Button>

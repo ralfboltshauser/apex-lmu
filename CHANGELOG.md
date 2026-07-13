@@ -2,6 +2,36 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.5 — 2026-07-13
+
+### English — Durable lap analysis and private feedback
+
+Completed LMU laps now remain available across partial finishes and app restarts, while a new explicit feedback workflow keeps reports precise and privacy-masked.
+
+- **Keep every completed lap available** — Analysis stores full-resolution eligible lap payloads locally, restores them after restart, defaults to a useful completed lap, and keeps earlier laps selectable when the final lap is only partial or telemetry pauses. Lap boundaries follow the measured distance wrap and wait briefly for LMU's authoritative time, so early scoring transitions cannot truncate or mis-time a lap.
+- **Learn the centre path from trustworthy evidence** — A durable track model publishes only after at least two clean, countable LMU laps corroborate the route. Untimed, off-track, incomplete, unsafe, replay, remote, pit, and AI-controlled evidence cannot become a PB or silently bias the learned geometry.
+- **Replay the exact recorded lap** — Time and distance playback, synchronized controls, speed and brake traces, PB deltas, and brake-zone seeking make each retained lap inspectable while provisional geometry remains clearly labelled as learning.
+- **Report an exact interface problem** — Select an Apex element, review an explicit privacy notice, send masked screenshots through a durable offline outbox, and continue the resulting conversation in the new Feedback view. Telemetry, driver and server identities, local paths, recordings, and feedback threads are covered by redaction boundaries.
+
+**Known limitations**
+
+- **A complete centre path needs two clean laps** — Until enough eligible local-player evidence exists, Apex shows the exact selected driven line over a route explicitly labelled as learning or partial rather than claiming a complete centre path.
+- **Feedback synchronization uses an explicit cloud service** — Core telemetry and analysis remain local with no account or analytics. Only a report the user explicitly sends crosses the network; an internet connection is required to synchronize it and receive replies.
+
+### Deutsch — Dauerhafte Rundenanalyse und privates Feedback
+
+Abgeschlossene LMU-Runden bleiben jetzt auch nach einem Teilrunden-Finish und App-Neustarts verfügbar. Gleichzeitig hält ein neuer ausdrücklicher Feedback-Ablauf Meldungen präzise und datenschutzmaskiert.
+
+- **Behalte jede abgeschlossene Runde verfügbar** — Die Analyse speichert vollständige geeignete Rundendaten lokal, stellt sie nach einem Neustart wieder her, wählt standardmäßig eine nützliche abgeschlossene Runde und hält frühere Runden auswählbar, wenn die letzte Runde nur teilweise gefahren wurde oder die Telemetrie pausiert. Rundengrenzen folgen dem gemessenen Distanzsprung und warten kurz auf die verbindliche LMU-Rundenzeit, damit frühe Wertungsübergänge eine Runde weder abschneiden noch zeitlich falsch zuordnen.
+- **Lerne die Mittellinie aus vertrauenswürdigen Belegen** — Ein dauerhaftes Streckenmodell wird erst veröffentlicht, nachdem mindestens zwei saubere und zählbare LMU-Runden die Strecke bestätigen. Runden ohne Zeit sowie Daten von Ausritten, unvollständigen oder unsicheren Runden, Wiedergaben, Fernsteuerung, Boxenfahrten und KI-Steuerung können weder PB werden noch die gelernte Geometrie unbemerkt verzerren.
+- **Spiele die exakt aufgezeichnete Runde ab** — Wiedergabe nach Zeit oder Distanz, synchronisierte Eingaben, Geschwindigkeits- und Bremskurven, PB-Deltas und das Anspringen von Bremszonen machen jede gespeicherte Runde prüfbar. Vorläufige Geometrie bleibt dabei klar als Lernstand gekennzeichnet.
+- **Melde ein genaues Oberflächenproblem** — Wähle ein Apex-Element aus, prüfe einen ausdrücklichen Datenschutzhinweis, sende maskierte Screenshots über einen dauerhaften Offline-Ausgang und führe die Unterhaltung in der neuen Feedback-Ansicht fort. Telemetrie, Fahrer- und Serveridentitäten, lokale Pfade, Aufzeichnungen und Feedback-Unterhaltungen sind durch Maskierungsgrenzen geschützt.
+
+**Bekannte Einschränkungen**
+
+- **Eine vollständige Mittellinie benötigt zwei saubere Runden** — Bis genügend geeignete Belege des lokalen Spielers vorhanden sind, zeigt Apex die exakt ausgewählte Fahrlinie über einer ausdrücklich als lernend oder teilweise gekennzeichneten Strecke, statt eine vollständige Mittellinie zu behaupten.
+- **Die Feedback-Synchronisierung nutzt einen ausdrücklichen Cloud-Dienst** — Kerntelemetrie und Analyse bleiben ohne Konto oder Analysefunktionen lokal. Nur eine vom Nutzer ausdrücklich gesendete Meldung verlässt den Computer; für die Synchronisierung und Antworten ist eine Internetverbindung erforderlich.
+
 ## 0.2.4 — 2026-07-13
 
 ### English — Clear overlay display-mode guidance

@@ -317,6 +317,20 @@
   stroke-width: 1;
 }
 
+.circuit-lap-trace {
+  fill: none;
+  opacity: 0.72;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.circuit-lap-trace.is-reference {
+  opacity: 0.55;
+  stroke-dasharray: 3 4;
+}
+
 .circuit-segment-glow {
   opacity: 0.34;
   stroke-width: 17;

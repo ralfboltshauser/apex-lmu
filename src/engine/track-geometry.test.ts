@@ -34,11 +34,11 @@ describe('measured track geometry', () => {
     expect(zones[0].minimumSpeedKph).toBe(130)
   })
 
-  it('learns a complete route by lap distance and retains measured brake zones', () => {
+  it('keeps a one-lap route provisional while retaining measured brake zones', () => {
     const completed = buildMeasuredTrackSnapshot({ id: 'session-1', trackName: 'Measured Track', layoutName: '', trackLengthM: 1000, laps: [lap(1)] }, 'lap-1', 20)!
 
     expect(completed.completedLapCount).toBe(1)
-    expect(completed.state).toBe('complete')
+    expect(completed.state).toBe('partial')
     expect(completed.coverage).toBeGreaterThan(0.95)
     expect(completed.route.length).toBe(50)
     expect(completed.geometryFingerprint).toMatch(/^[0-9a-f]{8}$/)
@@ -55,6 +55,19 @@ describe('measured track geometry', () => {
     expect(snapshot.selectedLap).toHaveLength(25)
     expect(snapshot.route).toHaveLength(50)
     expect(snapshot.coverage).toBe(1)
+    expect(snapshot.state).toBe('partial')
+  })
+
+  it('publishes complete geometry only from the durable multi-lap track model', () => {
+    const points = lap(1).samples.map(({ distanceM, x, z }) => ({ distanceM, x, z }))
+    const snapshot = buildMeasuredTrackSnapshot({
+      id: 'session-1', trackName: 'Measured Track', layoutName: '', trackLengthM: 1000, laps: [lap(1), lap(2)],
+      trackModel: { published: true, coverage: 0.99, geometryHash: 'durable-model', points },
+    }, 'lap-2', 20)!
+
     expect(snapshot.state).toBe('complete')
+    expect(snapshot.coverage).toBe(0.99)
+    expect(snapshot.geometryFingerprint).toBe('durable-model')
+    expect(snapshot.route).toHaveLength(points.length)
   })
 })

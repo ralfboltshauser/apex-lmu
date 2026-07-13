@@ -32,6 +32,9 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	if decoded.Player.WorldPositionM == nil || *decoded.Player.WorldPositionM != (worldPositionM{X: 1200, Y: 4.5, Z: -800}) {
 		t.Fatalf("player world-position offsets decoded incorrectly: %#v", decoded.Player.WorldPositionM)
 	}
+	if decoded.Player.PathLateralM != 1.75 || decoded.Player.TrackEdgeM != 6.5 || decoded.Player.CountLapFlag != 2 {
+		t.Fatalf("player path offsets decoded incorrectly: lateral=%g edge=%g count=%d", decoded.Player.PathLateralM, decoded.Player.TrackEdgeM, decoded.Player.CountLapFlag)
+	}
 	if decoded.Player.GameElapsedSeconds == nil || *decoded.Player.GameElapsedSeconds != 901.25 || decoded.Player.LapStartSeconds == nil || *decoded.Player.LapStartSeconds != 695.15 {
 		t.Fatalf("player time offsets decoded incorrectly: elapsed=%v lapStart=%v", decoded.Player.GameElapsedSeconds, decoded.Player.LapStartSeconds)
 	}
@@ -187,6 +190,12 @@ func TestDecodeSnapshotRejectsTruncationCountsAndNonFiniteData(t *testing.T) {
 	if _, err := decodeSnapshot(raw); err == nil {
 		t.Fatal("expected non-finite world-position rejection")
 	}
+
+	raw = makeContractFixture()
+	raw[lmuVehicleScoringBase+lmuVehicleScoringSize+506] = 3
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected invalid count-lap flag rejection")
+	}
 }
 
 func TestDecodeSnapshotReportsButDoesNotRejectUnknownGameVersion(t *testing.T) {
@@ -325,6 +334,13 @@ func putScoringVehicle(raw []byte, index int, id int32, driver, name, class stri
 	putText(raw, base+36, 64, name)
 	putI16(raw, base+100, int16(7-index))
 	putF64(raw, base+104, 5000+float64(index)*100)
+	putF64(raw, base+112, 0)
+	putF64(raw, base+120, 5)
+	if player {
+		putF64(raw, base+112, 1.75)
+		putF64(raw, base+120, 6.5)
+		raw[base+506] = 2
+	}
 	putF64(raw, base+144, 205+float64(index))
 	putF64(raw, base+168, 206+float64(index))
 	if player {

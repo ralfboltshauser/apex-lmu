@@ -134,7 +134,7 @@ function MeasuredLiveView({ frame, measuredTrack }: { frame: TelemetryFrame; mea
   const brakeSegments = measuredTrack?.brakeZones.map((zone) => ({ from: zone.startDistanceM / measuredTrack.trackLengthM, to: zone.releaseDistanceM / measuredTrack.trackLengthM, color: '#ff5d57', label: `${Math.round(zone.startDistanceM)}–${Math.round(zone.releaseDistanceM)} m` })) ?? []
 
   return (
-    <div className="view view--live">
+    <div className="view view--live" data-feedback-redact="measured-live-telemetry">
       <div className="live-titlebar">
         <div className="live-titlebar__identity"><Badge tone="positive" dot>{sessionOnly ? m.measured.sessionDetected : m.common.measured}</Badge><div><h1>{frame.session.track.name}</h1><p>{frame.player.car.model} · {sessionKindLabel(frame.session.kind, m)} · {conditionLabel(frame.weather.trackCondition, m)}</p></div></div>
         <div className="live-titlebar__status"><span><CloudSun size={15} /> {m.common.track} {formatNumber(frame.weather.trackTemperatureC, language, 1)}°C</span><span><Timer size={15} /> {formatDuration(frame.sessionState.remainingMs)}</span></div>

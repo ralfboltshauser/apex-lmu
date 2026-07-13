@@ -1,0 +1,78 @@
+.nav-item__count { min-width: 17px; height: 17px; display: grid !important; place-items: center; margin-left: auto; border-radius: 999px; padding: 0 5px; background: var(--warning); color: #111; font: 7px var(--mono); }
+
+.feedback-selector-ui { position: fixed; z-index: 1000; inset: 0; pointer-events: none; }
+.feedback-selector-tip, .feedback-capturing { position: fixed; z-index: 1002; top: 16px; left: 50%; display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid rgba(185,243,74,.25); border-radius: 9px; padding: 9px 12px; background: rgba(11,13,14,.96); box-shadow: 0 12px 35px rgba(0,0,0,.45); color: var(--accent); }
+.feedback-selector-tip strong { color: var(--text); font-size: 9px; }
+.feedback-selector-tip span, .feedback-capturing span { color: var(--text-tertiary); font-size: 7px; }
+.feedback-selector-outline { position: fixed; z-index: 1001; border: 2px solid var(--accent); border-radius: 5px; background: rgba(185,243,74,.08); box-shadow: 0 0 0 9999px rgba(0,0,0,.25); }
+.feedback-capturing { pointer-events: none; }
+
+.feedback-composer-backdrop { position: fixed; z-index: 1010; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); }
+.feedback-composer { width: min(620px, 100%); max-height: calc(100vh - 48px); overflow: auto; border: 1px solid var(--line-strong); border-radius: 14px; padding: 20px; background: var(--surface); box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+.feedback-composer > header { display: flex; justify-content: space-between; gap: 18px; }
+.feedback-composer h2 { margin-top: 7px; font-size: 18px; }
+.feedback-composer header p { max-width: 470px; margin-top: 6px; color: var(--text-tertiary); font-size: 8px; line-height: 1.55; }
+.feedback-target-summary, .feedback-attachment-note, .feedback-privacy-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: var(--surface-2); color: var(--text-tertiary); }
+.feedback-target-summary > div, .feedback-attachment-note > div { min-width: 0; display: grid; gap: 4px; }
+.feedback-target-summary strong, .feedback-attachment-note strong { color: var(--text-secondary); font-size: 8px; }
+.feedback-target-summary code { overflow: hidden; font: 7px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.feedback-target-summary span, .feedback-attachment-note span, .feedback-privacy-note p { font-size: 7px; line-height: 1.5; }
+.feedback-composer-field, .feedback-reply { display: grid; gap: 7px; margin-top: 14px; }
+.feedback-composer-field > span, .feedback-reply > span { color: var(--text-secondary); font-size: 8px; font-weight: 650; }
+.feedback-composer textarea, .feedback-reply textarea { width: 100%; resize: vertical; border: 1px solid var(--line-strong); border-radius: 9px; padding: 10px; background: #0a0c0d; color: var(--text); font: 9px/1.55 var(--sans); outline: 0; }
+.feedback-composer textarea:focus, .feedback-reply textarea:focus { border-color: rgba(185,243,74,.42); box-shadow: 0 0 0 2px rgba(185,243,74,.08); }
+.feedback-privacy-note { border-color: rgba(112,218,157,.16); background: var(--positive-soft); color: var(--positive); }
+.feedback-privacy-note p { color: var(--text-tertiary); }
+.feedback-composer > footer { display: flex; justify-content: flex-end; gap: 7px; margin-top: 17px; }
+.feedback-error { margin: 10px 0; border: 1px solid rgba(255,91,73,.2); border-radius: 8px; padding: 8px 10px; background: rgba(255,91,73,.07); color: var(--critical); font-size: 8px; }
+
+.feedback-status-strip { min-height: 46px; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); }
+.feedback-status-strip > span:last-child { margin-left: auto; max-width: 650px; color: var(--text-tertiary); font-size: 6px; line-height: 1.45; text-align: right; }
+.feedback-sync-warning { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; border: 1px solid rgba(255,174,93,.2); border-radius: 8px; padding: 8px 10px; background: var(--warning-soft); color: var(--warning); font-size: 7px; }
+.feedback-view > .segmented { width: max-content; margin-bottom: 10px; }
+.feedback-inbox-layout { min-height: 530px; display: grid; grid-template-columns: minmax(255px, .72fr) minmax(430px, 1.28fr); gap: 11px; }
+.feedback-thread-list, .feedback-thread-detail { padding: 0; overflow: hidden; }
+.feedback-thread-list > button { width: 100%; display: grid; gap: 8px; border: 0; border-bottom: 1px solid var(--line); padding: 12px; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.feedback-thread-list > button:hover { background: rgba(255,255,255,.025); }
+.feedback-thread-list > button.is-active { background: var(--accent-soft); box-shadow: 2px 0 0 var(--accent) inset; }
+.feedback-thread-list > button > strong { display: -webkit-box; overflow: hidden; font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.feedback-thread-list__meta, .feedback-thread-list__detail { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.feedback-thread-list time, .feedback-thread-list small { color: var(--text-tertiary); font-size: 6px; }
+.feedback-thread-list code { color: var(--text-tertiary); font: 6px var(--mono); }
+.feedback-empty { min-height: 220px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 24px; color: var(--text-tertiary); text-align: center; }
+.feedback-empty strong { color: var(--text-secondary); font-size: 10px; }
+.feedback-empty span { max-width: 320px; font-size: 8px; line-height: 1.55; }
+
+.feedback-thread-detail { padding: 16px; }
+.feedback-thread-detail__header { border-bottom: 1px solid var(--line); padding-bottom: 13px; }
+.feedback-thread-detail__header > div { display: grid; gap: 7px; }
+.feedback-thread-detail__header > div > div { display: flex; align-items: center; gap: 8px; }
+.feedback-thread-detail__header code { color: var(--text-tertiary); font: 7px var(--mono); }
+.feedback-thread-detail__header h2 { font-size: 14px; line-height: 1.4; }
+.feedback-thread-detail__header p, .feedback-thread-loading { color: var(--text-tertiary); font-size: 7px; }
+.feedback-thread-loading { padding: 10px 0 0; }
+.feedback-conversation { display: grid; gap: 9px; margin: 15px 0; padding: 0; list-style: none; }
+.feedback-conversation li { max-width: 88%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; background: var(--surface-2); }
+.feedback-conversation li.is-human { margin-left: auto; border-color: rgba(185,243,74,.15); background: var(--accent-soft); }
+.feedback-conversation li > div { display: flex; align-items: center; gap: 7px; }
+.feedback-conversation li strong { font-size: 7px; }
+.feedback-conversation li time { margin-left: auto; color: var(--text-tertiary); font-size: 6px; }
+.feedback-conversation li p { margin-top: 7px; font-size: 9px; line-height: 1.6; white-space: pre-wrap; }
+.feedback-attachments { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.feedback-attachment { min-width: 0; margin: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); overflow: hidden; }
+.feedback-attachment img, .feedback-attachment > div { width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; object-fit: contain; background: #08090a; }
+.feedback-attachment > div { align-content: center; gap: 5px; color: var(--text-tertiary); }
+.feedback-attachment > div.is-failed { color: var(--critical); }
+.feedback-attachment figcaption { padding: 7px 8px; color: var(--text-tertiary); font: 6px var(--mono); }
+.feedback-resolution { margin: 12px 0; border: 1px solid rgba(112,218,157,.18); border-radius: 9px; padding: 10px; background: var(--positive-soft); }
+.feedback-resolution strong { color: var(--positive); font-size: 8px; }
+.feedback-resolution p { margin-top: 5px; color: var(--text-secondary); font-size: 8px; line-height: 1.55; }
+.feedback-reply { border-top: 1px solid var(--line); padding-top: 13px; }
+.feedback-reply > .button { justify-self: end; }
+.feedback-reopen { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 13px; }
+
+@media (max-width: 1080px) {
+  .feedback-inbox-layout { grid-template-columns: 1fr; }
+  .feedback-thread-list { max-height: 310px; overflow: auto; }
+  .feedback-status-strip > span:last-child { display: none; }
+}

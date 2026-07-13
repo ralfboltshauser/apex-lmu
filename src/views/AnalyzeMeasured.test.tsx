@@ -19,12 +19,16 @@ describe('measured analysis view', () => {
     const root = createRoot(container)
     await act(async () => root.render(<I18nProvider><AnalyzeView measuredTrack={measured} /></I18nProvider>))
 
-    expect(container.textContent).toContain('Measured braking by lap distance')
+    expect(container.textContent).toContain('Synchronized speed and brake trace')
     expect(container.textContent).toContain('250–400 m')
     expect(container.textContent).toContain('Peak pressure 80%')
     expect(container.querySelector('.measured-zone-list button')?.getAttribute('aria-pressed')).toBe('true')
     expect(container.querySelectorAll('.circuit-segment')).toHaveLength(1)
     expect(container.querySelector('.measured-trace polyline.speed')).not.toBeNull()
+
+    await act(async () => (container.querySelector('.measured-zone-list button') as HTMLButtonElement).click())
+    expect(container.querySelector('[data-testid="playback-value"]')?.textContent).toBe('300 m')
+    expect(container.querySelector('[data-testid="telemetry-cursor"]')?.getAttribute('x1')).toBe('300')
 
     await act(async () => root.unmount())
     container.remove()
@@ -47,9 +51,9 @@ describe('measured analysis view', () => {
     try {
       await act(async () => root.render(<I18nProvider><AnalyzeView analysisSessions={[session]} /></I18nProvider>))
       await act(async () => { await Promise.resolve() })
-      const selects = container.querySelectorAll('select')
-      expect(selects).toHaveLength(2)
-      expect((selects[1] as HTMLSelectElement).value).toBe('lap-3')
+      const lapSelect = container.querySelector('select[aria-label="Measured lap"]') as HTMLSelectElement
+      expect(lapSelect.value).toBe('lap-3')
+      expect(container.querySelector('select[aria-label="Playback speed"]')).not.toBeNull()
       expect(container.textContent).toContain('Lap 4 · Current partial lap · Not eligible as reference')
       expect(container.textContent).toContain('Selected lap 3')
       expect(container.querySelector('.measured-trace polyline.speed')).not.toBeNull()

@@ -1,10 +1,14 @@
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
+const os = require('node:os')
 const crypto = require('node:crypto')
 const readline = require('node:readline')
 const { spawn, spawnSync } = require('node:child_process')
 const { LiveSessionStore } = require('../electron/live-session-store.cjs')
+const { TelemetryDatabase } = require('../electron/telemetry-database.cjs')
+const { buildTrackModel } = require('../electron/track-model.cjs')
+const { version: appVersion } = require('../package.json')
 
 const root = path.join(__dirname, '..')
 const defaultManifest = path.join(root, 'data', 'recordings', 'apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.expected.json')
@@ -174,9 +178,15 @@ async function run(options = {}) {
   }
   args.push(`--replay=${replayPath}`, '--replay-speed=0', '--replay-strict', `--run-id=${runId}`)
   if (runner) { args = [command, ...args]; command = runner }
+  const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), 'apex-recording-analysis-'))
+  const database = await TelemetryDatabase.open({ userDataPath: temporary, appVersion, persistReplay: true })
   const child = spawn(command, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   const summary = emptySummary()
-  const analysis = new LiveSessionStore({ makeId: (() => { let id = 0; return () => `recording-${++id}` })() })
+  const finalizedEvents = []
+  const analysis = new LiveSessionStore({
+    makeId: (() => { let id = 0; return () => `recording-${++id}` })(),
+    onLapFinalized: (event) => { finalizedEvents.push(event); return database.enqueueFinalized(event) },
+  })
   let stderr = ''
   child.stderr.on('data', (chunk) => { if (stderr.length < 8192) stderr += String(chunk).slice(0, 8192 - stderr.length) })
   const timer = setTimeout(() => child.kill(), options.timeoutMs || 120000)
@@ -184,6 +194,7 @@ async function run(options = {}) {
     for await (const line of readline.createInterface({ input: child.stdout, crlfDelay: Infinity })) { const message = JSON.parse(line); accept(summary, message, runId); analysis.ingest(message) }
     const result = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal })) })
     if (result.code !== 0) fail(`bridge exited with ${result.code ?? result.signal}; ${stderr.trim()}`)
+    await database.flush()
     assertSummary(summary, manifest.expected)
     const sessions = analysis.listSessions()
     exactAnalysis(sessions.length, 1, 'analysis session count')
@@ -196,7 +207,38 @@ async function run(options = {}) {
     const routeBins = new Set(cleanPayloads.flatMap((payload) => payload.samples.map((sample) => Math.max(0, Math.min(totalBins - 1, Math.floor(sample.distanceM / 12))))))
     atLeast(routeBins.size / totalBins * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'aggregated analysis route coverage')
     exactAnalysis(brakeZoneCount(cleanPayloads.at(-1).samples), manifest.expected.measuredRoute.brakeZones, 'compacted analysis brake zones')
-  } finally { clearTimeout(timer); if (child.exitCode === null) child.kill() }
+    const durableSessions = database.listSessions()
+    exactAnalysis(durableSessions.length, 1, 'durable analysis session count')
+    const eligibleLaps = durableSessions[0].laps.filter((lap) => lap.state === 'complete' && lap.quality === 'clean' && lap.trackModelEligible)
+    if (eligibleLaps.length < manifest.expected.measuredRoute.minimumCleanLaps) fail(`durable track-model laps ${eligibleLaps.length} is below ${manifest.expected.measuredRoute.minimumCleanLaps}: ${JSON.stringify(durableSessions[0].laps)}`)
+    const durablePayload = database.getLap(durableSessions[0].id, eligibleLaps.at(-1).id)
+    if (!durablePayload?.trackModel?.published) {
+      const candidate = buildTrackModel({
+        trackKey: 'fixture-track',
+        trackLengthM: durableSessions[0].track.lengthM,
+        laps: finalizedEvents.filter((event) => event.lap.trackModelEligible).map((event) => ({ ...event, payloadHash: event.lap.id })),
+      })
+      const sources = finalizedEvents.filter((event) => event.lap.trackModelEligible).map((event) => ({
+        lap: event.lap.number,
+        samples: event.samples.length,
+        lateral: event.samples.filter((sample) => Number.isFinite(sample.pathLateralM)).length,
+        timed: event.samples.filter((sample) => sample.countLapFlag === 2).length,
+        usable: event.samples.filter((sample) => Number.isFinite(sample.pathLateralM) && sample.countLapFlag === 2).length,
+        withinEdge: event.samples.filter((sample) => Number.isFinite(sample.pathLateralM) && (!Number.isFinite(sample.trackEdgeM) || Math.abs(sample.trackEdgeM) <= 0.1 || Math.abs(sample.pathLateralM) <= Math.abs(sample.trackEdgeM) + 0.75)).length,
+        distanceRange: event.samples.reduce((range, sample) => Number.isFinite(sample.distanceIndexM) ? [Math.min(range[0], sample.distanceIndexM), Math.max(range[1], sample.distanceIndexM)] : range, [Infinity, -Infinity]),
+        distanceBins: new Set(event.samples.map((sample) => Math.floor(sample.distanceIndexM / 2))).size,
+        edgeRange: event.samples.reduce((range, sample) => Number.isFinite(sample.trackEdgeM) ? [Math.min(range[0], sample.trackEdgeM), Math.max(range[1], sample.trackEdgeM)] : range, [Infinity, -Infinity]),
+        negativeEdge: event.samples.filter((sample) => Number.isFinite(sample.trackEdgeM) && sample.trackEdgeM < -0.75).length,
+      }))
+      fail(`durable track model was not published from the real recording: ${JSON.stringify(candidate && { trackLengthM: durableSessions[0].track.lengthM, coverage: candidate.coverage, seamGapM: candidate.seamGapM, maximumJumpM: candidate.maximumJumpM, published: candidate.published, eligibleLaps: eligibleLaps.length, sources })}`)
+    }
+    atLeast(durablePayload.trackModel.coverage * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'durable track-model coverage')
+  } finally {
+    clearTimeout(timer)
+    if (child.exitCode === null) child.kill()
+    await database.close({ requireDurable: true })
+    await fsp.rm(temporary, { recursive: true, force: true })
+  }
   return { ok: true, runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, track: manifest.expected.track, car: manifest.expected.car, class: manifest.expected.carClass, opponents: summary.opponentMaximum, lastLapSeconds: [...summary.lastLaps], pitSequence: summary.pits }
 }
 

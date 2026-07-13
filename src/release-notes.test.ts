@@ -2,9 +2,9 @@ import { compareReleaseVersions, pendingReleaseNotes, releaseCatalog } from './r
 
 describe('bundled release-note catalog', () => {
   it('is newest-first, bilingual, and contains the package release history', () => {
-    expect(releaseCatalog.releases[0].version).toBe('0.2.4')
+    expect(releaseCatalog.releases[0].version).toBe('0.2.5')
     expect(releaseCatalog.releases.at(-1)?.version).toBe('0.1.0')
-    expect(releaseCatalog.releases).toHaveLength(20)
+    expect(releaseCatalog.releases).toHaveLength(21)
     for (const release of releaseCatalog.releases) {
       expect(release.en.highlights.map((item) => item.id)).toEqual(release.de.highlights.map((item) => item.id))
       expect(release.en.knownLimitations.map((item) => item.id)).toEqual(release.de.knownLimitations.map((item) => item.id))

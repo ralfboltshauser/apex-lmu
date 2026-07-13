@@ -46,4 +46,17 @@ describe('numeric view integration', () => {
     expect(container.querySelector(resultSelector)).not.toBeNull()
     await act(async () => root.unmount()); container.remove()
   })
+
+  it('marks an automatic measured fuel model as private feedback context', async () => {
+    installStorage([['apex:language', 'en']])
+    const live = {
+      sessionId: 'session', trackName: 'Private Track', carName: 'Private Car', fuelSamplesLiters: [3.4], lapTimeSamplesSeconds: [120],
+      currentFuelLiters: 40, tankCapacityLiters: 90, completedLaps: 2, currentLapProgress: 0.25, totalLaps: 30, durationSeconds: null, elapsedSeconds: 300,
+    }
+    const container = document.createElement('div'); document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<I18nProvider><FuelCalculatorView live={live} /></I18nProvider>))
+    expect(container.querySelector('.view--fuel')?.getAttribute('data-feedback-redact')).toBe('measured-fuel-model')
+    await act(async () => root.unmount()); container.remove()
+  })
 })

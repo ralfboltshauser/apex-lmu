@@ -63,6 +63,83 @@ test('a completed lap uses the official LMU lap time when the boundary publishes
   assert.equal(store.listSessions()[0].laps[0].lapTimeMs, 19_876)
 })
 
+test('an early LMU lap-number change does not cut off the measured end of the lap', () => {
+  const finalized = []
+  const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 990; distanceM += 10) {
+    store.ingest(source.frame(1, distanceM, { player: { lastLapSeconds: 18, countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  }
+  store.ingest(source.frame(2, 990, { player: { lastLapSeconds: 19.876, countLapFlag: 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  assert.equal(store.listSessions()[0].laps.filter((lap) => lap.state === 'complete').length, 0)
+
+  store.ingest(source.frame(2, 0, { player: { lastLapSeconds: 19.876, countLapFlag: 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.sampleCount, 100)
+  assert.equal(lap.lapTimeMs, 19_876)
+  assert.equal(finalized[0].samples.at(-1).distanceM, 990)
+})
+
+test('a delayed official LMU time resolves the preceding lap without reusing the stale value', () => {
+  const finalized = []
+  const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) {
+    store.ingest(source.frame(1, distanceM, { player: { lastLapSeconds: 18, countLapFlag: distanceM < 500 ? 1 : 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  }
+  store.ingest(source.frame(2, 0, { player: { lastLapSeconds: 18, countLapFlag: 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  assert.equal(finalized.length, 0)
+  assert.equal(store.listSessions()[0].laps[0].officialTimePending, true)
+
+  store.ingest(source.frame(2, 10, { player: { lastLapSeconds: 19.876, countLapFlag: 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(finalized.length, 1)
+  assert.equal(lap.lapTimeMs, 19_876)
+  assert.equal(lap.referenceEligible, true)
+  assert.equal(lap.trackModelEligible, true)
+  assert.equal(lap.officialTimePending, false)
+})
+
+test('an untimed LMU lap stays replayable but cannot become a PB or track-model source', () => {
+  const finalized = []
+  const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) store.ingest(source.frame(1, distanceM, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  store.ingest(source.frame(2, 0, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  for (let distanceM = 10; distanceM <= 60; distanceM += 10) store.ingest(source.frame(2, distanceM, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.quality, 'clean')
+  assert.equal(lap.replayable, true)
+  assert.equal(lap.referenceEligible, false)
+  assert.equal(lap.trackModelEligible, false)
+  assert.ok(lap.reasons.includes('lap-invalidated'))
+  assert.equal(finalized[0].samples.length, 100)
+})
+
+test('mixed scoring flags cannot leak an untimed lap into the track model', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) {
+    store.ingest(source.frame(1, distanceM, { player: { countLapFlag: distanceM < 500 ? 1 : 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  }
+  store.ingest(source.frame(2, 0, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  for (let distanceM = 10; distanceM <= 60; distanceM += 10) store.ingest(source.frame(2, distanceM, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.referenceEligible, false)
+  assert.equal(lap.trackModelEligible, false)
+  assert.ok(lap.reasons.includes('lap-invalidated'))
+})
+
+test('an official LMU lap time authorizes the PB even when scoring flags were transitional', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) store.ingest(source.frame(1, distanceM, { player: { countLapFlag: 1 } }))
+  store.ingest(source.frame(2, 0, { player: { lastLapSeconds: 19.876, countLapFlag: 2 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.referenceEligible, true)
+  assert.ok(!lap.reasons.includes('lap-invalidated'))
+})
+
 test('waiting and disconnect statuses preserve the logical session and completed laps', () => {
   const store = new LiveSessionStore({ makeId: () => 'stable' })
   const source = fixture()
