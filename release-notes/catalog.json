@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.2.3",
+      "releasedAt": "2026-07-13",
+      "en": {
+        "title": "Complete laps stay available in Analysis",
+        "summary": "Analysis now keeps the current driving session and its completed laps when telemetry pauses or the final lap is only partial.",
+        "highlights": [
+          { "id": "analysis-lap-history", "title": "Choose the lap you meant to inspect", "body": "A bounded main-process session store retains completed, incomplete, and current laps across bridge interruptions. Analysis defaults to the latest clean completed lap and exposes session, lap, quality, and exclusion-reason controls." },
+          { "id": "analysis-replay-proof", "title": "Validated with the real LMU recording", "body": "The 18,039-frame raw replay now verifies selectable clean laps, aggregate measured-route coverage, and all 11 expected braking zones through the same session-store path used by the desktop app." }
+        ],
+        "knownLimitations": [
+          { "id": "runtime-only-analysis", "title": "Measured lap history lasts for the current app run", "body": "High-rate position and pedal traces remain private, bounded in memory, and are not silently persisted. Under memory pressure, old trace payloads may be discarded while their lap summaries remain visible; raw .apexrec recording is the lossless opt-in path." }
+        ]
+      },
+      "de": {
+        "title": "Abgeschlossene Runden bleiben in der Analyse verfügbar",
+        "summary": "Die Analyse behält jetzt die aktuelle Fahrsitzung und ihre abgeschlossenen Runden, wenn die Telemetrie pausiert oder die letzte Runde nur teilweise gefahren wurde.",
+        "highlights": [
+          { "id": "analysis-lap-history", "title": "Wähle genau die Runde aus, die du untersuchen möchtest", "body": "Ein begrenzter Sitzungsspeicher im Hauptprozess behält abgeschlossene, unvollständige und aktuelle Runden über Unterbrechungen der Bridge hinweg. Die Analyse wählt standardmäßig die neueste saubere abgeschlossene Runde und zeigt Steuerelemente für Sitzung, Runde, Qualität und Ausschlussgründe." },
+          { "id": "analysis-replay-proof", "title": "Mit der echten LMU-Aufzeichnung geprüft", "body": "Die Rohdatenwiedergabe mit 18.039 Frames prüft jetzt auswählbare saubere Runden, die zusammengefasste Abdeckung der gemessenen Fahrlinie und alle 11 erwarteten Bremszonen über denselben Sitzungsspeicher, den die Desktop-App verwendet." }
+        ],
+        "knownLimitations": [
+          { "id": "runtime-only-analysis", "title": "Der gemessene Rundenverlauf gilt für den aktuellen App-Lauf", "body": "Hochfrequente Positions- und Pedaldaten bleiben privat, werden begrenzt im Arbeitsspeicher gehalten und nicht unbemerkt dauerhaft gespeichert. Bei Speicherdruck können alte Detaildaten verworfen werden, während ihre Rundenübersichten sichtbar bleiben; die rohe .apexrec-Aufzeichnung ist der verlustfreie optionale Pfad." }
+        ]
+      }
+    },
+    {
       "version": "0.2.2",
       "releasedAt": "2026-07-13",
       "en": {
