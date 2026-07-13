@@ -18,13 +18,17 @@ function harness(initialDisplays = [display(1, 0, 1920, 1, 0, 'Main')]) {
     mkdir: async () => {}, writeFile: async (name, value) => writes.push([name, value]), rename: async () => {},
   }
   const windows = []
+  const intervals = new Map()
+  let nextInterval = 1
   class MockWindow extends EventEmitter {
     constructor(options) {
-      super(); this.options = options; this.destroyed = false; this.shown = 0; this.bounds = null; this.mouse = null
+      super(); this.options = options; this.destroyed = false; this.shown = 0; this.bounds = null; this.mouse = null; this.moves = 0
       this.webContents = new EventEmitter(); this.webContents.id = windows.length + 10
       windows.push(this)
     }
     setAlwaysOnTop(value, level) { this.top = [value, level] }
+    isAlwaysOnTop() { return this.top?.[0] === true }
+    moveTop() { this.moves += 1 }
     setIgnoreMouseEvents(value, options) { this.mouse = [value, options] }
     loadFile() { return Promise.resolve() }
     showInactive() { this.shown += 1 }
@@ -39,8 +43,11 @@ function harness(initialDisplays = [display(1, 0, 1920, 1, 0, 'Main')]) {
     app: { getPath: () => '/tmp/apex-test' }, BrowserWindow: MockWindow, screen, fs,
     diagnostics: { record: async (...args) => logs.push(args) }, broadcast: (...args) => events.push(args),
     preloadPath: '/app/preload.cjs', rendererPath: '/app/index.html', readyTimeoutMs: 50,
+    platform: 'win32',
+    scheduleInterval: (callback, milliseconds) => { const id = nextInterval++; intervals.set(id, { callback, milliseconds }); return id },
+    cancelInterval: (id) => intervals.delete(id),
   })
-  return { manager, screen, windows, writes, events, logs }
+  return { manager, screen, windows, writes, events, logs, intervals, tickIntervals: () => { for (const { callback } of [...intervals.values()]) callback() } }
 }
 
 test('normalizes persisted config and rejects untrusted patches', () => {
@@ -73,12 +80,20 @@ test('enumerates real display geometry and opens an inactive secure window on th
   assert.deepEqual(window.bounds, { x: -2560, y: 0, width: 2560, height: 1080 })
   assert.equal(window.options.webPreferences.sandbox, true)
   assert.equal(window.shown, 1)
+  assert.deepEqual(window.top, [true, 'screen-saver'])
+  assert.equal(window.moves, 1)
+  assert.equal(h.intervals.size, 1)
+  assert.equal([...h.intervals.values()][0].milliseconds, 250)
   assert.deepEqual(window.mouse, [true, { forward: true }])
   assert.equal(h.manager.getDisplays()[1].rotation, 90)
   assert.equal(h.manager.getDisplays()[1].scaleFactor, 1.5)
   assert.equal((await h.manager.open()).ok, true)
   assert.equal(h.windows.length, 1)
   assert.equal(window.shown, 2)
+  assert.equal(window.moves, 2)
+  assert.equal(h.intervals.size, 1)
+  h.tickIntervals()
+  assert.equal(window.moves, 3)
 })
 
 test('close waits for the real closed state and reopen creates one fresh window', async () => {
@@ -88,6 +103,7 @@ test('close waits for the real closed state and reopen creates one fresh window'
   const closed = await h.manager.close()
   assert.equal(closed.state.status, 'closed')
   assert.equal(h.windows[0].destroyed, true)
+  assert.equal(h.intervals.size, 0)
   opening = h.manager.open(); await new Promise((resolve) => setImmediate(resolve)); h.manager.markRendererReady(11)
   assert.equal((await opening).ok, true)
   assert.equal(h.windows.length, 2)

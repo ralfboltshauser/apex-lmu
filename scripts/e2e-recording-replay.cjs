@@ -2,12 +2,15 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const os = require('node:os')
 const crypto = require('node:crypto')
+const { execFile } = require('node:child_process')
+const { promisify } = require('node:util')
 const { _electron: electron } = require('playwright-core')
 
 const root = path.join(__dirname, '..')
 const manifestPath = path.join(root, 'data', 'recordings', 'apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.expected.json')
 const manifest = require(manifestPath)
 const fixturePath = path.join(path.dirname(manifestPath), manifest.recording.file)
+const execFileAsync = promisify(execFile)
 
 function fail(message) { throw new Error(`Windows desktop replay E2E: ${message}`) }
 function exact(actual, expected, label) { if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`) }
@@ -15,6 +18,44 @@ function between(value, range, label) { if (!Number.isFinite(value) || value < r
 function atLeast(value, minimum, label) { if (!Number.isFinite(value) || value < minimum) fail(`${label} ${value} below ${minimum}`) }
 
 async function fixtureHash() { return crypto.createHash('sha256').update(await fs.readFile(fixturePath)).digest('hex') }
+
+async function assertWindowAbove(aboveHandle, belowHandle, raiseFirst = false) {
+  if (!/^\d+$/.test(aboveHandle) || !/^\d+$/.test(belowHandle)) fail('invalid native window handle')
+  const script = `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ApexWindowOrder {
+  [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint command);
+  [DllImport("user32.dll", SetLastError = true)] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+}
+'@
+$above = [IntPtr]::new([Int64]::Parse("${aboveHandle}"))
+$below = [IntPtr]::new([Int64]::Parse("${belowHandle}"))
+if (${raiseFirst ? '$true' : '$false'}) {
+  if (-not [ApexWindowOrder]::SetWindowPos($above, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013)) { exit 2 }
+}
+$cursor = [ApexWindowOrder]::GetTopWindow([IntPtr]::Zero)
+$aboveRank = -1
+$belowRank = -1
+$rank = 0
+while ($cursor -ne [IntPtr]::Zero -and $rank -lt 10000) {
+  if ($cursor -eq $above) { $aboveRank = $rank }
+  if ($cursor -eq $below) { $belowRank = $rank }
+  $cursor = [ApexWindowOrder]::GetWindow($cursor, 2)
+  $rank += 1
+}
+if ($aboveRank -lt 0 -or $belowRank -lt 0) { exit 3 }
+if ($aboveRank -ge $belowRank) { exit 4 }
+Write-Output "$aboveRank,$belowRank"
+`
+  try {
+    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10000 })
+  } catch (error) {
+    fail(`native z-order assertion failed (${aboveHandle} above ${belowHandle}): ${error.stderr || error.message}`)
+  }
+}
 
 async function main() {
   if (process.platform !== 'win32') fail('this source-desktop test must run on Windows')
@@ -91,6 +132,27 @@ async function main() {
     exact(overlayRuntime[0].bounds, selectedDisplay.bounds, 'overlay display bounds')
     exact(overlayRuntime[0].visible, true, 'overlay visibility')
     exact(overlayRuntime[0].alwaysOnTop, true, 'overlay always-on-top state')
+    const zOrderFixture = await application.evaluate(async ({ BrowserWindow }, bounds) => {
+      const overlay = BrowserWindow.getAllWindows().find((window) => !window.isFocusable())
+      if (!overlay) throw new Error('overlay window missing')
+      const competitor = new BrowserWindow({ ...bounds, show: false, frame: false, alwaysOnTop: true, backgroundColor: '#102030' })
+      await competitor.loadURL('data:text/html,<body style="margin:0;background:%23102030"></body>')
+      competitor.setAlwaysOnTop(true, 'screen-saver')
+      competitor.show()
+      competitor.moveTop()
+      const nativeHandle = (window) => {
+        const handle = window.getNativeWindowHandle()
+        return handle.length === 8 ? handle.readBigUInt64LE().toString() : String(handle.readUInt32LE())
+      }
+      return { competitorId: competitor.id, competitorHandle: nativeHandle(competitor), overlayHandle: nativeHandle(overlay) }
+    }, selectedDisplay.bounds)
+    // Reproduce the reported failure by placing another topmost HWND above the
+    // already-topmost overlay, then prove the Windows guard restores Apex's
+    // relative z-order without focusing it.
+    await assertWindowAbove(zOrderFixture.competitorHandle, zOrderFixture.overlayHandle, true)
+    await new Promise((resolve) => setTimeout(resolve, 750))
+    await assertWindowAbove(zOrderFixture.overlayHandle, zOrderFixture.competitorHandle)
+    await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.destroy(), zOrderFixture.competitorId)
     const started = await page.evaluate(() => window.apexDesktop.startReplayForTest())
     if (!started.ok || started.runId !== runId) fail(`replay did not start: ${JSON.stringify(started)}`)
     const trackVisible = page.getByText(manifest.expected.track, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })

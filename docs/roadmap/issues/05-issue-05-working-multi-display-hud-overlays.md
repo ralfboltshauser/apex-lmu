@@ -53,6 +53,16 @@ Additional closure hardening on `codex/complete-open-issues`:
 - the manual Windows artifact lane repeats that E2E against
   `release/win-unpacked/Apex for LMU.exe`, not only source Electron.
 
+A physical LMU report then exposed a z-order condition that the boolean
+`isAlwaysOnTop()` assertion could not detect: when focused, a borderless game
+window can move ahead of an existing HUD inside the same Win32 topmost band.
+The Windows overlay now periodically calls Electron's non-activating
+`moveTop()`, stops that guard deterministically on every close/failure path, and
+has a native E2E regression that uses `SetWindowPos` to put a competing topmost
+HWND above Apex before checking that the HUD returns above it. This does not
+change the honest exclusive-fullscreen boundary; desktop-window overlays still
+require windowed or borderless LMU.
+
 The first hosted Windows replay run then exposed a real constructor-only edge
 case: Electron clamped the initial non-resizable `1024×768` overlay to the
 taskbar work area (`1024×720`). The manager now reapplies the selected

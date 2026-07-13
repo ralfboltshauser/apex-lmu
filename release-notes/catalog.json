@@ -2,6 +2,30 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.2.2",
+      "releasedAt": "2026-07-13",
+      "en": {
+        "title": "Overlay stays above focused LMU",
+        "summary": "Apex now restores its non-activating Windows z-order when a focused borderless LMU window moves ahead of the HUD.",
+        "highlights": [
+          { "id": "focused-overlay", "title": "Keep the HUD visible while driving", "body": "A Windows-specific guard reorders the already-topmost overlay without taking keyboard focus or mouse input, including after the game raises its own topmost window." }
+        ],
+        "knownLimitations": [
+          { "id": "exclusive-fullscreen", "title": "Use borderless or windowed mode", "body": "True exclusive fullscreen can bypass composed desktop windows; Apex remains injection-free and therefore requires LMU in borderless or windowed mode for overlays." }
+        ]
+      },
+      "de": {
+        "title": "Overlay bleibt über dem fokussierten LMU",
+        "summary": "Apex stellt jetzt seine nicht aktivierende Windows-Z-Reihenfolge wieder her, wenn sich ein fokussiertes randloses LMU-Fenster vor das HUD schiebt.",
+        "highlights": [
+          { "id": "focused-overlay", "title": "Das HUD bleibt während der Fahrt sichtbar", "body": "Ein Windows-spezifischer Wächter ordnet das bereits oberste Overlay neu, ohne Tastaturfokus oder Mauseingaben zu übernehmen – auch nachdem das Spiel sein eigenes oberstes Fenster angehoben hat." }
+        ],
+        "knownLimitations": [
+          { "id": "exclusive-fullscreen", "title": "Verwende den randlosen oder Fenstermodus", "body": "Echtes exklusives Vollbild kann zusammengesetzte Desktop-Fenster umgehen. Apex bleibt frei von Injektionen und benötigt für Overlays daher den randlosen oder Fenstermodus von LMU." }
+        ]
+      }
+    },
+    {
       "version": "0.2.1",
       "releasedAt": "2026-07-13",
       "en": {
