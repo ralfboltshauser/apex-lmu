@@ -296,14 +296,23 @@ class LiveSessionStore {
     lap.maximumGapM = classified.maximumGapM
     lap.finalReasons = classified.reasons
     const observedCountFlags = fullSamples.map((sample) => sample.countLapFlag).filter((value) => value !== null)
-    const countLapValid = observedCountFlags.length === 0 || observedCountFlags.filter((value) => value === 2).length / observedCountFlags.length >= 0.98
-    if (!countLapValid) {
+    // LMU exposes three distinct scoring states: do not count, count without a
+    // time, and count with a time. Capture integrity is independent from that
+    // scoring decision, so keep an otherwise-complete lap replayable while
+    // preventing an untimed lap from becoming a PB. Older recordings without
+    // this additive field retain the pre-existing eligibility behavior.
+    const countLapTimed = observedCountFlags.length === 0
+      || finite(officialLapTimeMs)
+      || observedCountFlags.every((value) => value === 2)
+    if (!countLapTimed) {
       lap.finalReasons = [...new Set([...lap.finalReasons, 'lap-invalidated'])].sort()
-      lap.quality = lap.samples.length > 1 && lap.coverage >= LIMITED_COVERAGE ? 'limited' : 'ineligible'
     }
     lap.replayable = fullSamples.length > 1
-    lap.referenceEligible = lap.state === 'complete' && lap.quality === 'clean' && countLapValid
-    lap.trackModelEligible = lap.referenceEligible && fullSamples.some((sample) => sample.pathLateralM !== null)
+    lap.referenceEligible = lap.state === 'complete' && lap.quality === 'clean' && countLapTimed
+    lap.trackModelEligible = lap.state === 'complete'
+      && lap.quality === 'clean'
+      && countLapTimed
+      && fullSamples.some((sample) => sample.pathLateralM !== null && (sample.countLapFlag === null || sample.countLapFlag === 2))
     const finalized = {
       schemaVersion: SCHEMA_VERSION,
       qualityPolicyVersion: QUALITY_POLICY_VERSION,

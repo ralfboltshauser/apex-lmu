@@ -175,18 +175,25 @@ class TelemetryDatabase {
   }
 
   enforceRetention() {
-    const rows = this.database.prepare('SELECT id FROM sessions ORDER BY started_at DESC').all()
+    const rows = this.database.prepare('SELECT id,track_key AS trackKey,track_length_m AS trackLengthM FROM sessions ORDER BY started_at DESC').all()
     const pbSessions = new Set(this.database.prepare(`SELECT DISTINCT l.session_id AS sessionId FROM laps l JOIN sessions s ON s.id=l.session_id
       WHERE l.reference_eligible=1 AND l.lap_time_ms=(SELECT MIN(l2.lap_time_ms) FROM laps l2 JOIN sessions s2 ON s2.id=l2.session_id WHERE l2.reference_eligible=1 AND s2.track_key=s.track_key AND s2.car_key=s.car_key)`).all().map((row) => row.sessionId))
     const remove = rows.slice(this.maxSessions).map((row) => row.id).filter((id) => !pbSessions.has(id))
     let bytes = Number(this.database.prepare('SELECT COALESCE(SUM(length(compressed)),0) AS bytes FROM lap_payloads').get().bytes)
+    const affectedTracks = new Map()
     for (const row of [...rows].reverse()) {
       if (bytes <= this.maxBytes && !remove.includes(row.id)) continue
       if (pbSessions.has(row.id)) continue
       const size = Number(this.database.prepare('SELECT COALESCE(SUM(length(p.compressed)),0) AS bytes FROM lap_payloads p JOIN laps l ON l.id=p.lap_id WHERE l.session_id=?').get(row.id).bytes)
       this.database.prepare('DELETE FROM sessions WHERE id=?').run(row.id)
       bytes -= size
+      affectedTracks.set(row.trackKey, Number(row.trackLengthM))
     }
+    // A published model is derived data. Cascading deletion removes its source
+    // rows, but not the model row itself, so always rebuild affected tracks
+    // after retention. With fewer than two corroborating laps the rebuild
+    // deliberately withdraws the model.
+    for (const [trackKey, trackLengthM] of affectedTracks) this.rebuildTrackModel(trackKey, trackLengthM)
   }
 
   rowLapSummary(row) {

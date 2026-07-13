@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getFeedbackState: () => ipcRenderer.invoke('apex:get-feedback-state'),
   listFeedback: () => ipcRenderer.invoke('apex:list-feedback'),
   getFeedback: (feedbackId) => ipcRenderer.invoke('apex:get-feedback', feedbackId),
+  getFeedbackAttachment: (feedbackId, attachmentId) => ipcRenderer.invoke('apex:get-feedback-attachment', feedbackId, attachmentId),
+  consumeFeedbackThread: () => ipcRenderer.invoke('apex:consume-feedback-thread'),
   submitFeedback: (input) => ipcRenderer.invoke('apex:submit-feedback', input),
   replyFeedback: (feedbackId, body, expectedRevision) => ipcRenderer.invoke('apex:reply-feedback', feedbackId, body, expectedRevision),
   reopenFeedback: (feedbackId, expectedRevision) => ipcRenderer.invoke('apex:reopen-feedback', feedbackId, expectedRevision),

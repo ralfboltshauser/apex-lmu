@@ -10,6 +10,7 @@ import type { CreateFeedbackSchema } from './contracts'
 
 type CreateFeedbackInput = z.infer<typeof CreateFeedbackSchema>
 export type AttachmentInput = { kind: 'selected-area' | 'full-window'; mediaType: string; width: number; height: number; data: Buffer }
+type FeedbackTransaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0]
 
 function reference(publicNumber: number) {
   return `APX-${String(publicNumber).padStart(6, '0')}`
@@ -17,10 +18,6 @@ function reference(publicNumber: number) {
 
 function exposeItem(row: typeof feedbackItems.$inferSelect, firstMessage?: string) {
   return { ...row, reference: reference(row.publicNumber), firstMessage: firstMessage ?? '' }
-}
-
-async function recordEvent(executor: ReturnType<typeof getDb>, input: { installationId: string; feedbackId: string; actor: 'human' | 'agent' | 'system'; eventType: string; payload: Record<string, unknown> }) {
-  await executor.insert(feedbackEvents).values(input)
 }
 
 export async function registerInstallation(appVersion?: string, platform?: string) {
@@ -39,8 +36,9 @@ export async function authenticateInstallation(token: string | null) {
   return installation
 }
 
-async function enforceQuota(executor: ReturnType<typeof getDb>, installationId: string, kind: 'feedback' | 'message', attachmentBytes = 0) {
-  const [quota] = await executor.select().from(feedbackQuotas).where(eq(feedbackQuotas.installationId, installationId)).limit(1)
+async function enforceQuota(executor: FeedbackTransaction, installationId: string, kind: 'feedback' | 'message', attachmentBytes = 0) {
+  await executor.insert(feedbackQuotas).values({ installationId }).onConflictDoNothing()
+  const [quota] = await executor.select().from(feedbackQuotas).where(eq(feedbackQuotas.installationId, installationId)).for('update').limit(1)
   const now = new Date()
   const expired = !quota || now.getTime() - quota.windowStartedAt.getTime() >= 60 * 60 * 1000
   const current = expired ? { feedbackCount: 0, messageCount: 0, attachmentBytes: 0 } : quota
@@ -54,7 +52,7 @@ async function enforceQuota(executor: ReturnType<typeof getDb>, installationId: 
     messageCount: current.messageCount + (kind === 'message' ? 1 : 0),
     attachmentBytes: current.attachmentBytes + attachmentBytes,
   }
-  await executor.insert(feedbackQuotas).values(values).onConflictDoUpdate({ target: feedbackQuotas.installationId, set: values })
+  await executor.update(feedbackQuotas).set(values).where(eq(feedbackQuotas.installationId, installationId))
 }
 
 export async function createFeedback(installationId: string, input: CreateFeedbackInput, attachments: AttachmentInput[]) {
@@ -63,7 +61,7 @@ export async function createFeedback(installationId: string, input: CreateFeedba
   const attachmentBytes = attachments.reduce((sum, attachment) => sum + attachment.data.length, 0)
   const feedbackId = randomUUID()
   await getDb().transaction(async (tx) => {
-    await enforceQuota(tx as ReturnType<typeof getDb>, installationId, 'feedback', attachmentBytes)
+    await enforceQuota(tx, installationId, 'feedback', attachmentBytes)
     await tx.insert(feedbackItems).values({
       id: feedbackId,
       installationId,
@@ -115,10 +113,11 @@ export async function addHumanMessage(installationId: string, feedbackId: string
   if (input.expectedRevision != null && input.expectedRevision !== current.revision) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload the thread before replying')
   const nextStatus: FeedbackStatus = current.status === 'needs_user_answer' ? 'user_answered' : current.status
   await getDb().transaction(async (tx) => {
-    await enforceQuota(tx as ReturnType<typeof getDb>, installationId, 'message')
+    await enforceQuota(tx, installationId, 'message')
+    const updated = await tx.update(feedbackItems).set({ status: nextStatus, revision: current.revision + 1, updatedAt: new Date() }).where(and(eq(feedbackItems.id, feedbackId), eq(feedbackItems.revision, current.revision))).returning({ id: feedbackItems.id })
+    if (updated.length === 0) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload the thread before replying')
     const messageId = randomUUID()
     await tx.insert(feedbackMessages).values({ id: messageId, feedbackId, clientMessageId: input.clientMessageId, actor: 'human', kind: current.status === 'needs_user_answer' ? 'answer' : 'comment', body: input.body })
-    await tx.update(feedbackItems).set({ status: nextStatus, revision: current.revision + 1, updatedAt: new Date() }).where(eq(feedbackItems.id, feedbackId))
     await tx.insert(feedbackEvents).values({ installationId, feedbackId, actor: 'human', eventType: current.status === 'needs_user_answer' ? 'feedback.answered' : 'message.created', payload: { messageId, status: nextStatus } })
   })
   return getFeedback(feedbackId, installationId)
@@ -129,7 +128,8 @@ export async function reopenFeedback(installationId: string, feedbackId: string,
   if (!canTransition('human', current.status, 'reopened')) throw new HttpError(409, 'invalid_transition', `Cannot reopen feedback from ${current.status}`)
   if (expectedRevision != null && expectedRevision !== current.revision) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload before reopening')
   await getDb().transaction(async (tx) => {
-    await tx.update(feedbackItems).set({ status: 'reopened', revision: current.revision + 1, updatedAt: new Date(), resolvedAt: null }).where(eq(feedbackItems.id, feedbackId))
+    const updated = await tx.update(feedbackItems).set({ status: 'reopened', revision: current.revision + 1, updatedAt: new Date(), resolvedAt: null }).where(and(eq(feedbackItems.id, feedbackId), eq(feedbackItems.revision, current.revision))).returning({ id: feedbackItems.id })
+    if (updated.length === 0) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload before reopening')
     await tx.insert(feedbackEvents).values({ installationId, feedbackId, actor: 'human', eventType: 'feedback.reopened', payload: { status: 'reopened' } })
   })
   return getFeedback(feedbackId, installationId)
@@ -144,8 +144,9 @@ export async function addAgentMessage(feedbackId: string, input: { clientMessage
   if (input.kind === 'question' && !canTransition('agent', current.status, nextStatus)) throw new HttpError(409, 'invalid_transition', `Cannot ask a question from ${current.status}`)
   const messageId = randomUUID()
   await getDb().transaction(async (tx) => {
+    const updated = await tx.update(feedbackItems).set({ status: nextStatus, revision: current.revision + 1, updatedAt: new Date() }).where(and(eq(feedbackItems.id, feedbackId), eq(feedbackItems.revision, current.revision))).returning({ id: feedbackItems.id })
+    if (updated.length === 0) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload before replying')
     await tx.insert(feedbackMessages).values({ id: messageId, feedbackId, clientMessageId: input.clientMessageId, actor: 'agent', kind: input.kind, body: input.body })
-    await tx.update(feedbackItems).set({ status: nextStatus, revision: current.revision + 1, updatedAt: new Date() }).where(eq(feedbackItems.id, feedbackId))
     await tx.insert(feedbackEvents).values({ installationId: current.installationId, feedbackId, actor: 'agent', eventType: input.kind === 'question' ? 'agent.question' : 'agent.message', payload: { messageId, kind: input.kind, body: input.body.slice(0, 300), status: nextStatus } })
   })
   return getFeedback(feedbackId)
@@ -158,14 +159,15 @@ export async function updateFeedbackStatus(feedbackId: string, input: { status: 
   if (input.duplicateOf) await getFeedback(input.duplicateOf)
   const now = new Date()
   await getDb().transaction(async (tx) => {
-    await tx.update(feedbackItems).set({
+    const updated = await tx.update(feedbackItems).set({
       status: input.status,
       revision: current.revision + 1,
       updatedAt: now,
       resolvedAt: ['resolved', 'dismissed', 'duplicate'].includes(input.status) ? now : null,
       resolutionSummary: input.summary ?? null,
       duplicateOf: input.duplicateOf ?? null,
-    }).where(eq(feedbackItems.id, feedbackId))
+    }).where(and(eq(feedbackItems.id, feedbackId), eq(feedbackItems.revision, current.revision))).returning({ id: feedbackItems.id })
+    if (updated.length === 0) throw new HttpError(409, 'revision_conflict', 'Feedback changed; reload before updating status')
     let messageId: string | undefined
     if (input.summary) {
       messageId = randomUUID()

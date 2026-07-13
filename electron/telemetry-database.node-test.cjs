@@ -6,7 +6,7 @@ const path = require('node:path')
 const { DatabaseSync } = require('node:sqlite')
 const { TelemetryDatabase } = require('./telemetry-database.cjs')
 
-function event({ sessionId = 'session-1', lapId = 'lap-1', lapTimeMs = 90_000, source = 'live', lateral = 2 } = {}) {
+function event({ sessionId = 'session-1', lapId = 'lap-1', lapTimeMs = 90_000, source = 'live', lateral = 2, startedAt = '2026-07-13T10:00:00.000Z' } = {}) {
   const radius = 100
   const length = 2 * Math.PI * radius
   const samples = []
@@ -16,8 +16,8 @@ function event({ sessionId = 'session-1', lapId = 'lap-1', lapTimeMs = 90_000, s
   }
   return {
     schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1',
-    session: { id: sessionId, source, state: 'active', startedAt: '2026-07-13T10:00:00.000Z', updatedAt: '2026-07-13T10:02:00.000Z', trackKey: 'test||628', track: { name: 'Test', layout: '', lengthM: length }, car: { id: 7, name: 'Test Car', class: 'GT3' }, interruptionCount: 0 },
-    lap: { id: lapId, number: 1, state: 'complete', startedAt: '2026-07-13T10:00:00.000Z', endedAt: '2026-07-13T10:02:00.000Z', lapTimeMs, quality: 'clean', reasons: [], coverage: 1, maximumGapM: 1, sampleCount: samples.length, replayable: true, referenceEligible: true, trackModelEligible: true },
+    session: { id: sessionId, source, state: 'active', startedAt, updatedAt: startedAt, trackKey: 'test||628', track: { name: 'Test', layout: '', lengthM: length }, car: { id: 7, name: 'Test Car', class: 'GT3' }, interruptionCount: 0 },
+    lap: { id: lapId, number: 1, state: 'complete', startedAt, endedAt: startedAt, lapTimeMs, quality: 'clean', reasons: [], coverage: 1, maximumGapM: 1, sampleCount: samples.length, replayable: true, referenceEligible: true, trackModelEligible: true },
     samples,
   }
 }
@@ -63,5 +63,22 @@ test('payload corruption is detected before samples reach the renderer', async (
   raw.close()
   database = await TelemetryDatabase.open({ userDataPath: root, databasePath, appVersion: '1.0.0' })
   assert.throws(() => database.getLap('session-1', 'lap-1'))
+  await database.close()
+})
+
+test('retention rebuilds derived models after deleting source laps', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', maxSessions: 1 })
+  await database.enqueueFinalized(event({ sessionId: 'older', lapId: 'older-lap', lapTimeMs: 89_000, startedAt: '2026-07-13T10:00:00.000Z' }))
+  await database.enqueueFinalized(event({ sessionId: 'newer', lapId: 'newer-lap', lapTimeMs: 91_000, startedAt: '2026-07-13T11:00:00.000Z' }))
+
+  const sessions = database.listSessions()
+  assert.deepEqual(sessions.map((session) => session.id), ['newer', 'older'])
+  // The older session is the PB and is retained; force byte retention to remove
+  // the non-PB source and ensure its geometry is no longer advertised.
+  database.maxBytes = 1
+  database.enforceRetention()
+  assert.deepEqual(database.listSessions().map((session) => session.id), ['older'])
+  assert.equal(database.getLap('older', 'older-lap').trackModel, null)
   await database.close()
 })

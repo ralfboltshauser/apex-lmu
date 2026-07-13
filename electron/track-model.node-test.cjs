@@ -34,3 +34,30 @@ test('off-track observations and ineligible laps cannot move the learned route',
   const near = (candidate) => candidate.points.reduce((best, point) => Math.abs(point.distanceM - 200) < Math.abs(best.distanceM - 200) ? point : best)
   assert.ok(Math.hypot(near(model).x - near(baseline).x, near(model).z - near(baseline).z) < 0.2)
 })
+
+test('one eligible lap remains a draft instead of publishing an uncorroborated route', () => {
+  const length = 2 * Math.PI * 100
+  const model = buildTrackModel({ trackKey: 'test', trackLengthM: length, laps: [circleLap({ id: 'only' })] })
+  assert.equal(model.coverage > 0.97, true)
+  assert.equal(model.published, false)
+})
+
+test('one unsafe sample rejects that lap\'s entire distance bin', () => {
+  const length = 2 * Math.PI * 100
+  const clean = circleLap({ id: 'clean' })
+  const unsafe = circleLap({ id: 'unsafe' })
+  for (const sample of unsafe.samples) {
+    if (sample.distanceIndexM < 200 || sample.distanceIndexM >= 202) continue
+    const scale = (Math.hypot(sample.x, sample.z) + 15) / Math.hypot(sample.x, sample.z)
+    sample.x *= scale
+    sample.z *= scale
+    sample.pathLateralM = 0
+    sample.trackEdgeM = 100
+  }
+  unsafe.samples.find((sample) => sample.distanceIndexM === 200).x = Number.NaN
+
+  const baseline = buildTrackModel({ trackKey: 'test', trackLengthM: length, laps: [clean] })
+  const model = buildTrackModel({ trackKey: 'test', trackLengthM: length, laps: [clean, unsafe] })
+  const near = (candidate) => candidate.points.reduce((best, point) => Math.abs(point.distanceM - 201) < Math.abs(best.distanceM - 201) ? point : best)
+  assert.ok(Math.hypot(near(model).x - near(baseline).x, near(model).z - near(baseline).z) < 0.2)
+})

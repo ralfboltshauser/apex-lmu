@@ -46,7 +46,7 @@ class FeedbackService {
 
   async initialize() {
     await this.store.initialize()
-    if (this.store.state.credential) {
+    if (this.store.state.credential || this.store.state.outbox.length) {
       await this.sync().catch((error) => this.log('warning', 'initial-sync-failed', error.message))
       this.timer = this.setIntervalFn(() => void this.sync().catch((error) => this.log('warning', 'poll-failed', error.message)), POLL_INTERVAL_MS)
       this.timer.unref?.()
@@ -71,6 +71,28 @@ class FeedbackService {
   getState() { return publicState(this.store.state) }
   list() { return this.getState().items }
   get(feedbackId) { return this.store.state.items[feedbackId] ?? null }
+
+  async load(feedbackId) {
+    await this.store.initialize()
+    const cached = this.get(feedbackId)
+    if (!feedbackId || feedbackId.startsWith('local:') || !this.store.state.credential) return cached
+    try {
+      const item = await this.client.get(this.token(), feedbackId)
+      await this.store.mutate((state) => ({ ...state, items: { ...state.items, [item.id]: { ...item, syncState: 'synced' } } }))
+      this.changed()
+      return this.get(feedbackId)
+    } catch (error) {
+      this.log('warning', 'thread-load-failed', error.message)
+      if (cached) return cached
+      throw error
+    }
+  }
+
+  async attachment(feedbackId, attachmentId) {
+    const token = this.token()
+    if (!token || !feedbackId || feedbackId.startsWith('local:')) throw new Error('Feedback screenshot is not available until synchronization completes')
+    return this.client.attachment(token, feedbackId, attachmentId)
+  }
 
   async submit(payload) {
     if (!payload || typeof payload.comment !== 'string' || !payload.comment.trim() || payload.comment.length > 10_000) throw new Error('Feedback comment is required and must be at most 10,000 characters')

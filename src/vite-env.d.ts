@@ -73,6 +73,8 @@ interface ApexDesktopApi {
   getFeedbackState(): Promise<ApexFeedbackState>
   listFeedback(): Promise<ApexFeedbackItem[]>
   getFeedback(feedbackId: string): Promise<ApexFeedbackItem | null>
+  getFeedbackAttachment(feedbackId: string, attachmentId: string): Promise<{ dataUrl: string }>
+  consumeFeedbackThread(): Promise<string | null>
   submitFeedback(input: { comment: string; context: Omit<ApexFeedbackContext, 'appVersion' | 'platform' | 'screen' | 'redactionVersion'>; selectedArea?: ApexFeedbackImage | null; fullWindow?: ApexFeedbackImage | null }): Promise<ApexFeedbackItem | null>
   replyFeedback(feedbackId: string, body: string, expectedRevision: number): Promise<ApexFeedbackItem | null>
   reopenFeedback(feedbackId: string, expectedRevision: number): Promise<ApexFeedbackItem | null>

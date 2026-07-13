@@ -287,7 +287,7 @@ export function SettingsView() {
             </div></div>
             {updateState?.progress && <div className="update-progress"><span style={{ width: `${Math.max(0, Math.min(100, updateState.progress.percent))}%` }} /><small>{Math.floor(updateState.progress.percent)}{m.units.percent}</small></div>}
             {updateState?.releaseNotes && <details className="update-notes"><summary>{formatMessage(m.updates.changed, { version: updateState.availableVersion ?? '' })}</summary><pre>{updateState.releaseNotes}</pre></details>}
-            {updateState?.error && <details className="update-notes update-notes--error"><summary>{m.updates.errorDetails}</summary><pre>{updateState.error.code ? `${updateState.error.code}: ` : ''}{updateState.error.message}\n{updateState.error.stack}</pre><p>{m.updates.portableCopy}</p></details>}
+            {updateState?.error && <details className="update-notes update-notes--error" data-feedback-redact="diagnostic-details"><summary>{m.updates.errorDetails}</summary><pre>{updateState.error.code ? `${updateState.error.code}: ` : ''}{updateState.error.message}\n{updateState.error.stack}</pre><p>{m.updates.portableCopy}</p></details>}
           </Card>
           </>}
 
@@ -307,14 +307,14 @@ export function SettingsView() {
 
           <Card>
             <CardHeader eyebrow={m.connection.gameEyebrow} title={m.connection.gameTitle} action={<StatusBadge value={diagnostics?.installation ?? null} available={m.status.found} />} />
-            <div className="path-field"><div><FolderOpen size={16} /><span><small>{m.connection.installationFolder}</small><strong>{lmuPath || m.connection.noneSelected}</strong></span></div><Button variant="secondary" size="sm" onClick={() => void autoDetectLmu()} disabled={!window.apexDesktop || diagnosing}>{m.connection.autoDetect}</Button><Button variant="secondary" size="sm" onClick={() => void chooseLmu()} disabled={!window.apexDesktop}>{m.connection.browse}</Button></div>
+            <div className="path-field" data-feedback-redact="local-path"><div><FolderOpen size={16} /><span><small>{m.connection.installationFolder}</small><strong>{lmuPath || m.connection.noneSelected}</strong></span></div><Button variant="secondary" size="sm" onClick={() => void autoDetectLmu()} disabled={!window.apexDesktop || diagnosing}>{m.connection.autoDetect}</Button><Button variant="secondary" size="sm" onClick={() => void chooseLmu()} disabled={!window.apexDesktop}>{m.connection.browse}</Button></div>
             <div className="integration-checks">
               <div><StatusIcon value={sharedMemoryReady} /><span><strong>{m.connection.executable}</strong><small>{m.connection.executableHint}</small></span><StatusBadge value={sharedMemoryReady} available={m.status.confirmed} /></div>
               <div><StatusIcon value={diagnostics?.sharedMemoryInterface ?? null} /><span><strong>{m.connection.sharedMemory}</strong><small>{m.connection.sharedMemoryHint}</small></span><StatusBadge value={diagnostics?.sharedMemoryInterface ?? null} available={m.status.present} /></div>
               <div><StatusIcon value={diagnostics?.telemetryFolder ?? null} /><span><strong>{m.connection.telemetry}</strong><small>{m.connection.telemetryHint}</small></span><StatusBadge value={diagnostics?.telemetryFolder ?? null} available={m.status.folderFound} /></div>
               <div><StatusIcon value={diagnostics?.setupFolder ?? null} /><span><strong>{m.connection.setupDirectory}</strong><small>{m.connection.setupHint}</small></span><StatusBadge value={diagnostics?.setupFolder ?? null} available={m.status.folderFound} /></div>
             </div>
-            {discovery && <details className="discovery-details"><summary>{formatMessage(m.connection.discovery, { count: discovery.attempts.length })}</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
+            {discovery && <details className="discovery-details" data-feedback-redact="local-path"><summary>{formatMessage(m.connection.discovery, { count: discovery.attempts.length })}</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
           <Card>
             <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Badge tone={overlayDisplays?.length ? 'positive' : overlayDisplays ? 'warning' : 'neutral'}>{overlayDisplays ? formatMessage(m.overlay.displayCount, { count: overlayDisplays.length }) : m.status.notChecked}</Badge>} />
@@ -375,18 +375,18 @@ export function SettingsView() {
               {recording.status !== 'replaying' && <Button variant="secondary" icon={<Play size={14} />} onClick={() => void startReplay()} disabled={!window.apexDesktop || ['recording', 'starting', 'stopping'].includes(recording.status)}>{m.data.recorder.replay}</Button>}
               {recording.status === 'replaying' && <Button variant="secondary" icon={<Square size={13} />} onClick={() => void window.apexDesktop?.stopReplay()}>{m.data.recorder.stopReplay}</Button>}
             </div>
-            <div className="recording-detail"><strong>{recording.message || m.data.recorder.ready}</strong>{recording.path && <span title={recording.path}>{recording.path}</span>}</div>
+            <div className="recording-detail" data-feedback-redact="local-path"><strong>{recording.message || m.data.recorder.ready}</strong>{recording.path && <span title={recording.path}>{recording.path}</span>}</div>
             <div className="support-privacy"><ShieldCheck size={15} /><span><strong>{m.data.recorder.privateTitle}</strong>{m.data.recorder.privateCopy}</span></div>
           </Card>
 
-          <Card className="lifetime-card">
+          <Card className="lifetime-card" data-feedback-redact="measured-lifetime-stats">
             <CardHeader eyebrow={m.data.lifetime.eyebrow} title={m.data.lifetime.title} description={m.data.lifetime.description} action={<Badge tone={lifetimeHealth?.status === 'ready' ? 'positive' : lifetimeHealth?.status === 'future-schema' || lifetimeHealth?.status === 'error' ? 'warning' : 'neutral'}>{lifetimeHealth ? m.data.lifetime.health[lifetimeHealth.status === 'future-schema' ? 'futureSchema' : lifetimeHealth.status === 'read-only' ? 'readOnly' : lifetimeHealth.status] : m.status.notChecked}</Badge>} />
             <div className="lifetime-summary"><div><small>{m.data.lifetime.total}</small><strong>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format((lifetime?.totalDistanceMm || 0) / 1_000_000)} {m.data.lifetime.kilometers}</strong></div><div><small>{m.data.lifetime.trackedSince}</small><strong>{lifetime?.trackedSince ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(lifetime.trackedSince)) : '—'}</strong></div></div>
             {lifetime?.vehicles.length ? <div className="lifetime-vehicles">{lifetime.vehicles.map((vehicle) => <div key={vehicle.id}><span><strong>{vehicle.name}</strong><small>{vehicle.className} · {formatMessage(m.data.lifetime.sessions, { count: vehicle.sessions })} · {formatMessage(m.data.lifetime.lastDriven, { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(vehicle.lastSeenAt)) })}</small></span><b>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(vehicle.distanceMm / 1_000_000)} {m.data.lifetime.kilometers}</b></div>)}</div> : <p className="diagnostics-intro">{lifetime?.status === 'error' ? lifetime.message : m.data.lifetime.noDistance}</p>}
             {lifetimeHealth?.status === 'future-schema' && <p className="diagnostics-intro">{m.data.lifetime.futureSchema}</p>}
             {lifetimeHealth?.status === 'error' && <p className="diagnostics-intro">{m.data.lifetime.recovery}{lifetimeHealth.message ? ` ${lifetimeHealth.message}` : ''}</p>}
             <dl className="lifetime-ledger-details">
-              <div><dt>{m.data.lifetime.database}</dt><dd title={lifetimeHealth?.path}>{lifetimeHealth?.path || '—'}</dd></div>
+              <div data-feedback-redact="local-path"><dt>{m.data.lifetime.database}</dt><dd title={lifetimeHealth?.path}>{lifetimeHealth?.path || '—'}</dd></div>
               <div><dt>{m.data.lifetime.lastBackup}</dt><dd>{lifetimeHealth?.lastBackup ? <><span>{lifetimeHealth.lastBackup.file}</span><code title={lifetimeHealth.lastBackup.sha256}>{lifetimeHealth.lastBackup.sha256.slice(0, 12)}…</code></> : m.data.lifetime.noBackup}</dd></div>
             </dl>
             <div className="support-privacy"><ShieldCheck size={15} /><span>{m.data.lifetime.coverage}</span></div>
@@ -396,7 +396,7 @@ export function SettingsView() {
 
           <Card id="settings-data">
             <CardHeader eyebrow={m.data.folderEyebrow} title={m.data.folderTitle} action={<Badge tone="neutral">{m.data.localOnly}</Badge>} />
-            <div className="path-field"><div><Database size={16} /><span><small>{m.data.userData}</small><strong>{environment?.userDataPath ?? m.data.desktopOnly}</strong></span></div><Button variant="secondary" size="sm" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openDataFolder()} disabled={!window.apexDesktop}>{m.data.openFolder}</Button></div>
+            <div className="path-field" data-feedback-redact="local-path"><div><Database size={16} /><span><small>{m.data.userData}</small><strong>{environment?.userDataPath ?? m.data.desktopOnly}</strong></span></div><Button variant="secondary" size="sm" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openDataFolder()} disabled={!window.apexDesktop}>{m.data.openFolder}</Button></div>
           </Card>
           </>}
 

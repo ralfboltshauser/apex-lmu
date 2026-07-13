@@ -27,6 +27,8 @@ import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
 import { pendingReleaseNotes, type ReleaseNote } from './release-notes'
 import { buildMeasuredTrackSnapshot, type MeasuredLapRecord, type MeasuredTrackSnapshot } from './engine'
+import { FeedbackProvider } from './feedback/FeedbackProvider'
+import { FeedbackView } from './feedback/FeedbackView'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
@@ -155,15 +157,15 @@ function Onboarding({ onComplete, onDemo }: { onComplete: () => void; onDemo: ()
           <div className="eyebrow">{m.connection.step}</div><h1>{m.connection.title}</h1><p>{m.connection.summary}</p>
           <div className={`detection-card ${found ? 'is-found' : ''}`}>
             <div className="detection-card__icon">{found ? <Check size={20} /> : <Radio size={20} />}</div>
-            <div><strong>{found ? m.connection.found : m.connection.automaticDetection}</strong><span>{found ? detectedPath : detectionMessage}</span></div>
+            <div><strong>{found ? m.connection.found : m.connection.automaticDetection}</strong><span data-feedback-redact={found ? 'local-path' : undefined}>{found ? detectedPath : detectionMessage}</span></div>
             {!found && <Button variant="secondary" size="sm" onClick={() => void detect()}>{checking ? m.connection.searching : m.connection.detect}</Button>}
             {found && <Badge tone="positive">{m.connection.interfaceFound}</Badge>}
           </div>
-          {!found && discovery && <div className="manual-path"><label htmlFor="lmu-path">{m.connection.installationFolder}</label><div><input id="lmu-path" value={manualPath} onChange={(event) => setManualPath(event.target.value)} placeholder={m.connection.folderPlaceholder} onKeyDown={(event) => { if (event.key === 'Enter') void inspectManualPath() }} /><Button variant="secondary" size="sm" onClick={() => void inspectManualPath()} disabled={!manualPath.trim() || checking}>{m.connection.check}</Button><Button variant="secondary" size="sm" onClick={() => void chooseInstallation()}>{m.connection.browse}</Button></div><small>{m.connection.browseHint}</small></div>}
-          {discovery && <details className="discovery-details"><summary>{m.connection.discoveryDetails}</summary><div><p>{m.connection.discoveryExplanationBefore} <code>{discovery.expectations.appId}</code>. {m.connection.discoveryExplanationAfter} <code>{discovery.expectations.manifest}</code>.</p>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {m.connection.expected} {check.expected}{check.optional ? ` (${m.connection.optional})` : ''}</small>)}{attempt.fixes.map((fix) => <small key={fix}>{m.connection.fix} {fix}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
+          {!found && discovery && <div className="manual-path"><label htmlFor="lmu-path">{m.connection.installationFolder}</label><div data-feedback-redact="local-path"><input id="lmu-path" value={manualPath} onChange={(event) => setManualPath(event.target.value)} placeholder={m.connection.folderPlaceholder} onKeyDown={(event) => { if (event.key === 'Enter') void inspectManualPath() }} /><Button variant="secondary" size="sm" onClick={() => void inspectManualPath()} disabled={!manualPath.trim() || checking}>{m.connection.check}</Button><Button variant="secondary" size="sm" onClick={() => void chooseInstallation()}>{m.connection.browse}</Button></div><small>{m.connection.browseHint}</small></div>}
+          {discovery && <details className="discovery-details" data-feedback-redact="local-path"><summary>{m.connection.discoveryDetails}</summary><div><p>{m.connection.discoveryExplanationBefore} <code>{discovery.expectations.appId}</code>. {m.connection.discoveryExplanationAfter} <code>{discovery.expectations.manifest}</code>.</p>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {m.connection.expected} {check.expected}{check.optional ? ` (${m.connection.optional})` : ''}</small>)}{attempt.fixes.map((fix) => <small key={fix}>{m.connection.fix} {fix}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           <div className="connection-facts"><div><i><Check size={12} /></i><span><strong>{m.connection.liveTelemetry}</strong>{m.connection.officialSharedMemory}</span></div><div><i><Check size={12} /></i><span><strong>{m.connection.recordedSessions}</strong>{m.connection.nativeDuckDb}</span></div><div><i><Check size={12} /></i><span><strong>{m.connection.setupManagement}</strong>{m.connection.backups}</span></div></div>
           {found && <div className="onboarding-system-check"><Button variant="secondary" size="sm" onClick={() => void verifySystem()} disabled={checking}>{checking ? m.connection.testingBridge : m.connection.runSystemCheck}</Button>{systemReport && <span className={systemReport.checks.some((item) => item.status === 'fail') ? 'is-warning' : 'is-pass'}>{formatMessage(m.connection.checksPassed, { passed: systemReport.checks.filter((item) => item.status === 'pass').length, total: systemReport.checks.length })}</span>}</div>}
-          {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>{m.connection.fix} {item.fixes[0]}</small>}</div>)}
+          {systemReport?.checks.filter((item) => item.status !== 'pass').map((item) => <div className="onboarding-fix" data-feedback-redact="diagnostic-details" key={item.id}><strong>{item.title}</strong><span>{item.summary}</span>{item.fixes[0] && <small>{m.connection.fix} {item.fixes[0]}</small>}</div>)}
           <div className="onboarding-step__actions"><Button variant="secondary" onClick={() => setStep(0)}>{m.connection.back}</Button><Button disabled={!found || !systemReport || systemReport.checks.some((item) => item.status === 'fail')} onClick={() => setStep(2)}>{m.connection.continue} <ArrowRight size={15} /></Button></div>
         </div>}
 
@@ -352,7 +354,8 @@ export default function App() {
         id: lap.id, number: lap.number, state: lap.state, quality: lap.quality,
         samples: analysisLapCache.current.get(`${session.id}:${lap.id}`)?.samples ?? [],
       }))
-      setMeasuredTrack(buildMeasuredTrackSnapshot({ id: session.id, trackName: session.track.name, layoutName: session.track.layout, trackLengthM: session.track.lengthM, laps }, selected.id))
+      const selectedPayload = analysisLapCache.current.get(`${session.id}:${selected.id}`)
+      setMeasuredTrack(buildMeasuredTrackSnapshot({ id: session.id, trackName: session.track.name, layoutName: session.track.layout, trackLengthM: session.track.lengthM, laps, trackModel: selectedPayload?.trackModel }, selected.id))
     }
     const scheduleRefresh = async () => {
       if (refreshing) { refreshPending = true; return }
@@ -416,8 +419,8 @@ export default function App() {
     return () => window.removeEventListener('apex:open-replay', openReplay)
   }, [])
 
+  const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
   const renderView = () => {
-    const source = demoRunning ? 'demo' as const : realConnected ? 'live' as const : 'offline' as const
     switch (view) {
       case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} measuredTrack={measuredTrack} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
       case 'fuel': return <FuelCalculatorView live={liveFuel} />
@@ -425,6 +428,7 @@ export default function App() {
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />
       case 'overlays': return <OverlaysView onOpenOverlay={openOverlay} />
+      case 'feedback': return <FeedbackView />
       case 'settings': return <SettingsView />
       default: return <HomeView source={source} frame={liveFrame} onNavigate={setView} onImport={importTelemetry} />
     }
@@ -432,12 +436,14 @@ export default function App() {
 
   return (
     <>
-      <Shell view={view} onViewChange={setView} connected={demoRunning || realConnected} demoRunning={demoRunning} onToggleDemo={toggleDemo}>
-        {renderView()}
-      </Shell>
+      <FeedbackProvider view={view} source={source} onOpenView={() => setView('feedback')}>
+        <Shell view={view} onViewChange={setView} connected={demoRunning || realConnected} demoRunning={demoRunning} onToggleDemo={toggleDemo}>
+          {renderView()}
+        </Shell>
+      </FeedbackProvider>
       {onboarding && <Onboarding onComplete={completeOnboarding} onDemo={() => setDemoRunning(true)} />}
       {!onboarding && whatsNew.length > 0 && <WhatsNewDialog releases={whatsNew} onDone={() => acknowledgeWhatsNew(false)} onViewAll={() => acknowledgeWhatsNew(true)} />}
-      <div className="toast-region" aria-live="polite">
+      <div className="toast-region" data-feedback-redact="notifications" aria-live="polite">
         {toasts.map((toast) => <div className="toast" key={toast.id}><div><Check size={15} /></div><span><strong>{toast.title}</strong><small>{toast.body}</small></span><button type="button" aria-label={appCopy.common.dismiss} onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}><X size={14} /></button></div>)}
       </div>
     </>

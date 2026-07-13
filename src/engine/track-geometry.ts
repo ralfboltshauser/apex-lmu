@@ -186,7 +186,7 @@ export function buildMeasuredTrackSnapshot(session: MeasuredSessionRecord, selec
   const route = learnedRoute?.length ? learnedRoute : aggregateRoute(routeSource, session.trackLengthM, binSizeM)
   const totalBins = Math.max(1, Math.ceil(session.trackLengthM / binSizeM))
   const coverage = learnedRoute ? session.trackModel!.coverage : Math.min(1, route.length / totalBins)
-  const state = route.length === 0 ? 'empty' : learnedRoute ? 'complete' : routeLaps.length > 0 && coverage >= 0.82 ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
+  const state = route.length === 0 ? 'empty' : learnedRoute ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
   return {
     sessionId: session.id,
     trackName: session.trackName,

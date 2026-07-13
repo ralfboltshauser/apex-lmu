@@ -63,6 +63,44 @@ test('a completed lap uses the official LMU lap time when the boundary publishes
   assert.equal(store.listSessions()[0].laps[0].lapTimeMs, 19_876)
 })
 
+test('an untimed LMU lap stays replayable but cannot become a PB or track-model source', () => {
+  const finalized = []
+  const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) store.ingest(source.frame(1, distanceM, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  store.ingest(source.frame(2, 0, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.quality, 'clean')
+  assert.equal(lap.replayable, true)
+  assert.equal(lap.referenceEligible, false)
+  assert.equal(lap.trackModelEligible, false)
+  assert.ok(lap.reasons.includes('lap-invalidated'))
+  assert.equal(finalized[0].samples.length, 100)
+})
+
+test('mixed scoring flags cannot leak an untimed lap into the track model', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) {
+    store.ingest(source.frame(1, distanceM, { player: { countLapFlag: distanceM < 500 ? 1 : 2, pathLateralM: 0, trackEdgeM: 8 } }))
+  }
+  store.ingest(source.frame(2, 0, { player: { countLapFlag: 1, pathLateralM: 0, trackEdgeM: 8 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.referenceEligible, false)
+  assert.equal(lap.trackModelEligible, false)
+  assert.ok(lap.reasons.includes('lap-invalidated'))
+})
+
+test('an official LMU lap time authorizes the PB even when scoring flags were transitional', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) store.ingest(source.frame(1, distanceM, { player: { countLapFlag: 1 } }))
+  store.ingest(source.frame(2, 0, { player: { lastLapSeconds: 19.876, countLapFlag: 2 } }))
+  const lap = store.listSessions()[0].laps[0]
+  assert.equal(lap.referenceEligible, true)
+  assert.ok(!lap.reasons.includes('lap-invalidated'))
+})
+
 test('waiting and disconnect statuses preserve the logical session and completed laps', () => {
   const store = new LiveSessionStore({ makeId: () => 'stable' })
   const source = fixture()

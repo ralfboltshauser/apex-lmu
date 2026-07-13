@@ -22,21 +22,54 @@ function tangentAt(samples, index) {
   return length > 0.05 ? { x: dx / length, z: dz / length } : null
 }
 
+function representative(values) {
+  const normalX = median(values.map((value) => value.normalX))
+  const normalZ = median(values.map((value) => value.normalZ))
+  const normalLength = Math.hypot(normalX, normalZ)
+  return {
+    distanceM: median(values.map((value) => value.distanceM)),
+    x: median(values.map((value) => value.x)),
+    y: median(values.map((value) => value.y)),
+    z: median(values.map((value) => value.z)),
+    lateralM: median(values.map((value) => value.lateralM)),
+    normalX: normalLength > 0.001 ? normalX / normalLength : 0,
+    normalZ: normalLength > 0.001 ? normalZ / normalLength : 0,
+  }
+}
+
 function observationsFor(laps, trackLengthM, binSizeM) {
   const bins = new Map()
   for (const lap of laps) {
     if (!lap?.lap?.trackModelEligible || !Array.isArray(lap.samples) || lap.samples.length < 2) continue
-    const samples = lap.samples.filter((sample) => finite(sample.distanceIndexM) && finite(sample.x) && finite(sample.y) && finite(sample.z))
+    const distanceSamples = lap.samples.filter((sample) => finite(sample.distanceIndexM))
+    const samples = distanceSamples.filter((sample) => finite(sample.x) && finite(sample.y) && finite(sample.z))
+    const lapBins = new Map()
+    const rejectedBins = new Set()
+    for (const sample of distanceSamples) {
+      if (finite(sample.x) && finite(sample.y) && finite(sample.z)) continue
+      const bin = Math.max(0, Math.min(Math.ceil(trackLengthM / binSizeM) - 1, Math.floor(sample.distanceIndexM / binSizeM)))
+      rejectedBins.add(bin)
+    }
     for (let index = 0; index < samples.length; index += 1) {
       const sample = samples[index]
-      if (sample.countLapFlag !== null && sample.countLapFlag !== 2) continue
-      if (!finite(sample.pathLateralM)) continue
-      if (finite(sample.trackEdgeM) && Math.abs(sample.trackEdgeM) > 0.1 && Math.abs(sample.pathLateralM) > Math.abs(sample.trackEdgeM) + 0.75) continue
-      const tangent = tangentAt(samples, index)
-      if (!tangent) continue
       const bin = Math.max(0, Math.min(Math.ceil(trackLengthM / binSizeM) - 1, Math.floor(sample.distanceIndexM / binSizeM)))
-      const list = bins.get(bin) ?? []
+      const countable = sample.countLapFlag === null || sample.countLapFlag === 2
+      const withinTrack = !finite(sample.trackEdgeM) || Math.abs(sample.trackEdgeM) <= 0.1 || Math.abs(sample.pathLateralM) <= Math.abs(sample.trackEdgeM) + 0.75
+      if (!countable || !finite(sample.pathLateralM) || !withinTrack) { rejectedBins.add(bin); continue }
+      const tangent = tangentAt(samples, index)
+      if (!tangent) { rejectedBins.add(bin); continue }
+      const list = lapBins.get(bin) ?? []
       list.push({ distanceM: sample.distanceIndexM, x: sample.x, y: sample.y, z: sample.z, lateralM: sample.pathLateralM, normalX: -tangent.z, normalZ: tangent.x })
+      lapBins.set(bin, list)
+    }
+    // Give each lap at most one vote per distance bin. If any sample in the
+    // bin is explicitly non-countable or outside the reported edge, discard
+    // that lap's entire bin so a partial off-track observation cannot bias the
+    // median toward whichever samples happened to remain.
+    for (const [bin, values] of lapBins) {
+      if (rejectedBins.has(bin) || values.length === 0) continue
+      const list = bins.get(bin) ?? []
+      list.push(representative(values))
       bins.set(bin, list)
     }
   }
@@ -61,7 +94,8 @@ function signScore(bins, sign) {
 
 function buildTrackModel({ trackKey, trackLengthM, laps, binSizeM = DEFAULT_BIN_M }) {
   if (typeof trackKey !== 'string' || !trackKey || !finite(trackLengthM) || trackLengthM <= 0 || !Array.isArray(laps)) return null
-  const bins = observationsFor(laps, trackLengthM, binSizeM)
+  const eligibleLaps = laps.filter((lap) => lap?.lap?.trackModelEligible && Array.isArray(lap.samples) && lap.samples.length >= 2)
+  const bins = observationsFor(eligibleLaps, trackLengthM, binSizeM)
   const totalBins = Math.max(1, Math.ceil(trackLengthM / binSizeM))
   const scoreNegative = signScore(bins, -1)
   const scorePositive = signScore(bins, 1)
@@ -84,8 +118,8 @@ function buildTrackModel({ trackKey, trackLengthM, laps, binSizeM = DEFAULT_BIN_
   const seamGapM = points.length > 1 ? Math.hypot(points[0].x - points.at(-1).x, points[0].z - points.at(-1).z) : Infinity
   let maximumJumpM = 0
   for (let index = 1; index < points.length; index += 1) maximumJumpM = Math.max(maximumJumpM, Math.hypot(points[index].x - points[index - 1].x, points[index].z - points[index - 1].z))
-  const published = coverage >= 0.97 && points.length > 10 && seamGapM <= 60 && maximumJumpM <= 80
-  const sourceHashes = laps.filter((lap) => lap?.lap?.trackModelEligible && typeof lap.payloadHash === 'string').map((lap) => lap.payloadHash).sort()
+  const sourceHashes = eligibleLaps.filter((lap) => typeof lap.payloadHash === 'string').map((lap) => lap.payloadHash).sort()
+  const published = sourceHashes.length >= 2 && coverage >= 0.97 && points.length > 10 && seamGapM <= 60 && maximumJumpM <= 80
   const sourceHash = stableHash(sourceHashes)
   const canonical = points.map((point) => [Math.round(point.distanceM * 1000), Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000), point.observations, Math.round(point.spreadM * 1000)])
   return { schemaVersion: 1, algorithmVersion: TRACK_MODEL_ALGORITHM, trackKey, trackLengthM, binSizeM, coverage, published, lateralSign, seamGapM, maximumJumpM, sourceHash, geometryHash: stableHash(canonical), points }

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Check, Crosshair, Image, ShieldCheck, X } from 'lucide-react'
 import { Button } from '../components/ui'
-import { formatMessage, useI18n, useMessages } from '../i18n'
+import { useI18n, useMessages } from '../i18n'
 import { feedbackMessages } from './messages'
 
 const EMPTY_STATE: ApexFeedbackState = { status: 'ready', pending: 0, unread: 0, needsAnswer: 0, items: [] }
@@ -38,9 +38,9 @@ function selectorFor(element: Element) {
   return parts.join(' > ') || element.tagName.toLowerCase()
 }
 
-function elementContext(element: Element, selectedText = ''): ApexFeedbackElementContext {
+function elementContext(element: Element, selectedText = '', redactAll = false): ApexFeedbackElementContext {
   const rect = element.getBoundingClientRect()
-  const redacted = Boolean(element.closest('[data-feedback-redact]'))
+  const redacted = redactAll || Boolean(element.closest('[data-feedback-redact]'))
   const name = element.getAttribute('aria-label') || element.getAttribute('title') || (element as HTMLElement).innerText?.trim().replace(/\s+/g, ' ').slice(0, 512)
   return {
     feedbackId: element.getAttribute('data-feedback-id') || undefined,
@@ -55,10 +55,12 @@ function elementContext(element: Element, selectedText = ''): ApexFeedbackElemen
   }
 }
 
-async function privacySafeCapture(rect: ApexFeedbackElementContext['rect']) {
+async function privacySafeCapture(rect: ApexFeedbackElementContext['rect'], redactWorkspace = false) {
   if (!window.apexDesktop?.captureFeedback) return { selectedArea: null, fullWindow: null }
   const hidden = [...document.querySelectorAll<HTMLElement>('[data-feedback-ui]')].map((element) => ({ element, visibility: element.style.visibility }))
-  const masks = [...document.querySelectorAll<HTMLElement>('[data-feedback-redact]')].map((element) => {
+  const privateElements = new Set([...document.querySelectorAll<HTMLElement>('[data-feedback-redact]')])
+  if (redactWorkspace) document.querySelectorAll<HTMLElement>('.workspace__content').forEach((element) => privateElements.add(element))
+  const masks = [...privateElements].map((element) => {
     const bounds = element.getBoundingClientRect()
     const mask = document.createElement('div')
     mask.dataset.feedbackUi = 'mask'
@@ -91,14 +93,14 @@ export function FeedbackProvider({ children, view, source, onOpenView }: { child
   const [error, setError] = useState('')
 
   const refresh = useCallback(async () => {
-    if (!window.apexDesktop) return
-    setState(await window.apexDesktop.syncFeedback())
+    const request = window.apexDesktop?.syncFeedback?.()
+    if (request) setState(await request)
   }, [])
 
   const openThread = useCallback((feedbackId: string) => {
     setSelectedThreadId(feedbackId)
     onOpenView()
-    void window.apexDesktop?.markFeedbackRead(feedbackId).then(setState)
+    void window.apexDesktop?.markFeedbackRead?.(feedbackId)?.then(setState)
   }, [onOpenView])
 
   const startSelection = useCallback(() => {
@@ -107,22 +109,24 @@ export function FeedbackProvider({ children, view, source, onOpenView }: { child
       const ancestor = selection.getRangeAt(0).commonAncestorContainer
       const element = ancestor.nodeType === Node.ELEMENT_NODE ? ancestor as Element : ancestor.parentElement
       if (element && !element.closest('[data-feedback-ui]')) {
-        const context = elementContext(element, selection.toString())
+        const context = elementContext(element, selection.toString(), source === 'live')
         setCapturing(true)
-        void privacySafeCapture(context.rect).then((images) => setDraft({ element: context, ...images })).finally(() => setCapturing(false))
+        void privacySafeCapture(context.rect, source === 'live').then((images) => setDraft({ element: context, ...images })).finally(() => setCapturing(false))
         return
       }
     }
     setDraft(null)
     setError('')
     setSelecting(true)
-  }, [])
+  }, [source])
 
   useEffect(() => {
-    void window.apexDesktop?.getFeedbackState().then(setState)
-    const stopChanged = window.apexDesktop?.onFeedbackChanged(setState)
-    const stopShortcut = window.apexDesktop?.onFeedbackShortcut(startSelection)
-    const stopOpen = window.apexDesktop?.onOpenFeedbackThread(openThread)
+    const stopChanged = window.apexDesktop?.onFeedbackChanged?.(setState)
+    const stopShortcut = window.apexDesktop?.onFeedbackShortcut?.(startSelection)
+    const handleOpen = (feedbackId: string) => { openThread(feedbackId); void window.apexDesktop?.consumeFeedbackThread() }
+    const stopOpen = window.apexDesktop?.onOpenFeedbackThread?.(handleOpen)
+    void window.apexDesktop?.getFeedbackState?.()?.then(setState)
+    void window.apexDesktop?.consumeFeedbackThread?.()?.then((feedbackId) => { if (feedbackId) openThread(feedbackId) })
     return () => { stopChanged?.(); stopShortcut?.(); stopOpen?.() }
   }, [openThread, startSelection])
 
@@ -146,16 +150,16 @@ export function FeedbackProvider({ children, view, source, onOpenView }: { child
       if (!element || element.closest('[data-feedback-ui]')) return
       event.preventDefault()
       event.stopPropagation()
-      const context = elementContext(element, window.getSelection()?.toString() || '')
+      const context = elementContext(element, window.getSelection()?.toString() || '', source === 'live')
       setSelecting(false)
       setHovered(null)
       setCapturing(true)
-      void privacySafeCapture(context.rect).then((images) => setDraft({ element: context, ...images })).finally(() => setCapturing(false))
+      void privacySafeCapture(context.rect, source === 'live').then((images) => setDraft({ element: context, ...images })).finally(() => setCapturing(false))
     }
     document.addEventListener('pointermove', move, true)
     document.addEventListener('click', choose, true)
     return () => { document.removeEventListener('pointermove', move, true); document.removeEventListener('click', choose, true) }
-  }, [selecting])
+  }, [selecting, source])
 
   const submit = async () => {
     if (!draft || !comment.trim() || submitting) return
@@ -206,8 +210,4 @@ export function useFeedback() {
   const value = useContext(FeedbackContext)
   if (!value) throw new Error('useFeedback must be used inside FeedbackProvider')
   return value
-}
-
-export function feedbackQueueLabel(count: number, languageMessages: ReturnType<typeof useMessages<typeof feedbackMessages>>) {
-  return formatMessage(languageMessages.inbox.queued, { count })
 }

@@ -1,4 +1,5 @@
 import { ZodError, z } from 'zod'
+import sharp from 'sharp'
 import { bearerToken, validAdminToken } from '@/auth'
 import { acceptedAttachmentTypes, AgentMessageSchema, CreateFeedbackSchema, CreateMessageSchema, FeedbackStatusSchema, ListQuerySchema, MAX_ATTACHMENT_BYTES, MAX_COMBINED_ATTACHMENT_BYTES, StatusMutationSchema } from '@/contracts'
 import { HttpError } from '@/http-error'
@@ -43,7 +44,16 @@ async function parseAttachments(form: FormData): Promise<AttachmentInput[]> {
     if (!acceptedAttachmentTypes.has(value.type) || value.size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, 'attachment_invalid', 'A screenshot type or size is not accepted')
     const size = dimensions[field]
     if (!size) throw new HttpError(400, 'attachment_dimensions', 'Screenshot dimensions are required')
-    result.push({ kind, mediaType: value.type, width: size.width, height: size.height, data: Buffer.from(await value.arrayBuffer()) })
+    try {
+      const sanitized = await sharp(Buffer.from(await value.arrayBuffer()), { limitInputPixels: 20_000_000, failOn: 'warning' })
+        .rotate()
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer({ resolveWithObject: true })
+      if (sanitized.info.width !== size.width || sanitized.info.height !== size.height || sanitized.data.length > MAX_ATTACHMENT_BYTES) throw new Error('Screenshot dimensions or encoded size are invalid')
+      result.push({ kind, mediaType: 'image/jpeg', width: sanitized.info.width, height: sanitized.info.height, data: sanitized.data })
+    } catch {
+      throw new HttpError(413, 'attachment_invalid', 'A screenshot could not be validated safely')
+    }
   }
   if (result.reduce((sum, attachment) => sum + attachment.data.length, 0) > MAX_COMBINED_ATTACHMENT_BYTES) throw new HttpError(413, 'attachments_too_large', 'The combined screenshots are too large')
   return result
@@ -66,7 +76,7 @@ async function handleGet(request: Request, context: RouteContext) {
     }
     if (path.length === 4 && path[2] === 'attachments') {
       const attachment = await getAttachment(path[1], path[3], installation.id)
-      return new Response(attachment.data, { headers: { 'Content-Type': attachment.mediaType, 'Content-Length': String(attachment.bytes), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
+      return new Response(new Uint8Array(attachment.data), { headers: { 'Content-Type': attachment.mediaType, 'Content-Length': String(attachment.bytes), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
     }
     return json({ feedback: await getFeedback(path[1], installation.id) })
   }
@@ -79,7 +89,7 @@ async function handleGet(request: Request, context: RouteContext) {
     }
     if (path.length === 5 && path[3] === 'attachments') {
       const attachment = await getAttachment(path[2], path[4])
-      return new Response(attachment.data, { headers: { 'Content-Type': attachment.mediaType, 'Content-Length': String(attachment.bytes), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
+      return new Response(new Uint8Array(attachment.data), { headers: { 'Content-Type': attachment.mediaType, 'Content-Length': String(attachment.bytes), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } })
     }
     return json({ feedback: await getFeedback(path[2]) })
   }

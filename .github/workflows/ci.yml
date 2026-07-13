@@ -25,6 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run build:site
+      - run: npm run build:feedback-api
       - run: npm run test:all
       - run: npm audit --audit-level=high
 

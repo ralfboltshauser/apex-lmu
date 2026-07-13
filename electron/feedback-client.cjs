@@ -48,6 +48,29 @@ class FeedbackClient {
     return this.request(`/feedback/${encodeURIComponent(feedbackId)}`, { token }).then((data) => data.feedback)
   }
 
+  async attachment(token, feedbackId, attachmentId) {
+    let response
+    try {
+      response = await this.fetch(`${this.baseUrl}/feedback/${encodeURIComponent(feedbackId)}/attachments/${encodeURIComponent(attachmentId)}`, { headers: { Authorization: `Bearer ${token}` } })
+    } catch (error) {
+      const failure = new Error(error instanceof Error ? error.message : String(error))
+      failure.code = 'network'
+      throw failure
+    }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      const failure = new Error(payload?.error?.message || `Feedback service returned HTTP ${response.status}`)
+      failure.code = payload?.error?.code || `http-${response.status}`
+      failure.status = response.status
+      throw failure
+    }
+    const mediaType = String(response.headers.get('content-type') || '').split(';')[0]
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) throw new Error('Feedback service returned an unsupported screenshot type')
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (buffer.length > 2 * 1024 * 1024) throw new Error('Feedback screenshot exceeded the size limit')
+    return { dataUrl: `data:${mediaType};base64,${buffer.toString('base64')}` }
+  }
+
   async submit(token, payload) {
     const form = new FormData()
     form.set('metadata', JSON.stringify({ clientRequestId: payload.clientRequestId, comment: payload.comment, context: payload.context }))

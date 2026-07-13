@@ -226,6 +226,7 @@ release workflow until signing is configured.
 | `electron` | Sandboxed desktop shell, file services and overlay lifecycle |
 | `bridge` | Windows LMU shared-memory sidecar and deterministic fixture tests |
 | `apps/website` | Motion-led public website deployed by Vercel |
+| `apps/feedback-api` | Explicit opt-in feedback service; see [privacy and operations](docs/FEEDBACK.md) |
 | `docs` | Product decisions, architecture, validation and roadmap |
 
 ## Contributing and security

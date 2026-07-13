@@ -29,6 +29,7 @@ let statsDatabase
 let statsError = null
 let liveSessionStore
 let feedbackService
+let pendingFeedbackThreadId = null
 let telemetryDatabase
 let telemetryDatabaseError = null
 let quitFlushStarted = false
@@ -167,7 +168,12 @@ ipcMain.handle('apex:get-analysis-lap', async (_event, sessionId, lapId) => {
 ipcMain.handle('apex:get-analysis-health', () => ({ ...(liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }), storage: telemetryDatabase?.getHealth() ?? { status: 'error', message: telemetryDatabaseError || 'unavailable' } }))
 ipcMain.handle('apex:get-feedback-state', () => feedbackService?.getState() ?? { status: 'ready', pending: 0, unread: 0, needsAnswer: 0, items: [] })
 ipcMain.handle('apex:list-feedback', () => feedbackService?.list() ?? [])
-ipcMain.handle('apex:get-feedback', (_event, feedbackId) => typeof feedbackId === 'string' && feedbackId.length <= 96 ? feedbackService?.get(feedbackId) ?? null : null)
+ipcMain.handle('apex:get-feedback', (_event, feedbackId) => typeof feedbackId === 'string' && feedbackId.length <= 96 ? feedbackService?.load(feedbackId) ?? null : null)
+ipcMain.handle('apex:get-feedback-attachment', (_event, feedbackId, attachmentId) => {
+  if (typeof feedbackId !== 'string' || feedbackId.length > 96 || typeof attachmentId !== 'string' || attachmentId.length > 96) throw new Error('Feedback screenshot ID is invalid')
+  return feedbackService.attachment(feedbackId, attachmentId)
+})
+ipcMain.handle('apex:consume-feedback-thread', () => { const feedbackId = pendingFeedbackThreadId; pendingFeedbackThreadId = null; return feedbackId })
 ipcMain.handle('apex:submit-feedback', async (_event, input = {}) => {
   if (!feedbackService || !mainWindow || mainWindow.isDestroyed()) throw new Error('Feedback service is unavailable')
   const display = screen.getDisplayMatching(mainWindow.getBounds())
@@ -346,11 +352,12 @@ app.whenReady().then(async () => {
   })
   await overlayManager.initialize()
   const openFeedbackThread = (feedbackId) => {
+    pendingFeedbackThreadId = feedbackId
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
-    mainWindow.webContents.send('apex:open-feedback-thread', feedbackId)
+    if (!mainWindow.webContents.isLoadingMainFrame()) mainWindow.webContents.send('apex:open-feedback-thread', feedbackId)
   }
   feedbackService = new FeedbackService({
     app,
