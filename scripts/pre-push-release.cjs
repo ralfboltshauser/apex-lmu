@@ -34,14 +34,17 @@ let pushedHead = null
 for (const update of updates) {
   if (zero.test(update.localSha)) continue
   pushedHead = update.localSha
-  let base = update.remoteSha
-  if (zero.test(base)) {
-    try { base = git(['merge-base', update.localSha, 'origin/main']) } catch { base = `${update.localSha}^` }
+  let changedBase = update.remoteSha
+  if (zero.test(changedBase)) {
+    try { changedBase = git(['merge-base', update.localSha, 'origin/main']) } catch { changedBase = `${update.localSha}^` }
   }
-  const files = git(['diff', '--name-only', base, update.localSha]).split('\n').filter(Boolean)
+  const files = git(['diff', '--name-only', changedBase, update.localSha]).split('\n').filter(Boolean)
   if (files.some((file) => desktopFiles.has(file) || desktopPrefixes.some((prefix) => file.startsWith(prefix)))) {
     needsRelease = true
-    comparisonBase = base
+    // A release version is relative to the last mainline baseline, not the
+    // previous commit on an in-progress PR branch. This permits CI fixes before
+    // publication without requiring a second, artificial version increment.
+    try { comparisonBase = git(['merge-base', update.localSha, 'origin/main']) } catch { comparisonBase = changedBase }
     break
   }
 }

@@ -38,6 +38,12 @@ Implemented on `codex/complete-open-issues`:
   compatibility, immediate language switching, and safe write-failure behavior;
 - complete offline version history under Settings → About.
 
+The release guard also distinguishes the pushed branch delta from the release
+baseline: it detects desktop changes against the previous remote branch head,
+but validates the version increment against the `origin/main` merge base. This
+allows a CI correction on an unreleased version without forcing a fictitious
+second bump, while a desktop release that still matches main remains blocked.
+
 Focused catalog, Electron, renderer-integration, i18n, TypeScript, production
 build, and visual Electron smoke checks pass. The GitHub issue remains open until
 the final release runs a real packaged Windows N→N+1 update and proves user-data

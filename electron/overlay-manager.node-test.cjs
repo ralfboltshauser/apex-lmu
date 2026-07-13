@@ -70,6 +70,7 @@ test('enumerates real display geometry and opens an inactive secure window on th
   assert.equal(window.options.show, false)
   assert.equal(window.options.focusable, false)
   assert.equal(window.options.skipTaskbar, true)
+  assert.deepEqual(window.bounds, { x: -2560, y: 0, width: 2560, height: 1080 })
   assert.equal(window.options.webPreferences.sandbox, true)
   assert.equal(window.shown, 1)
   assert.deepEqual(window.mouse, [true, { forward: true }])

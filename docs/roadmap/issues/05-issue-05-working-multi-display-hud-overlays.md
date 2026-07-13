@@ -53,6 +53,13 @@ Additional closure hardening on `codex/complete-open-issues`:
 - the manual Windows artifact lane repeats that E2E against
   `release/win-unpacked/Apex for LMU.exe`, not only source Electron.
 
+The first hosted Windows replay run then exposed a real constructor-only edge
+case: Electron clamped the initial non-resizable `1024×768` overlay to the
+taskbar work area (`1024×720`). The manager now reapplies the selected
+display's exact full DIP bounds after `BrowserWindow` creation and a unit
+regression preserves that contract. The native E2E intentionally remains
+strict so the corrective run must prove the real Windows result.
+
 Local evidence is green for 9 OverlayManager tests, 5 focused renderer/model
 tests, the source-Electron lifecycle smoke, i18n and typecheck. The complete
 NSIS + portable build also contains the current overlay manager, renderer,

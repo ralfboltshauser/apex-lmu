@@ -229,6 +229,10 @@ class OverlayManager {
       webPreferences: { preload: this.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
     this.window = window
+    // Windows can clamp a non-resizable BrowserWindow's constructor bounds to
+    // the taskbar-excluding work area. Reapply the selected display's full DIP
+    // bounds after creation so the HUD canvas still covers borderless LMU.
+    window.setBounds(display.bounds)
     window.setAlwaysOnTop(true, 'screen-saver')
     window.setIgnoreMouseEvents(this.config.clickThrough, { forward: true })
     window.on('closed', () => {
