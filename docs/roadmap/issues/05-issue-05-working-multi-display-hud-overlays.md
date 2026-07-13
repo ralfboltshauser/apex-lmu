@@ -3,7 +3,7 @@ title: "Working multi-display HUD overlays"
 issue: 5
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/5"
 issue_state: "open"
-implementation_status: "shipped in v0.1.14; closure hardening implemented locally; native source/package acceptance pending"
+implementation_status: "shipped in v0.1.14; hosted native source acceptance passed; packaged/hardware acceptance pending"
 plan_order: 5
 phase: 1
 workstream: "desktop-overlay-runtime"
@@ -61,13 +61,13 @@ regression preserves that contract. The native E2E intentionally remains
 strict so the corrective run must prove the real Windows result.
 
 Local evidence is green for 9 OverlayManager tests, 5 focused renderer/model
-tests, the source-Electron lifecycle smoke, i18n and typecheck. The complete
-NSIS + portable build also contains the current overlay manager, renderer,
-preload and bridge and passes generated SHA-256 verification; it has not been
-claimed as runtime proof. The issue remains open until the source and packaged
-checks run on native hosted Windows and the physical multi-monitor/borderless
-matrix is recorded. Xvfb and mocked display topology are not being presented as
-physical Windows proof.
+tests, the source-Electron lifecycle smoke, i18n and typecheck. Hosted Windows
+Actions run `29215503714` now proves exact full-display bounds, topmost and
+non-focusable state, live configuration/content, cleanup and deterministic
+close in source Electron. The complete NSIS + portable build contains the same
+manager, renderer, preload and bridge and passes generated SHA-256 verification;
+its runtime lane and the physical multi-monitor/borderless matrix remain open.
+CI topology is not presented as physical multi-display proof.
 
 > Implementation update (2026-07-12): PR #12 landed this feature on `main` in
 > commit `9660be5` and shipped as `v0.1.14`, while GitHub issue #5 remains open.

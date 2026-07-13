@@ -4,7 +4,7 @@ issue: 13
 issue_url: "https://github.com/ralfboltshauser/apex-lmu/issues/13"
 issue_state: "open"
 labels: ["documentation", "enhancement"]
-implementation_status: "implemented locally; Linux and Windows-binary replay pass; hosted Windows Electron E2E pending"
+implementation_status: "implemented; hosted Windows raw and source-desktop replay pass; packaged-mainline replay pending"
 plan_order: 3
 phase: 0
 workstream: "windows-end-to-end-validation"
@@ -67,12 +67,13 @@ live route capture waits for the manifest's zone count, measured classification
 and minimum coverage together; both snapshots are retained through correlated
 completion. Analysis-route assertions remain separate and run afterwards.
 
-The complete real fixture passes through the current Linux bridge and the
-compiled Windows bridge under Wine with the exact expected aggregates. Go,
-Electron service, script, TypeScript, and build checks pass locally. The GitHub
-issue stays open until the branch is published and the new source-desktop E2E
-job passes on a hosted Windows runner; Wine is not claimed as proof of Electron
-or native Win32 desktop behavior.
+The complete fixture passes through the current Linux bridge, the compiled
+Windows bridge under Wine, and hosted native Windows source Electron with the
+exact expected aggregates and UI states. GitHub Actions run `29215503714`
+completed both `verify` and `windows-bridge-self-test`; the latter carried the
+raw fixture through the full desktop harness. The remaining release gate is the
+same E2E against the unpacked packaged mainline application. Physical LMU and
+multi-display checks remain separate and are not inferred from CI.
 
 ## Outcome
 
