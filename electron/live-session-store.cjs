@@ -8,6 +8,8 @@ const LIMITED_COVERAGE = 0.8
 const MAX_FINAL_SAMPLES = 4096
 const MAX_CURRENT_SAMPLES = 500000
 const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024
+const OFFICIAL_LAP_TIME_GRACE_SECONDS = 1
+const OFFICIAL_LAP_TIME_GRACE_FRAMES = 100
 
 function finite(value) { return typeof value === 'number' && Number.isFinite(value) }
 function normalize(value) { return String(value || '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') }
@@ -24,6 +26,8 @@ function lapStart(message) { return finite(message.player?.lapStartSeconds) ? me
 function currentLapNumber(message) { return Number.isSafeInteger(message.player?.lap) ? Math.max(1, message.player.lap) : 1 }
 function sourceKind(message) { return message.source === 'recording-replay' ? 'recording-replay' : 'live' }
 function safeLength(message) { return Math.max(1, finite(message.session?.trackLengthM) ? message.session.trackLengthM : 1) }
+function officialLapSeconds(message) { return finite(message.player?.lastLapSeconds) ? message.player.lastLapSeconds : null }
+function changedOfficialLapSeconds(current, previous) { return finite(current) && current > 0 && (!finite(previous) || previous <= 0 || Math.abs(current - previous) > 0.000001) }
 
 function compactSamples(samples, maximum = MAX_FINAL_SAMPLES) {
   if (samples.length <= maximum) return samples.map((sample) => ({ ...sample }))
@@ -114,7 +118,10 @@ class LiveSessionStore {
     }
     this.updateSessionSource(message)
 
-    if (message.playerTelemetryAvailable !== false) this.ingestVehicleFrame(message)
+    const officialSeconds = officialLapSeconds(message)
+    this.reconcilePendingLap(message, officialSeconds)
+    if (this.active.currentLap && finite(officialSeconds) && officialSeconds <= 0) this.active.currentLap.officialResetObserved = true
+    if (message.playerTelemetryAvailable !== false) this.ingestVehicleFrame(message, officialSeconds)
     this.active.lastFrame = this.frameIdentity(message)
     this.active.updatedAt = message.capturedAt || this.now().toISOString()
     this.revision += 1
@@ -169,7 +176,7 @@ class LiveSessionStore {
       id, revision: this.revision, source: sourceKind(message), state: 'active', startedAt: createdAt, updatedAt: createdAt, endedAt: null,
       trackKey: sessionTrackKey(message), track: { name: message.session.track, layout: message.session.layout || '', lengthM: safeLength(message) },
       car: { id: Number.isSafeInteger(message.player.id) ? message.player.id : 0, name: message.player.name || '', class: message.player.class || '' },
-      sourceSegments: [], interruptionCount: 0, laps: [], currentLap: null, lastFrame: null,
+      sourceSegments: [], interruptionCount: 0, laps: [], currentLap: null, pendingLap: null, lastFrame: null, lastVehicleFrame: null,
     }
     this.sessions.push(this.active)
     this.health.sessions += 1
@@ -185,21 +192,20 @@ class LiveSessionStore {
     else segment.lastSequence = message.sequence
   }
 
-  ingestVehicleFrame(message) {
+  ingestVehicleFrame(message, officialSeconds) {
     const identity = this.frameIdentity(message)
-    const previous = this.active.lastFrame
+    const previous = this.active.lastVehicleFrame
     const boundary = previous && this.lapBoundary(previous, identity, this.active.track.lengthM)
     if (!this.active.currentLap) this.startLap(message, identity)
     else if (boundary) {
       if (boundary === 'lap-counter-jump') this.active.currentLap.reasons.add(boundary)
-      const officialLapTimeMs = finite(message.player?.lastLapSeconds) && message.player.lastLapSeconds > 0
-        ? message.player.lastLapSeconds * 1000
-        : null
-      this.finalizeCurrent('complete', officialLapTimeMs)
+      this.completeCurrentAtBoundary(message, officialSeconds)
       this.startLap(message, identity)
     }
+    this.active.lastVehicleFrame = identity
     const lap = this.active.currentLap
     if (!lap) return
+    if (identity.lap > lap.number + 1) lap.reasons.add('lap-counter-jump')
     if (previous && previous.runId === identity.runId && Number.isSafeInteger(identity.sequence) && Number.isSafeInteger(previous.sequence) && identity.sequence !== previous.sequence + 1) lap.reasons.add('sequence-gap')
     this.trackControlState(lap, message)
     const sample = this.sampleFromMessage(message)
@@ -226,7 +232,7 @@ class LiveSessionStore {
   startLap(message, identity) {
     const number = identity.lap
     const id = stableId('analysis-lap', `${this.active.id}|${number}|${identity.lapStart ?? identity.elapsed}|${this.makeId()}`)
-    this.active.currentLap = { id, number, state: 'current', startedAt: message.capturedAt || this.now().toISOString(), endedAt: null, samples: [], reasons: new Set(), lastSequence: null, ownerCandidate: null, ownerCount: 0, pitCount: 0, justStarted: true }
+    this.active.currentLap = { id, number, state: 'current', startedAt: message.capturedAt || this.now().toISOString(), endedAt: null, samples: [], reasons: new Set(), lastSequence: null, ownerCandidate: null, ownerCount: 0, pitCount: 0, justStarted: true, officialBaselineLapSeconds: officialLapSeconds(message), officialResetObserved: false }
   }
 
   trackControlState(lap, message) {
@@ -271,17 +277,84 @@ class LiveSessionStore {
   }
 
   lapBoundary(previous, current, trackLengthM) {
+    const measuredDistance = finite(current.distanceM) && finite(previous.distanceM)
+    if (measuredDistance) {
+      if (previous.distanceM > trackLengthM * 0.6 && current.distanceM < trackLengthM * 0.4) return 'distance-wrap'
+      const plausibleSkippedWrap = current.distanceM < trackLengthM * 0.4 && previous.distanceM > current.distanceM
+      if (plausibleSkippedWrap && current.lap > previous.lap) return current.lap === previous.lap + 1 ? 'lap-number' : 'lap-counter-jump'
+      if (plausibleSkippedWrap && current.lapStart !== null && previous.lapStart !== null && current.lapStart > previous.lapStart + 0.5) return 'lap-start-time'
+      return null
+    }
     if (current.lap > previous.lap) return current.lap === previous.lap + 1 ? 'lap-number' : 'lap-counter-jump'
     if (current.lapStart !== null && previous.lapStart !== null && current.lapStart > previous.lapStart + 0.5) return 'lap-start-time'
-    if ((current.lapStart === null || previous.lapStart === null) && finite(current.distanceM) && finite(previous.distanceM) && previous.distanceM > trackLengthM * 0.6 && current.distanceM < trackLengthM * 0.4) return 'distance-wrap'
     return null
+  }
+
+  completeCurrentAtBoundary(message, currentOfficialSeconds) {
+    const lap = this.active?.currentLap
+    if (!lap) return
+    if (this.active.pendingLap) this.resolvePendingLap(null, 'next-lap-boundary')
+    const officialChanged = changedOfficialLapSeconds(currentOfficialSeconds, lap.officialBaselineLapSeconds)
+      || (finite(currentOfficialSeconds) && currentOfficialSeconds > 0 && lap.officialResetObserved)
+    if (officialChanged) {
+      this.finalizeLap(lap, 'complete', currentOfficialSeconds * 1000)
+      return
+    }
+    const observedCountFlags = lap.samples.map((sample) => sample.countLapFlag).filter((value) => value !== null)
+    const needsOfficialDecision = observedCountFlags.some((value) => value !== 2)
+    if (!needsOfficialDecision) {
+      this.finalizeLap(lap, 'complete')
+      return
+    }
+    lap.state = 'complete'
+    lap.endedAt = message.capturedAt || this.active.updatedAt
+    lap.scoringPending = true
+    this.active.laps.push(lap)
+    this.active.currentLap = null
+    this.active.pendingLap = {
+      lap,
+      baselineOfficialLapSeconds: lap.officialBaselineLapSeconds,
+      officialResetObserved: lap.officialResetObserved,
+      boundaryElapsedSeconds: sessionElapsed(message),
+      boundarySequence: message.sequence,
+    }
+    this.record('info', 'analysis-lap-awaiting-score', 'A completed analysis lap is waiting briefly for its official LMU scoring result.', { sessionId: this.active.id, lapNumber: lap.number })
+  }
+
+  reconcilePendingLap(message, currentOfficialSeconds) {
+    const pending = this.active?.pendingLap
+    if (!pending) return
+    if (changedOfficialLapSeconds(currentOfficialSeconds, pending.baselineOfficialLapSeconds)
+      || (finite(currentOfficialSeconds) && currentOfficialSeconds > 0 && pending.officialResetObserved)) {
+      this.resolvePendingLap(currentOfficialSeconds * 1000, 'official-time-published')
+      return
+    }
+    const elapsed = sessionElapsed(message)
+    const elapsedExpired = finite(elapsed) && finite(pending.boundaryElapsedSeconds) && elapsed - pending.boundaryElapsedSeconds >= OFFICIAL_LAP_TIME_GRACE_SECONDS
+    const sequenceExpired = Number.isSafeInteger(message.sequence) && Number.isSafeInteger(pending.boundarySequence)
+      && message.sequence - pending.boundarySequence >= OFFICIAL_LAP_TIME_GRACE_FRAMES
+    if (elapsedExpired || sequenceExpired) this.resolvePendingLap(null, 'official-time-timeout')
+  }
+
+  resolvePendingLap(officialLapTimeMs, reason) {
+    const pending = this.active?.pendingLap
+    if (!pending) return
+    this.active.pendingLap = null
+    this.finalizeLap(pending.lap, 'complete', officialLapTimeMs)
+    this.record('info', 'analysis-lap-score-resolved', 'A pending analysis lap scoring result was resolved.', { sessionId: this.active.id, lapNumber: pending.lap.number, reason, officialTimeAvailable: finite(officialLapTimeMs) })
   }
 
   finalizeCurrent(state, officialLapTimeMs = null) {
     const lap = this.active?.currentLap
     if (!lap) return
+    this.finalizeLap(lap, state, officialLapTimeMs)
+  }
+
+  finalizeLap(lap, state, officialLapTimeMs = null) {
+    if (!this.active || !lap) return
     lap.state = state
-    lap.endedAt = this.active.updatedAt
+    lap.endedAt ||= this.active.updatedAt
+    lap.scoringPending = false
     if (state !== 'complete') lap.reasons.add('incomplete')
     const fullSamples = lap.samples.map((sample) => ({ ...sample }))
     lap.sampleCount = fullSamples.length
@@ -328,8 +401,8 @@ class LiveSessionStore {
       samples: fullSamples,
     }
     lap.samples = compactSamples(fullSamples)
-    this.active.laps.push(lap)
-    this.active.currentLap = null
+    if (!this.active.laps.includes(lap)) this.active.laps.push(lap)
+    if (this.active.currentLap === lap) this.active.currentLap = null
     if (state === 'complete') this.health.completedLaps += 1
     else this.health.incompleteLaps += 1
     this.record('info', 'analysis-lap-finalized', 'In-memory analysis lap finalized.', { sessionId: this.active.id, lapNumber: lap.number, state, quality: lap.quality, reasons: lap.finalReasons, coverageBucket: Math.round(lap.coverage * 20) * 5, sampleCount: lap.samples.length })
@@ -345,6 +418,7 @@ class LiveSessionStore {
 
   archiveActive(reason) {
     if (!this.active) return
+    if (this.active.pendingLap) this.resolvePendingLap(null, 'session-archived')
     if (this.active.currentLap) this.finalizeCurrent('incomplete')
     this.active.state = 'finished'
     this.active.endedAt = this.active.updatedAt || this.now().toISOString()
@@ -387,7 +461,7 @@ class LiveSessionStore {
     const first = lap.samples?.[0]
     const last = lap.samples?.at(-1)
     const lapTimeMs = lap.lapTimeMs !== undefined ? lap.lapTimeMs : lap.state === 'complete' && first && last ? Math.max(0, (last.elapsedSeconds - first.elapsedSeconds) * 1000) : null
-    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length), replayable: lap.replayable ?? Boolean(lap.samples?.length > 1), referenceEligible: lap.referenceEligible ?? false, trackModelEligible: lap.trackModelEligible ?? false }
+    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length), replayable: lap.replayable ?? Boolean(lap.samples?.length > 1), referenceEligible: lap.referenceEligible ?? false, trackModelEligible: lap.trackModelEligible ?? false, officialTimePending: Boolean(lap.scoringPending) }
   }
 
   getLap(sessionId, lapId) {
@@ -402,4 +476,4 @@ class LiveSessionStore {
   record(level, event, message, details) { void this.logger?.record(level, 'analysis-session', event, message, details) }
 }
 
-module.exports = { LiveSessionStore, compactSamples, classifyLap, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_FINAL_SAMPLES, DEFAULT_MEMORY_BUDGET } }
+module.exports = { LiveSessionStore, compactSamples, classifyLap, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_FINAL_SAMPLES, DEFAULT_MEMORY_BUDGET, OFFICIAL_LAP_TIME_GRACE_SECONDS, OFFICIAL_LAP_TIME_GRACE_FRAMES } }

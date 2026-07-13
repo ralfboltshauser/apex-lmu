@@ -2,12 +2,12 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const { buildTrackModel } = require('./track-model.cjs')
 
-function circleLap({ radius = 100, lateral = 0, offtrackAt = -1, id = 'lap' } = {}) {
+function circleLap({ radius = 100, lateral = 0, offtrackAt = -1, id = 'lap', stepM = 1 } = {}) {
   const length = 2 * Math.PI * radius
   const samples = []
-  for (let distance = 0; distance < length; distance += 1) {
+  for (let distance = 0; distance < length; distance += stepM) {
     const angle = distance / radius
-    const applied = Math.abs(distance - offtrackAt) < 2 ? 30 : lateral
+    const applied = offtrackAt >= 0 && Math.abs(distance - offtrackAt) < 2 ? 30 : lateral
     const drivenRadius = radius + applied
     samples.push({ distanceIndexM: distance, x: Math.cos(angle) * drivenRadius, y: 0, z: Math.sin(angle) * drivenRadius, pathLateralM: applied, trackEdgeM: applied === 30 ? 5 : 8, countLapFlag: 2 })
   }
@@ -40,6 +40,17 @@ test('one eligible lap remains a draft instead of publishing an uncorroborated r
   const model = buildTrackModel({ trackKey: 'test', trackLengthM: length, laps: [circleLap({ id: 'only' })] })
   assert.equal(model.coverage > 0.97, true)
   assert.equal(model.published, false)
+})
+
+test('two complete laps publish when LMU scoring distance advances less often than telemetry', () => {
+  const length = 2 * Math.PI * 100
+  const model = buildTrackModel({
+    trackKey: 'test',
+    trackLengthM: length,
+    laps: [circleLap({ id: 'first', stepM: 8.5 }), circleLap({ id: 'second', stepM: 8.5 })],
+  })
+  assert.equal(model.coverage > 0.97, true)
+  assert.equal(model.published, true)
 })
 
 test('one unsafe sample rejects that lap\'s entire distance bin', () => {
