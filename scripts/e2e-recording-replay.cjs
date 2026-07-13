@@ -103,8 +103,15 @@ async function main() {
       fuelWidgets: await overlayPage.locator('.overlay-slot--fuel').count(),
     }))
     const measuredRouteVisible = page.getByText('Locally reconstructed driven line', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
-    const measuredBrakeZonesVisible = page.waitForFunction((expected) => document.querySelectorAll('.measured-brake-zones li').length === expected, manifest.expected.measuredRoute.brakeZones, { timeout: 90000 })
-    const measuredLiveState = Promise.all([measuredRouteVisible, measuredBrakeZonesVisible]).then(async () => ({
+    const measuredRouteComplete = page.waitForFunction(({ brakeZones, coverage }) => {
+      const badge = document.querySelector('.live-measured-map-card .badge')?.textContent ?? ''
+      const percent = Number.parseInt(badge.match(/(\d+)%/)?.[1] ?? '', 10)
+      return document.querySelectorAll('.measured-brake-zones li').length === brakeZones
+        && badge.includes('Measured route')
+        && Number.isFinite(percent)
+        && percent >= coverage
+    }, { brakeZones: manifest.expected.measuredRoute.brakeZones, coverage: manifest.expected.measuredRoute.minimumCoveragePercent }, { timeout: 90000 })
+    const measuredLiveState = Promise.all([measuredRouteVisible, measuredRouteComplete]).then(async () => ({
       brakeZones: await page.locator('.measured-brake-zones li').count(),
       badge: await page.locator('.live-measured-map-card .badge').textContent(),
     }))

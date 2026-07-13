@@ -62,9 +62,10 @@ Hosted Windows iteration kept the native assertions strict and exposed two
 otherwise-hidden lifecycle assumptions: the overlay constructor could be
 clamped to the taskbar work area, and live-only DOM was initially read after
 replay cleanup. Full bounds are now explicitly reapplied by the product, while
-overlay and measured-route assertions are captured when replay telemetry is
-visible and retained through the correlated completion check. Analysis-route
-assertions remain separate and run after completion.
+overlay assertions are captured when measured replay telemetry is visible. The
+live route capture waits for the manifest's zone count, measured classification
+and minimum coverage together; both snapshots are retained through correlated
+completion. Analysis-route assertions remain separate and run afterwards.
 
 The complete real fixture passes through the current Linux bridge and the
 compiled Windows bridge under Wine with the exact expected aggregates. Go,
