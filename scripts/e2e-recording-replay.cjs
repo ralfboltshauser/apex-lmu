@@ -33,27 +33,35 @@ public static class ApexWindowOrder {
 '@
 $above = [IntPtr]::new([Int64]::Parse("${aboveHandle}"))
 $below = [IntPtr]::new([Int64]::Parse("${belowHandle}"))
-if (${raiseFirst ? '$true' : '$false'}) {
-  if (-not [ApexWindowOrder]::SetWindowPos($above, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013)) { exit 2 }
-}
-$cursor = [ApexWindowOrder]::GetTopWindow([IntPtr]::Zero)
+$raiseFirst = ${raiseFirst ? '$true' : '$false'}
 $aboveRank = -1
 $belowRank = -1
-$rank = 0
-while ($cursor -ne [IntPtr]::Zero -and $rank -lt 10000) {
-  if ($cursor -eq $above) { $aboveRank = $rank }
-  if ($cursor -eq $below) { $belowRank = $rank }
-  $cursor = [ApexWindowOrder]::GetWindow($cursor, 2)
-  $rank += 1
+$attemptLimit = if ($raiseFirst) { 100 } else { 1 }
+for ($attempt = 0; $attempt -lt $attemptLimit; $attempt += 1) {
+  if ($raiseFirst -and -not [ApexWindowOrder]::SetWindowPos($above, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013)) { exit 2 }
+  $cursor = [ApexWindowOrder]::GetTopWindow([IntPtr]::Zero)
+  $aboveRank = -1
+  $belowRank = -1
+  $rank = 0
+  while ($cursor -ne [IntPtr]::Zero -and $rank -lt 10000) {
+    if ($cursor -eq $above) { $aboveRank = $rank }
+    if ($cursor -eq $below) { $belowRank = $rank }
+    $cursor = [ApexWindowOrder]::GetWindow($cursor, 2)
+    $rank += 1
+  }
+  if ($aboveRank -ge 0 -and $belowRank -ge 0 -and $aboveRank -lt $belowRank) {
+    Write-Output "$aboveRank,$belowRank"
+    exit 0
+  }
+  if ($raiseFirst) { Start-Sleep -Milliseconds 1 }
 }
 if ($aboveRank -lt 0 -or $belowRank -lt 0) { exit 3 }
-if ($aboveRank -ge $belowRank) { exit 4 }
-Write-Output "$aboveRank,$belowRank"
+exit 4
 `
   try {
     await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10000 })
   } catch (error) {
-    fail(`native z-order assertion failed (${aboveHandle} above ${belowHandle}): ${error.stderr || error.message}`)
+    fail(`native z-order assertion failed (${aboveHandle} above ${belowHandle}, exit ${error.code}): ${error.stderr || error.message}`)
   }
 }
 
