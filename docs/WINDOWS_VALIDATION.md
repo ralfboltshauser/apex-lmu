@@ -91,15 +91,20 @@ building the NSIS and portable artifacts.
 The overlay portion checks display enumeration and selection, exact display
 bounds, non-focusable/topmost state, live opacity and supported-widget updates,
 measured replay content, unavailable-to-waiting cleanup, deterministic close,
-and a single remaining main window. The main renderer must also reconstruct the
-measured driven route from official world coordinates, reach the allowlisted
-coverage, expose the allowlisted braking-zone count, and open the matching
-distance-aligned Analysis view.
+and a single remaining main window. It also creates a separate topmost Win32
+window, explicitly raises that window above Apex with `SetWindowPos`, and checks
+the native HWND order after Apex's non-activating z-order guard restores the HUD
+above it. The main renderer must also reconstruct the measured driven route from
+official world coordinates, reach the allowlisted coverage, expose the
+allowlisted braking-zone count, and open the matching distance-aligned Analysis
+view.
 
 This proves that the recorded session's known facts survive the current Apex
-pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,
-multi-monitor/fullscreen behavior, a long-race soak, or any car/session absent
-from that recording. Those remain independent gates.
+pipeline and that another composed topmost window cannot permanently cover the
+HUD. It still does not prove current live LMU offsets, anti-cheat behavior,
+physical multi-monitor behavior, true exclusive-fullscreen composition, a
+long-race soak, or any car/session absent from that recording. Those remain
+independent gates.
 
 ## Lifetime-statistics runtime gate
 
