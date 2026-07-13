@@ -49,6 +49,11 @@ describe('overlay studio desktop contract', () => {
     expect(radar.querySelector('[role="switch"]')?.getAttribute('aria-disabled')).toBe('true')
     expect(radar.textContent).toContain('Unavailable: LMU does not expose a validated data source yet')
 
+    const guidance = container.querySelector('.overlay-guidance')!
+    expect(guidance.textContent).toContain('Overlay only visible after Alt+Tab?')
+    expect(guidance.textContent).toContain('set LMU to Borderless (recommended) or Windowed, then reopen the overlay')
+    expect(guidance.textContent).toContain('a local non-injected overlay cannot appear there')
+
     const show = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes('Show overlay'))!
     await act(async () => show.click())
     expect(openOverlay).toHaveBeenCalledOnce()
