@@ -138,7 +138,7 @@ async function main() {
     const overlayClosed = await page.evaluate(() => window.apexDesktop.closeOverlay())
     exact(overlayClosed.state.status, 'closed', 'overlay close state')
     exact(application.windows().length, 1, 'remaining window count')
-    await page.locator('button.nav-item').filter({ hasText: 'System' }).click()
+    await page.locator('button.nav-item').filter({ hasText: 'Settings' }).click()
     await page.getByText('Settings', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 })
     if (errors.length) fail(errors.join('; '))
     console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, ui: ['track', 'car', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'settings-responsive'] }))
