@@ -2,6 +2,26 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.2.1",
+      "releasedAt": "2026-07-13",
+      "en": {
+        "title": "Marketing-site page-view analytics",
+        "summary": "The Apex marketing site now reports page views through Vercel Analytics while the desktop app remains local-first and analytics-free.",
+        "highlights": [
+          { "id": "site-analytics", "title": "Understand visits to the public website", "body": "The deployed marketing site loads Vercel Analytics to count page views; this change does not add analytics, accounts, or a cloud runtime to the Apex desktop app." }
+        ],
+        "knownLimitations": []
+      },
+      "de": {
+        "title": "Seitenaufrufanalyse für die Marketing-Website",
+        "summary": "Die Apex-Marketing-Website erfasst jetzt Seitenaufrufe mit Vercel Analytics, während die Desktop-App weiterhin lokal und ohne Analysefunktionen arbeitet.",
+        "highlights": [
+          { "id": "site-analytics", "title": "Besuche der öffentlichen Website verstehen", "body": "Die bereitgestellte Marketing-Website lädt Vercel Analytics, um Seitenaufrufe zu zählen. Diese Änderung fügt der Apex-Desktop-App weder Analysefunktionen noch Konten oder eine Cloud-Laufzeit hinzu." }
+        ],
+        "knownLimitations": []
+      }
+    },
+    {
       "version": "0.2.0",
       "releasedAt": "2026-07-13",
       "en": {

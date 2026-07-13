@@ -2,6 +2,20 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.1 — 2026-07-13
+
+### English — Marketing-site page-view analytics
+
+The Apex marketing site now reports page views through Vercel Analytics while the desktop app remains local-first and analytics-free.
+
+- **Understand visits to the public website** — The deployed marketing site loads Vercel Analytics to count page views; this change does not add analytics, accounts, or a cloud runtime to the Apex desktop app.
+
+### Deutsch — Seitenaufrufanalyse für die Marketing-Website
+
+Die Apex-Marketing-Website erfasst jetzt Seitenaufrufe mit Vercel Analytics, während die Desktop-App weiterhin lokal und ohne Analysefunktionen arbeitet.
+
+- **Besuche der öffentlichen Website verstehen** — Die bereitgestellte Marketing-Website lädt Vercel Analytics, um Seitenaufrufe zu zählen. Diese Änderung fügt der Apex-Desktop-App weder Analysefunktionen noch Konten oder eine Cloud-Laufzeit hinzu.
+
 ## 0.2.0 — 2026-07-13
 
 ### English — Measured tracks, durable history, and trustworthy plans
