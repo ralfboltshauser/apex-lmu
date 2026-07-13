@@ -80,13 +80,13 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Fuel calculator | Manual timed/lap planning plus automatic clean-lap consumption capture. Excludes pit/refuel laps, retains car/track samples locally, protects timed extra-lap boundaries, and reports total fuel, starting load, stops, final stint, reserve and confidence. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
-| Analysis | Distance-aligned comparison and evidence-scored coaching engines are implemented. The polished analysis workspace currently uses visibly labeled generated fixtures. |
+| Analysis | Current-runtime measured sessions retain selectable completed, incomplete and current laps in bounded main-process memory, with explicit quality reasons and distance-aligned braking evidence. Generated comparison/coaching fixtures remain visibly labeled and separate from measured data. |
 | Strategy | Deterministic manual fuel-only candidates with integer-lap stints and pit/refuel time coupled back into timed-race distance. VE, tyres, traffic, weather and driver rules are explicitly not modeled until verified inputs exist. |
 | Setups | Imports `.svm` files only into LMU settings folders, creates durable collision backups, handles read-only files and rolls back a failed replacement. |
 | Demo | Seeded multiclass telemetry makes every workflow explorable without LMU or a network connection. |
 
-Recording-to-analysis ingestion, real community content and freeform overlay
-positioning are deliberately still marked unavailable.
+Durable cross-restart recording-to-analysis ingestion, real community content
+and freeform overlay positioning are deliberately still marked unavailable.
 
 The finite shipped/rejected scope—including why cloud, “pro” data and
 fixture-less import/setup features are not claimed—is documented in the

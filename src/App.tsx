@@ -26,7 +26,7 @@ import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, update
 import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
 import { pendingReleaseNotes, type ReleaseNote } from './release-notes'
-import { MeasuredTrackRecorder, type MeasuredTrackSnapshot } from './engine'
+import { buildMeasuredTrackSnapshot, type MeasuredLapRecord, type MeasuredTrackSnapshot } from './engine'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
@@ -190,7 +190,7 @@ export default function App() {
   const demoAdapter = useRef(new MockTelemetryAdapter({ autoTick: true, stepMs: 80, seed: 963 }))
   const desktopAdapter = useRef(new DesktopTelemetryAdapter())
   const fuelTracker = useRef(emptyFuelTracker())
-  const measuredTrackRecorder = useRef(new MeasuredTrackRecorder())
+  const analysisLapCache = useRef(new Map<string, ApexAnalysisLapPayload>())
   const demoRunningRef = useRef(false)
   const viewRef = useRef<ViewId>('home')
   const lastUpdateNotice = useRef('')
@@ -199,6 +199,7 @@ export default function App() {
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
   const [liveFuel, setLiveFuel] = useState<LiveFuelEstimate | null>(null)
   const [measuredTrack, setMeasuredTrack] = useState<MeasuredTrackSnapshot | null>(null)
+  const [analysisSessions, setAnalysisSessions] = useState<readonly ApexAnalysisSessionSummary[]>([])
   demoRunningRef.current = demoRunning
   viewRef.current = view
 
@@ -322,6 +323,51 @@ export default function App() {
   }, [demoRunning])
 
   useEffect(() => {
+    if (!window.apexDesktop?.getAnalysisSessions || !window.apexDesktop.getAnalysisLap || !window.apexDesktop.onAnalysisSessionsChanged) return
+    let cancelled = false
+    let refreshing = false
+    let refreshPending = false
+    const refresh = async () => {
+      const sessions = await window.apexDesktop!.getAnalysisSessions()
+      if (cancelled) return
+      setAnalysisSessions(sessions)
+      const session = sessions.find((candidate) => candidate.state !== 'finished') ?? sessions[0]
+      if (!session) { setMeasuredTrack(null); return }
+      if (session.currentLapId) analysisLapCache.current.delete(`${session.id}:${session.currentLapId}`)
+      const clean = session.laps.filter((lap) => lap.state === 'complete' && lap.quality === 'clean' && lap.samplesAvailable).slice(-3)
+      const fallback = [...session.laps].reverse().find((lap) => lap.state === 'complete' && lap.quality !== 'ineligible' && lap.samplesAvailable)
+        ?? session.laps.find((lap) => lap.id === session.currentLapId && lap.samplesAvailable)
+      const selected = clean.at(-1) ?? fallback
+      if (!selected) { setMeasuredTrack(null); return }
+      const requested = clean.length > 0 ? clean : [selected]
+      for (const lap of requested) {
+        const key = `${session.id}:${lap.id}`
+        if (!analysisLapCache.current.has(key)) {
+          const payload = await window.apexDesktop!.getAnalysisLap(session.id, lap.id)
+          if (payload) analysisLapCache.current.set(key, payload)
+        }
+      }
+      if (cancelled) return
+      const laps: MeasuredLapRecord[] = session.laps.map((lap) => ({
+        id: lap.id, number: lap.number, state: lap.state, quality: lap.quality,
+        samples: analysisLapCache.current.get(`${session.id}:${lap.id}`)?.samples ?? [],
+      }))
+      setMeasuredTrack(buildMeasuredTrackSnapshot({ id: session.id, trackName: session.track.name, layoutName: session.track.layout, trackLengthM: session.track.lengthM, laps }, selected.id))
+    }
+    const scheduleRefresh = async () => {
+      if (refreshing) { refreshPending = true; return }
+      refreshing = true
+      try {
+        do { refreshPending = false; await refresh() } while (refreshPending && !cancelled)
+      } finally { refreshing = false }
+    }
+    const reportRefresh = (context: string) => { void scheduleRefresh().catch((error) => void window.apexDesktop?.reportError({ message: error instanceof Error ? error.message : String(error), context })) }
+    const unsubscribe = window.apexDesktop.onAnalysisSessionsChanged(() => reportRefresh('analysis-session-refresh'))
+    reportRefresh('analysis-session-initial-load')
+    return () => { cancelled = true; unsubscribe() }
+  }, [])
+
+  useEffect(() => {
     const adapter = desktopAdapter.current
     let cancelled = false
     let unsubscribeFrame = () => {}
@@ -329,10 +375,6 @@ export default function App() {
     void window.apexDesktop?.getEnvironment().then((environment) => {
       if (cancelled || environment.platform !== 'win32') return
       unsubscribeFrame = adapter.subscribe((frame) => {
-        // Route aggregation is deliberately slower than the 50 Hz instruments;
-        // car markers still use the current frame while geometry refreshes at 2 Hz.
-        const measuredSnapshot = measuredTrackRecorder.current.ingest(frame, frame.sequence % 25 === 0)
-        if (measuredSnapshot) setMeasuredTrack(measuredSnapshot)
         const previousFuel = fuelTracker.current
         let nextFuel = updateFuelTracker(previousFuel, frame)
         if (nextFuel.sessionId && nextFuel.sessionId !== previousFuel.sessionId) {
@@ -379,7 +421,7 @@ export default function App() {
     switch (view) {
       case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} measuredTrack={measuredTrack} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
       case 'fuel': return <FuelCalculatorView live={liveFuel} />
-      case 'analyze': return <AnalyzeView measuredTrack={measuredTrack} />
+      case 'analyze': return <AnalyzeView measuredTrack={measuredTrack} analysisSessions={analysisSessions} />
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />
       case 'overlays': return <OverlaysView onOpenOverlay={openOverlay} />

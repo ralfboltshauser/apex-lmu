@@ -21,6 +21,9 @@ describe('desktop LMU bridge mapping', () => {
       type: 'telemetry',
       capturedAt: '2026-07-11T20:00:00.000Z',
       sequence: 42,
+      desktopSessionId: 'analysis-session-authoritative',
+      desktopLapId: 'analysis-lap-authoritative',
+      desktopSessionStartedAt: '2026-07-11T19:30:00.000Z',
       session: { track: 'Circuit de la Sarthe', layout: 'Le Mans', elapsedSeconds: 900, endSeconds: 7200, maximumLaps: 0, trackLengthM: 13626, phase: 5, inRealtime: true, airTempC: 18, trackTempC: 27, rain: 0, wetness: 0.1, windSpeedMps: 3.2, yellowState: 0 },
       player: { id: 6, driver: 'Ralf Driver', name: 'Porsche 963', class: 'Hypercar', controlOwner: 'local-player', worldPositionM: { x: 123, y: 4, z: -456 }, gameElapsedSeconds: 900.5, lapStartSeconds: 700, position: 3, lap: 8, sector: 2, lapDistanceM: 6813, speedKph: 271.4, rpm: 8021, maximumRpm: 9000, gear: 6, throttle: 0.92, brake: 0, steering: -0.08, clutch: 0, fuelL: 48.2, fuelCapacityL: 90, batteryFraction: 0.64, rearBrakeBias: 0.47, deltaBestSeconds: 0.12, bestLapSeconds: 205.2, lastLapSeconds: 206.1, timeBehindLeaderSeconds: 6.1, timeBehindNextSeconds: 2.8, inPits: false, pitState: 0, frontCompound: 'Mediums', rearCompound: 'Mediums', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')] },
       opponents: [
@@ -38,6 +41,9 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.opponents[1].car.vehicleClass).toBe('LMP2')
     expect(frame.opponents[1].pitState).toBe('stopped')
     expect(frame.sample.sequence).toBe(42)
+    expect(frame.session.id).toBe('analysis-session-authoritative')
+    expect(frame.session.startedAt).toBe('2026-07-11T19:30:00.000Z')
+    expect(frame.sample.lapId).toBe('analysis-lap-authoritative')
     expect(frame.sample.worldPositionM).toEqual({ x: 123, y: 4, z: -456 })
     expect(frame.sample.controlOwner).toBe('local-player')
     expect(frame.sample.sessionElapsedMs).toBe(900500)
