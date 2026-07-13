@@ -58,6 +58,9 @@ interface ApexDesktopApi {
   getLifetimeStats(): Promise<ApexLifetimeStats>
   getLifetimeStatsHealth(): Promise<ApexLifetimeStatsHealth>
   backupLifetimeStats(): Promise<{ ok: boolean; reason?: string; backup?: { file: string; bytes: number; sha256: string; createdAt: string } }>
+  getAnalysisSessions(): Promise<ApexAnalysisSessionSummary[]>
+  getAnalysisLap(sessionId: string, lapId: string): Promise<ApexAnalysisLapPayload | null>
+  getAnalysisHealth(): Promise<ApexAnalysisHealth>
   checkForUpdates(): Promise<ApexUpdateState>
   downloadUpdate(): Promise<{ ok: boolean; reason?: string }>
   installUpdate(): Promise<{ ok: boolean; reason?: string }>
@@ -92,6 +95,7 @@ interface ApexDesktopApi {
   overlayRendererReady(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
   onRecordingState(callback: (state: ApexRecordingState) => void): () => void
+  onAnalysisSessionsChanged(callback: (state: { schemaVersion: 1; revision: number; kind: 'sample' | 'lap' | 'session' | 'status' }) => void): () => void
   onUpdateState(callback: (state: ApexUpdateState) => void): () => void
   onDisplaysChanged(callback: (displays: ApexDisplay[]) => void): () => void
   onOverlayState(callback: (state: ApexOverlayState) => void): () => void
@@ -104,6 +108,17 @@ interface ApexLifetimeVehicleStats { id: string; name: string; className: string
 interface ApexLifetimeStats { status: 'ready' | 'future-schema' | 'error' | 'closed'; schemaVersion?: number; algorithmVersion?: string; message?: string; trackedSince: string | null; totalDistanceMm: number; vehicles: ApexLifetimeVehicleStats[] }
 interface ApexLifetimeStatsHealth { status: 'ready' | 'future-schema' | 'error' | 'closed' | 'read-only'; schemaVersion?: number; algorithmVersion?: string; message?: string; path?: string; lastBackup?: { file: string; bytes: number; sha256: string; createdAt: string } | null }
 interface ApexRecordingState { status: 'idle' | 'starting' | 'recording' | 'stopping' | 'replaying' | 'complete' | 'error'; path: string | null; frames: number; bytes: number; durationSeconds: number; message: string }
+
+type ApexAnalysisSource = 'live' | 'recording-replay'
+type ApexAnalysisSessionState = 'active' | 'interrupted' | 'finished'
+type ApexAnalysisLapState = 'current' | 'complete' | 'incomplete'
+type ApexAnalysisLapQuality = 'clean' | 'limited' | 'ineligible'
+type ApexAnalysisLapReason = 'ai-control' | 'coverage-low' | 'incomplete' | 'lap-counter-jump' | 'missing-sample' | 'pit' | 'position-discontinuity' | 'remote-control' | 'replay-control' | 'sample-compacted' | 'sequence-gap' | 'source-interrupted' | 'telemetry-gap' | 'time-reset' | 'unknown-control'
+interface ApexAnalysisLapSummary { id: string; number: number; state: ApexAnalysisLapState; quality: ApexAnalysisLapQuality; reasons: ApexAnalysisLapReason[]; lapTimeMs: number | null; coverage: number; maximumGapM: number; sampleCount: number; samplesAvailable: boolean }
+interface ApexAnalysisSessionSummary { schemaVersion: 1; qualityPolicyVersion: string; revision: number; id: string; source: ApexAnalysisSource; state: ApexAnalysisSessionState; startedAt: string; endedAt: string | null; track: { name: string; layout: string; lengthM: number }; car: { id: number; name: string; class: string }; laps: ApexAnalysisLapSummary[]; currentLapId: string | null; interruptionCount: number; sourceSegmentCount: number }
+interface ApexAnalysisSample { distanceM: number; x: number; z: number; brake: number; throttle: number; steering: number; speedKph: number; elapsedSeconds: number; lapElapsedSeconds: number }
+interface ApexAnalysisLapPayload { schemaVersion: 1; session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] | null }
+interface ApexAnalysisHealth { schemaVersion: 1; qualityPolicyVersion: string; revision: number; memoryBudgetBytes: number; telemetryFrames: number; statuses: number; sessions: number; completedLaps: number; incompleteLaps: number; evictedLapPayloads: number }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
 interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }

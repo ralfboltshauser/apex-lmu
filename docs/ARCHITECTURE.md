@@ -20,7 +20,13 @@ files and native services behind a small preload API.
 ### Electron main
 
 The main process owns file dialogs, DuckDB read-only inspection, guarded setup
-copying, bridge lifecycle and the transparent overlay window. `OverlayManager`
+copying, bridge lifecycle and the transparent overlay window. It also owns the
+bounded, in-memory live-analysis session store: bridge statuses may interrupt a
+session but cannot erase its completed laps, and genuine track/car/time boundaries
+archive the old session instead of replacing it. The renderer receives compact
+session/lap summaries and requests one lap payload at a time through narrow IPC;
+renderer reloads therefore do not discard the active driving history.
+`OverlayManager`
 owns display enumeration, validated configuration persistence, hot-plug
 fallback, renderer readiness and window lifecycle. External links open in the
 operating-system browser; renderer-created windows are denied and unexpected
@@ -55,7 +61,11 @@ already-computed result, but they may not generate the result.
 ## Persistence
 
 Repositories use versioned envelopes, validate imports and preserve corrupt
-payloads for diagnostics. Browser-only preferences use localStorage. Durable
+payloads for diagnostics. Browser-only preferences use localStorage. The live
+analysis store is intentionally ephemeral and memory-bounded: finalized traces
+are compacted, old sample payloads may be evicted transparently, and lap/session
+summaries remain available for the lifetime of the main process. Raw positions,
+pedals and driver identity are neither logged nor written by this store. Durable
 lifetime distance has one Electron-main writer backed by an immutable SQLite
 ledger; renderers receive aggregates through narrow read IPC and cannot count
 frames. Its metric, source filters, chunking, migration snapshots and recovery

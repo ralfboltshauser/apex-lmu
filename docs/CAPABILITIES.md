@@ -34,12 +34,12 @@ Status meanings:
 | Durable lifetime distance | Shipped locally; package gate pending | Live official source + local-player ownership + telemetry + monotonic game time | Replay/demo/AI/remote and invalid gaps never count |
 | Multi-display overlay | Shipped locally; hardware gate pending | Electron display/window APIs and measured overlay fields | Physical multi-monitor, DPI and borderless LMU acceptance remains |
 | Manual fuel-only strategy | Shipped locally | Manual typed assumptions and deterministic coupled timed-race solver | No live calibration, VE, tyres, weather, driver or traffic claim |
-| Measured driven route and braking | Shipped locally; native gate pending | Official world position/game time/brake/speed; real fixture gives 99.16% route coverage and 11 zones | A driven line is not surveyed track limits; high-rate history stays in memory unless the user records raw data |
+| Measured driven route and braking | Shipped locally; native gate pending | Official world position/game time/brake/speed; real fixture gives 99%+ aggregate route coverage and 11 zones; selectable completed/current laps survive bridge interruptions | A driven line is not surveyed track limits; bounded high-rate history stays in main-process memory unless the user records raw data |
 | Live tyre/brake state | Partial | Official player wheel pressure, surface/carcass temperature, wear and brake temperature | No universal target or diagnosis without car/compound/condition/version evidence |
 | Setup installation | Shipped locally | User-selected `.svm`, guarded destination, backup, atomic replacement and rollback | Apex does not parse or optimize unknown setup schemas |
 | Manual setup reasoning engine | Partial | Explicit symptom/phase/speed report; deterministic small reversible recommendations | It cannot write concrete values without a real versioned `.svm` schema fixture |
 | LMU DuckDB inspection | Partial | Read-only capability discovery, metadata, tables, channels, events and lap indexes | No real DuckDB recording exists in the approved fixture set, so channel ingestion/comparison is not approved |
-| Historical session/stint explorer | Rejected for current scope | Requires normalized DuckDB/live sample history and a retention/privacy decision | Reopen with a licensed anonymized DuckDB fixture and bounded retention contract |
+| Historical session/stint explorer | Rejected for current scope | The current runtime has an ephemeral measured session/lap selector, but durable cross-restart history still requires normalized DuckDB/live sample storage and a retention/privacy decision | Reopen with a licensed anonymized DuckDB fixture and bounded retention contract |
 | Historical real-lap comparison/coaching | Rejected for current scope | Deterministic comparison engine exists, but no approved normalized historic trace | Reopen after normalized ingestion fixtures; current-session measured brake evidence remains available |
 | Car-specific tyre/setup advice | Rejected for current scope | No licensed versioned target corpus or supported setup-schema fixture | Reopen with rights, car/compound/condition/version provenance and failure tests |
 | Derived CSV/JSON evidence export | Rejected for current scope | No approved portable schema or privacy UX | Raw `.apexrec` remains the lossless explicit export; define redaction and schema first |
@@ -73,7 +73,9 @@ hybrid power, or damage with credible-looking zero/100 defaults.
 - durable local-player distance ledger with recovery, backups and soak tests;
 - deterministic display-targeted overlay lifecycle;
 - coupled integer-lap fuel strategy with a golden issue regression;
-- measured route/braking reconstruction with physical position/speed proof;
+- measured route/braking reconstruction with physical position/speed proof,
+  stable main-process session identity, lap-quality reasons and selectable
+  completed/current laps;
 - full renderer, Electron, SQLite, scripts, Go, i18n, build, audit, Windows
   cross-compile, native E2E, packaging and release checks defined in the shared
   release workflow.

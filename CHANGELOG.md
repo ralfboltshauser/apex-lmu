@@ -2,6 +2,30 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.2 — 2026-07-13
+
+### English — Complete laps stay available in Analysis
+
+Analysis now keeps the current driving session and its completed laps when telemetry pauses or the final lap is only partial.
+
+- **Choose the lap you meant to inspect** — A bounded main-process session store retains completed, incomplete, and current laps across bridge interruptions. Analysis defaults to the latest clean completed lap and exposes session, lap, quality, and exclusion-reason controls.
+- **Validated with the real LMU recording** — The 18,039-frame raw replay now verifies selectable clean laps, aggregate measured-route coverage, and all 11 expected braking zones through the same session-store path used by the desktop app.
+
+**Known limitations**
+
+- **Measured lap history lasts for the current app run** — High-rate position and pedal traces remain private, bounded in memory, and are not silently persisted. Under memory pressure, old trace payloads may be discarded while their lap summaries remain visible; raw .apexrec recording is the lossless opt-in path.
+
+### Deutsch — Abgeschlossene Runden bleiben in der Analyse verfügbar
+
+Die Analyse behält jetzt die aktuelle Fahrsitzung und ihre abgeschlossenen Runden, wenn die Telemetrie pausiert oder die letzte Runde nur teilweise gefahren wurde.
+
+- **Wähle genau die Runde aus, die du untersuchen möchtest** — Ein begrenzter Sitzungsspeicher im Hauptprozess behält abgeschlossene, unvollständige und aktuelle Runden über Unterbrechungen der Bridge hinweg. Die Analyse wählt standardmäßig die neueste saubere abgeschlossene Runde und zeigt Steuerelemente für Sitzung, Runde, Qualität und Ausschlussgründe.
+- **Mit der echten LMU-Aufzeichnung geprüft** — Die Rohdatenwiedergabe mit 18.039 Frames prüft jetzt auswählbare saubere Runden, die zusammengefasste Abdeckung der gemessenen Fahrlinie und alle 11 erwarteten Bremszonen über denselben Sitzungsspeicher, den die Desktop-App verwendet.
+
+**Bekannte Einschränkungen**
+
+- **Der gemessene Rundenverlauf gilt für den aktuellen App-Lauf** — Hochfrequente Positions- und Pedaldaten bleiben privat, werden begrenzt im Arbeitsspeicher gehalten und nicht unbemerkt dauerhaft gespeichert. Bei Speicherdruck können alte Detaildaten verworfen werden, während ihre Rundenübersichten sichtbar bleiben; die rohe .apexrec-Aufzeichnung ist der verlustfreie optionale Pfad.
+
 ## 0.2.1 — 2026-07-13
 
 ### English — Marketing-site page-view analytics

@@ -4,6 +4,7 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const readline = require('node:readline')
 const { spawn, spawnSync } = require('node:child_process')
+const { LiveSessionStore } = require('../electron/live-session-store.cjs')
 
 const root = path.join(__dirname, '..')
 const defaultManifest = path.join(root, 'data', 'recordings', 'apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.expected.json')
@@ -11,6 +12,28 @@ const defaultManifest = path.join(root, 'data', 'recordings', 'apex-lmu-session-
 function fail(message) { throw new Error(`real recording replay: ${message}`) }
 function between(value, range, label) { if (!Number.isFinite(value) || value < range[0] || value > range[1]) fail(`${label} ${value} is outside ${range[0]}..${range[1]}`) }
 function atLeast(value, minimum, label) { if (!Number.isFinite(value) || value < minimum) fail(`${label} ${value} is below ${minimum}`) }
+
+function brakeZoneCount(samples) {
+  let zones = 0
+  let active = null
+  let belowSince = null
+  const finish = () => {
+    if (!active?.length) return
+    const braking = active.filter((sample) => sample.brake >= 0.05)
+    const duration = active.at(-1).elapsedSeconds - active[0].elapsedSeconds
+    if (duration >= 0.12 && braking.length >= 3) zones += 1
+    active = null; belowSince = null
+  }
+  for (const sample of samples) {
+    if (!active) { if (sample.brake >= 0.12) active = [sample]; continue }
+    active.push(sample)
+    if (sample.brake >= 0.05) { belowSince = null; continue }
+    belowSince ??= sample.elapsedSeconds
+    if (sample.elapsedSeconds - belowSince > 0.16) finish()
+  }
+  finish()
+  return zones
+}
 
 async function sha256(file) {
   const hash = crypto.createHash('sha256')
@@ -153,17 +176,31 @@ async function run(options = {}) {
   if (runner) { args = [command, ...args]; command = runner }
   const child = spawn(command, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   const summary = emptySummary()
+  const analysis = new LiveSessionStore({ makeId: (() => { let id = 0; return () => `recording-${++id}` })() })
   let stderr = ''
   child.stderr.on('data', (chunk) => { if (stderr.length < 8192) stderr += String(chunk).slice(0, 8192 - stderr.length) })
   const timer = setTimeout(() => child.kill(), options.timeoutMs || 120000)
   try {
-    for await (const line of readline.createInterface({ input: child.stdout, crlfDelay: Infinity })) accept(summary, JSON.parse(line), runId)
+    for await (const line of readline.createInterface({ input: child.stdout, crlfDelay: Infinity })) { const message = JSON.parse(line); accept(summary, message, runId); analysis.ingest(message) }
     const result = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal })) })
     if (result.code !== 0) fail(`bridge exited with ${result.code ?? result.signal}; ${stderr.trim()}`)
     assertSummary(summary, manifest.expected)
+    const sessions = analysis.listSessions()
+    exactAnalysis(sessions.length, 1, 'analysis session count')
+    const cleanLaps = sessions[0].laps.filter((lap) => lap.state === 'complete' && lap.quality === 'clean' && lap.samplesAvailable)
+    if (cleanLaps.length < manifest.expected.measuredRoute.minimumCleanLaps) fail(`clean analysis laps ${cleanLaps.length} is below ${manifest.expected.measuredRoute.minimumCleanLaps}: ${JSON.stringify(sessions[0].laps)}`)
+    atLeast(cleanLaps.at(-1).coverage * 100, manifest.expected.measuredRoute.minimumCleanLapCoveragePercent, 'clean analysis lap coverage')
+    const cleanPayloads = cleanLaps.map((lap) => analysis.getLap(sessions[0].id, lap.id)).filter((payload) => payload?.samples?.length)
+    if (cleanPayloads.length !== cleanLaps.length) fail('one or more clean analysis lap payloads are unavailable')
+    const totalBins = Math.ceil(sessions[0].track.lengthM / 12)
+    const routeBins = new Set(cleanPayloads.flatMap((payload) => payload.samples.map((sample) => Math.max(0, Math.min(totalBins - 1, Math.floor(sample.distanceM / 12))))))
+    atLeast(routeBins.size / totalBins * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'aggregated analysis route coverage')
+    exactAnalysis(brakeZoneCount(cleanPayloads.at(-1).samples), manifest.expected.measuredRoute.brakeZones, 'compacted analysis brake zones')
   } finally { clearTimeout(timer); if (child.exitCode === null) child.kill() }
   return { ok: true, runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, track: manifest.expected.track, car: manifest.expected.car, class: manifest.expected.carClass, opponents: summary.opponentMaximum, lastLapSeconds: [...summary.lastLaps], pitSequence: summary.pits }
 }
+
+function exactAnalysis(actual, expected, label) { if (actual !== expected) fail(`${label} mismatch: ${actual} vs ${expected}`) }
 
 if (require.main === module) run().then((result) => console.log(JSON.stringify(result))).catch((error) => { console.error(error.message); process.exit(1) })
 

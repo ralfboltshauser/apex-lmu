@@ -95,6 +95,9 @@ interface RawBridgeFrame {
   protocolVersion?: number
   source?: 'lmu-shared-memory' | 'self-test' | 'recording-replay'
   runId?: string
+  desktopSessionId?: string
+  desktopLapId?: string | null
+  desktopSessionStartedAt?: string
   type: 'telemetry'
   capturedAt: string
   sequence: number
@@ -275,15 +278,16 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     pitState: pitState(opponent.inPits, opponent.pitState), isConnected: true, isPlayerClass: normalizeClass(opponent.class) === playerClass,
     worldPositionM: optionalVector(opponent.worldPositionM),
   }))
-  const sessionId = `lmu-${raw.session.track || 'session'}-${startedAt}`
+  const sessionId = raw.desktopSessionId || `lmu-${raw.session.track || 'session'}-${startedAt}`
+  const sessionStartedAt = raw.desktopSessionStartedAt || startedAt
   const weather = mapWeather(raw.session)
   const gameElapsedSeconds = typeof raw.player.gameElapsedSeconds === 'number' && Number.isFinite(raw.player.gameElapsedSeconds) ? raw.player.gameElapsedSeconds : raw.session.elapsedSeconds
   const lapStartSeconds = typeof raw.player.lapStartSeconds === 'number' && Number.isFinite(raw.player.lapStartSeconds) ? raw.player.lapStartSeconds : undefined
-  const sample = { sequence: raw.sequence, sessionId, lapId: `${sessionId}-lap-${player.currentLapNumber}`, capturedAt: raw.capturedAt, sessionElapsedMs: gameElapsedSeconds * 1000, lapElapsedMs: lapStartSeconds === undefined ? 0 : Math.max(0, gameElapsedSeconds - lapStartSeconds) * 1000, distanceM: player.distanceM, distanceFraction: player.distanceFraction, sectorIndex: player.sectorIndex, isInPitLane: player.pitState !== 'none', inputs, motion, powertrain, hybrid, wheels, worldPositionM: optionalVector(raw.player.worldPositionM), controlOwner: raw.player.controlOwner ?? 'unknown' }
+  const sample = { sequence: raw.sequence, sessionId, lapId: raw.desktopLapId || `${sessionId}-lap-${player.currentLapNumber}`, capturedAt: raw.capturedAt, sessionElapsedMs: gameElapsedSeconds * 1000, lapElapsedMs: lapStartSeconds === undefined ? 0 : Math.max(0, gameElapsedSeconds - lapStartSeconds) * 1000, distanceM: player.distanceM, distanceFraction: player.distanceFraction, sectorIndex: player.sectorIndex, isInPitLane: player.pitState !== 'none', inputs, motion, powertrain, hybrid, wheels, worldPositionM: optionalVector(raw.player.worldPositionM), controlOwner: raw.player.controlOwner ?? 'unknown' }
   return {
     sequence: raw.sequence, source: raw.source,
     capturedAt: raw.capturedAt,
-    session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt, scheduledDurationMs: raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: raw.opponents.length > 0 },
+    session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt: sessionStartedAt, scheduledDurationMs: raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: raw.opponents.length > 0 },
     sessionState: { phase: phase(raw), flag: raw.session.yellowState > 0 ? 'yellow' : 'green', elapsedMs: raw.session.elapsedSeconds * 1000, remainingMs: raw.session.endSeconds > 0 ? Math.max(0, raw.session.endSeconds - raw.session.elapsedSeconds) * 1000 : null, currentLap: player.currentLapNumber, totalLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, sessionBestLapMs: null, incidentCount: 0 },
     weather, player, opponents, sample, events: [], sourceState: raw.playerTelemetryAvailable === false ? 'session-only' : 'vehicle-telemetry',
   }
@@ -297,7 +301,7 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
   private statusListeners = new Set<AdapterStatusListener>()
   private unsubscribeDesktop: (() => void) | null = null
   private latestFrame: TelemetryFrame | null = null
-  private startedAt = new Date().toISOString()
+  private startedAt: string | null = null
   private status: TelemetryAdapterStatus = { state: 'idle', sourceName: this.displayName, sampleRateHz: 50, connectedAt: null, lastFrameAt: null, framesReceived: 0, error: null }
 
   async connect(): Promise<void> {
@@ -314,6 +318,7 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
     this.unsubscribeDesktop = null
     await window.apexDesktop?.stopTelemetry()
     this.latestFrame = null
+    this.startedAt = null
     this.setStatus({ state: 'idle', connectedAt: null, lastFrameAt: null })
   }
 
@@ -328,7 +333,7 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
     // claim that LMU itself is connected.
     if (isRecord(message) && message.source === 'self-test') return
     if (isRawFrame(message)) {
-      if (!this.latestFrame) this.startedAt = message.capturedAt
+      this.startedAt ??= message.capturedAt
       const frame = mapBridgeFrame(message, this.startedAt)
       this.latestFrame = frame
       this.setStatus({ state: 'connected', connectedAt: this.status.connectedAt ?? frame.capturedAt, lastFrameAt: frame.capturedAt, framesReceived: this.status.framesReceived + 1, error: null })

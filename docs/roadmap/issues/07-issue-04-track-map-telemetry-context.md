@@ -45,24 +45,32 @@ The local implementation branch now carries a measured live and analysis path:
   coordinate/time interpretation rather than accepting merely plausible axes.
 - That recording reconstructs two clean laps, 354 robust 12 m route bins,
   99.16% coverage, geometry fingerprint `34f2b542`, and 11 stable braking zones.
-- `MeasuredTrackRecorder` deduplicates repeated LMU game-time snapshots, rejects
-  non-local control, pits, backwards/long gaps, teleports, invalid ranges, and
-  duplicate/out-of-order sequences. Pit/AI/incomplete laps cannot become clean
-  reference laps.
+- Electron main owns a bounded live-session store with stable logical session
+  and lap IDs. Bridge waiting/disconnect/run changes cannot erase compatible
+  completed laps; genuine track/car/time/lap-counter resets archive a session.
+- The store deduplicates repeated LMU game-time snapshots, records explicit
+  quality reasons for control, pit, gap, teleport, and invalid-sample evidence,
+  and keeps incomplete or ineligible laps visible without using them as clean
+  references. Finalized traces are compacted and old payload eviction preserves
+  lap summaries.
 - Braking uses application/release hysteresis, minimum duration/sample count,
   chatter-gap merging, isolated-spike rejection, and retains application, peak,
   release, duration, entry/minimum/exit speed, and sample count.
 - Measured Live renders the locally reconstructed driven line, exact measured
   player/opponent positions, coverage state, heat segments, and a textual brake
   list. No opponent coordinate means no marker.
-- Measured Analysis reuses the latest clean lap and synchronizes selected brake
-  evidence, map segment, distance cursor, speed trace, and brake trace. Zone
-  rows are keyboard buttons and expose complete textual evidence.
+- Measured Analysis lists the current runtime's sessions and every completed,
+  incomplete, and current lap. It defaults to the latest loaded clean completed
+  lap instead of the final partial lap, loads the selected trace on demand, and
+  exposes stable quality/reason labels. Selected brake evidence, map segment,
+  distance cursor, speed trace, and brake trace remain synchronized; zone rows
+  are keyboard buttons with complete textual evidence.
 - `CircuitTrackMap` no longer silently substitutes its generated demo path when
   an explicit measured point set is empty. Measured marker and segment lookup
   preserve LMU lap distance rather than SVG arc-length percentage.
 
-The normal product keeps this high-rate analysis in memory and reconstructs it
+The normal product keeps this high-rate analysis in bounded Electron-main
+memory so a renderer reload does not clear it, and reconstructs it
 from an explicitly chosen private `.apexrec` when replayed. It does not silently
 persist or upload high-rate position/pedal history. Durable automatic history
 would require a separate user-facing privacy/retention decision; the raw

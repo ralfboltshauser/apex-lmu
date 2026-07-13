@@ -12,6 +12,7 @@ const { OverlayManager } = require('./overlay-manager.cjs')
 const { WhatsNewService } = require('./whats-new.cjs')
 const { readE2EConfig } = require('./e2e-config.cjs')
 const { StatsDatabase } = require('./stats-database.cjs')
+const { LiveSessionStore } = require('./live-session-store.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 const e2eConfig = readE2EConfig()
@@ -24,6 +25,7 @@ let updateManager
 let whatsNewService
 let statsDatabase
 let statsError = null
+let liveSessionStore
 const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -140,6 +142,12 @@ ipcMain.handle('apex:acknowledge-whats-new', (_event, version) => whatsNewServic
 ipcMain.handle('apex:get-lifetime-stats', () => statsDatabase ? statsDatabase.getStats() : { status: 'error', message: statsError || 'Lifetime database is unavailable.', totalDistanceMm: 0, trackedSince: null, vehicles: [] })
 ipcMain.handle('apex:get-lifetime-stats-health', () => statsDatabase ? statsDatabase.getHealth() : { status: 'error', message: statsError || 'Lifetime database is unavailable.' })
 ipcMain.handle('apex:backup-lifetime-stats', () => statsDatabase ? statsDatabase.createBackup().then((backup) => ({ ok: true, backup })).catch((error) => ({ ok: false, reason: error.message })) : { ok: false, reason: statsError || 'unavailable' })
+ipcMain.handle('apex:get-analysis-sessions', () => liveSessionStore?.listSessions() ?? [])
+ipcMain.handle('apex:get-analysis-lap', (_event, sessionId, lapId) => {
+  if (typeof sessionId !== 'string' || typeof lapId !== 'string' || !/^[a-z0-9-]{1,96}$/i.test(sessionId) || !/^[a-z0-9-]{1,96}$/i.test(lapId)) return null
+  return liveSessionStore?.getLap(sessionId, lapId) ?? null
+})
+ipcMain.handle('apex:get-analysis-health', () => liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 })
 ipcMain.handle('apex:check-for-updates', () => updateManager?.check(false))
 ipcMain.handle('apex:download-update', () => updateManager?.download())
 ipcMain.handle('apex:install-update', () => updateManager?.install())
@@ -147,7 +155,7 @@ ipcMain.handle('apex:open-releases', () => shell.openExternal('https://github.co
 ipcMain.handle('apex:report-renderer-error', (_event, input = {}) => diagnostics.record('error', 'renderer', 'reported-error', String(input.message || 'Renderer error'), { stack: String(input.stack || ''), context: String(input.context || '') }).then(() => ({ ok: true })))
 async function getSupportText() {
   const report = await diagnostics.getReport({ bridgePath: bridgeManager?.getBinaryPath() })
-  return diagnostics.buildSupportText({ report })
+  return diagnostics.buildSupportText({ report, analysis: liveSessionStore?.getHealth() ?? null })
 }
 ipcMain.handle('apex:copy-support-bundle', async () => {
   const text = await getSupportText()
@@ -215,6 +223,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
+  liveSessionStore = new LiveSessionStore({ logger: diagnostics })
   whatsNewService = new WhatsNewService({ userDataPath: app.getPath('userData'), currentVersion: app.getVersion(), logger: diagnostics })
   try { statsDatabase = await StatsDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics }) }
   catch (error) { statsError = error.message; void diagnostics.record('error', 'lifetime-stats', 'open-failed', 'Lifetime statistics database was preserved but could not be opened.', { error: error.message }) }
@@ -224,8 +233,16 @@ app.whenReady().then(async () => {
     logger: diagnostics,
     broadcast: (message) => {
       try { statsDatabase?.ingest(message) } catch (error) { void diagnostics.record('error', 'lifetime-stats', 'ingest-failed', 'A lifetime distance chunk could not be committed.', { error: error.message }) }
+      let analysisResult = { changed: false, notify: false }
+      try { analysisResult = liveSessionStore.ingest(message) } catch (error) { void diagnostics.record('error', 'analysis-session', 'ingest-failed', 'The in-memory analysis session rejected a bridge message.', { error: error.message }) }
       if (message.runId && (message.state === 'self-test-complete' || message.state === 'error')) selfTestWaiters.get(message.runId)?.(message)
-      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:telemetry-message', message)
+      const rendererMessage = message.type === 'telemetry' && analysisResult.sessionId
+        ? { ...message, desktopSessionId: analysisResult.sessionId, desktopLapId: analysisResult.lapId, desktopSessionStartedAt: analysisResult.startedAt }
+        : message
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send('apex:telemetry-message', rendererMessage)
+        if (analysisResult.notify) window.webContents.send('apex:analysis-sessions-changed', { schemaVersion: 1, revision: analysisResult.revision, kind: analysisResult.kind })
+      }
     },
     broadcastRecording: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:recording-state', state)

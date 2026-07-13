@@ -1,5 +1,3 @@
-import type { TelemetryFrame, TelemetrySample } from '../core'
-
 export interface MeasuredRoutePoint {
   readonly distanceM: number
   readonly x: number
@@ -36,6 +34,22 @@ export interface MeasuredTrackSnapshot {
   readonly selectedLap: readonly MeasuredRoutePoint[]
   readonly brakeZones: readonly BrakeZone[]
   readonly geometryFingerprint: string | null
+}
+
+export interface MeasuredLapRecord {
+  readonly id: string
+  readonly number: number
+  readonly state: 'current' | 'complete' | 'incomplete'
+  readonly quality: 'clean' | 'limited' | 'ineligible'
+  readonly samples: readonly MeasuredRoutePoint[]
+}
+
+export interface MeasuredSessionRecord {
+  readonly id: string
+  readonly trackName: string
+  readonly layoutName: string
+  readonly trackLengthM: number
+  readonly laps: readonly MeasuredLapRecord[]
 }
 
 export interface BrakeZoneOptions {
@@ -156,144 +170,28 @@ function aggregateRoute(laps: readonly (readonly MeasuredRoutePoint[])[], trackL
   }))
 }
 
-function sampleFromFrame(frame: TelemetryFrame): MeasuredRoutePoint | null {
-  const position = frame.sample.worldPositionM
-  if (!position || frame.sourceState !== 'vehicle-telemetry') return null
-  const sample = {
-    distanceM: frame.sample.distanceM,
-    x: position.x,
-    z: position.z,
-    brake: frame.sample.inputs.brake,
-    speedKph: frame.sample.motion.speedKph,
-    elapsedSeconds: frame.sample.sessionElapsedMs / 1000,
+export function buildMeasuredTrackSnapshot(session: MeasuredSessionRecord, selectedLapId: string, binSizeM = 12): MeasuredTrackSnapshot | null {
+  const selected = session.laps.find((lap) => lap.id === selectedLapId && lap.samples.length > 1)
+  if (!selected) return null
+  const completed = session.laps.filter((lap) => lap.state === 'complete')
+  const routeLaps = completed.filter((lap) => lap.quality === 'clean' && lap.samples.length > 1).slice(-3)
+  const routeSource = routeLaps.length > 0 ? routeLaps.map((lap) => lap.samples) : [selected.samples]
+  const route = aggregateRoute(routeSource, session.trackLengthM, binSizeM)
+  const totalBins = Math.max(1, Math.ceil(session.trackLengthM / binSizeM))
+  const coverage = Math.min(1, route.length / totalBins)
+  const state = route.length === 0 ? 'empty' : routeLaps.length > 0 && coverage >= 0.82 ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
+  return {
+    sessionId: session.id,
+    trackName: session.trackName,
+    layoutName: session.layoutName,
+    trackLengthM: session.trackLengthM,
+    route,
+    coverage,
+    state,
+    completedLapCount: completed.length,
+    selectedLapNumber: selected.number,
+    selectedLap: selected.samples,
+    brakeZones: detectBrakeZones(selected.samples),
+    geometryFingerprint: fingerprint(route),
   }
-  return finitePoint(sample) ? sample : null
-}
-
-export class MeasuredTrackRecorder {
-  private sessionId = ''
-  private trackName = ''
-  private layoutName = ''
-  private trackLengthM = 0
-  private lapId = ''
-  private lapNumber = 0
-  private currentLap: MeasuredRoutePoint[] = []
-  private currentValid = true
-  private completedLaps: Array<{ number: number; samples: MeasuredRoutePoint[] }> = []
-  private lastSequence = -1
-  private lastAccepted: MeasuredRoutePoint | null = null
-  private readonly binSizeM: number
-
-  constructor(binSizeM = 12) {
-    if (!Number.isFinite(binSizeM) || binSizeM <= 0) throw new RangeError('binSizeM must be greater than zero')
-    this.binSizeM = binSizeM
-  }
-
-  ingest(frame: TelemetryFrame, createSnapshot = true): MeasuredTrackSnapshot | null {
-    const sessionChanged = frame.session.id !== this.sessionId
-    if (sessionChanged) this.reset(frame)
-    const publish = createSnapshot || sessionChanged
-    if (frame.sequence <= this.lastSequence) return publish ? this.snapshot() : null
-    this.lastSequence = frame.sequence
-
-    if (frame.sample.lapId !== this.lapId) {
-      this.finishLap()
-      this.lapId = frame.sample.lapId
-      this.lapNumber = frame.player.currentLapNumber
-      this.currentLap = []
-      this.currentValid = true
-      this.lastAccepted = null
-    }
-
-    if (frame.sample.controlOwner !== 'local-player' || frame.sample.isInPitLane) {
-      this.currentValid = false
-      this.lastAccepted = null
-      return publish ? this.snapshot() : null
-    }
-    const sample = sampleFromFrame(frame)
-    if (!sample || sample.distanceM > this.trackLengthM * 1.05) {
-      this.currentValid = false
-      return publish ? this.snapshot() : null
-    }
-    const previous = this.lastAccepted
-    if (previous) {
-      const elapsed = sample.elapsedSeconds - previous.elapsedSeconds
-      if (Math.abs(elapsed) < 1e-9) return publish ? this.snapshot() : null
-      const movement = Math.hypot(sample.x - previous.x, sample.z - previous.z)
-      const plausible = Math.max(20, (sample.speedKph / 3.6) * Math.max(0, elapsed) * 3 + 5)
-      if (elapsed < 0 || elapsed > 1 || movement > plausible) {
-        this.currentValid = false
-        this.lastAccepted = null
-        return publish ? this.snapshot() : null
-      }
-      if (sample.distanceM < previous.distanceM - this.trackLengthM * 0.5) {
-        this.finishLap()
-        this.currentLap = []
-        this.currentValid = true
-      }
-      if (Math.abs(sample.distanceM - previous.distanceM) < 2 && elapsed < 0.08) return publish ? this.snapshot() : null
-    }
-    this.currentLap.push(sample)
-    this.lastAccepted = sample
-    return publish ? this.snapshot() : null
-  }
-
-  snapshot(): MeasuredTrackSnapshot {
-    const selected = this.completedLaps.at(-1)
-    const routeSource = this.completedLaps.length > 0
-      ? this.completedLaps.map((lap) => lap.samples)
-      : this.currentLap.length > 0 ? [this.currentLap] : []
-    const route = aggregateRoute(routeSource, this.trackLengthM, this.binSizeM)
-    const totalBins = Math.max(1, Math.ceil(this.trackLengthM / this.binSizeM))
-    const coverage = Math.min(1, route.length / totalBins)
-    const state = route.length === 0 ? 'empty' : this.completedLaps.length > 0 && coverage >= 0.82
-      ? 'complete' : coverage >= 0.25 ? 'partial' : 'learning'
-    const selectedLap = selected?.samples ?? this.currentLap
-    return {
-      sessionId: this.sessionId,
-      trackName: this.trackName,
-      layoutName: this.layoutName,
-      trackLengthM: this.trackLengthM,
-      route,
-      coverage,
-      state,
-      completedLapCount: this.completedLaps.length,
-      selectedLapNumber: selected?.number ?? (this.currentLap.length > 0 ? this.lapNumber : null),
-      selectedLap,
-      brakeZones: detectBrakeZones(selectedLap),
-      geometryFingerprint: fingerprint(route),
-    }
-  }
-
-  private reset(frame: TelemetryFrame) {
-    this.sessionId = frame.session.id
-    this.trackName = frame.session.track.name
-    this.layoutName = frame.session.track.layout
-    this.trackLengthM = Math.max(1, frame.session.track.lengthM)
-    this.lapId = frame.sample.lapId
-    this.lapNumber = frame.player.currentLapNumber
-    this.currentLap = []
-    this.currentValid = true
-    this.completedLaps = []
-    this.lastSequence = -1
-    this.lastAccepted = null
-  }
-
-  private finishLap() {
-    if (this.currentValid && this.currentLap.length >= 10) {
-      const distances = this.currentLap.map((sample) => sample.distanceM)
-      const coverage = (Math.max(...distances) - Math.min(...distances)) / this.trackLengthM
-      if (coverage >= 0.8) {
-        this.completedLaps.push({ number: this.lapNumber, samples: [...this.currentLap] })
-        this.completedLaps = this.completedLaps.slice(-3)
-      }
-    }
-  }
-}
-
-export function makeTrackSample(sample: TelemetrySample): MeasuredRoutePoint | null {
-  const position = sample.worldPositionM
-  if (!position) return null
-  const point = { distanceM: sample.distanceM, x: position.x, z: position.z, brake: sample.inputs.brake, speedKph: sample.motion.speedKph, elapsedSeconds: sample.sessionElapsedMs / 1000 }
-  return finitePoint(point) ? point : null
 }
