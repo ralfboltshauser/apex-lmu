@@ -97,13 +97,18 @@ async function main() {
     const carVisible = page.getByText(manifest.expected.car, { exact: true }).first().waitFor({ state: 'visible', timeout: 90000 })
     const overlayReplayVisible = overlayPage.getByText('REPLAY', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
     const overlayMeasuredFuel = overlayPage.waitForFunction(() => document.querySelector('.race-overlay__fuel strong')?.textContent?.includes('L'), null, { timeout: 90000 })
+    const overlayLiveState = Promise.all([overlayReplayVisible, overlayMeasuredFuel]).then(async () => ({
+      opacity: await overlayPage.locator('.race-overlay').evaluate((element) => getComputedStyle(element).opacity),
+      deltaWidgets: await overlayPage.locator('.overlay-slot--delta').count(),
+      fuelWidgets: await overlayPage.locator('.overlay-slot--fuel').count(),
+    }))
     const measuredRouteVisible = page.getByText('Locally reconstructed driven line', { exact: true }).waitFor({ state: 'visible', timeout: 90000 })
     const measuredBrakeZonesVisible = page.waitForFunction(() => document.querySelectorAll('.measured-brake-zones li').length > 0, null, { timeout: 90000 })
     await page.waitForFunction(() => ['complete', 'error'].includes(window.__apexReplaySummary.recordingStatus), null, { timeout: 120000 })
-    await Promise.all([trackVisible, carVisible, overlayReplayVisible, overlayMeasuredFuel, measuredRouteVisible, measuredBrakeZonesVisible])
-    exact(await overlayPage.locator('.race-overlay').evaluate((element) => getComputedStyle(element).opacity), '0.61', 'live overlay opacity')
-    exact(await overlayPage.locator('.overlay-slot--delta').count(), 0, 'disabled overlay widget count')
-    exact(await overlayPage.locator('.overlay-slot--fuel').count(), 1, 'enabled overlay widget count')
+    const [, , liveOverlay] = await Promise.all([trackVisible, carVisible, overlayLiveState, measuredRouteVisible, measuredBrakeZonesVisible])
+    exact(liveOverlay.opacity, '0.61', 'live overlay opacity')
+    exact(liveOverlay.deltaWidgets, 0, 'disabled overlay widget count')
+    exact(liveOverlay.fuelWidgets, 1, 'enabled overlay widget count')
     exact(await page.locator('.measured-brake-zones li').count(), manifest.expected.measuredRoute.brakeZones, 'measured live brake zones')
     const routeBadge = await page.locator('.live-measured-map-card .badge').textContent()
     if (!routeBadge.includes('Measured route') || !routeBadge.includes(`${manifest.expected.measuredRoute.minimumCoveragePercent}%`)) fail(`measured route badge: ${routeBadge}`)
