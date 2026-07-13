@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Calculator, Check, Fuel, Gauge, Info, Radio, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, Progress, Segmented, TooltipHint } from '../components/ui'
+import { NumericField } from '../components/forms/NumericField'
 import type { LiveFuelEstimate } from '../core'
 import { buildFuelPlan } from '../engine'
 import { defineMessages, useI18n, useMessages, type Language } from '../i18n'
@@ -9,7 +10,9 @@ type Mode = 'automatic' | 'manual'
 type RaceKind = 'timed' | 'laps'
 
 const STORAGE_KEY = 'apex:fuel-calculator'
+const RECOVERY_STORAGE_KEY = `${STORAGE_KEY}:recovered`
 const defaults = { raceKind: 'timed' as RaceKind, durationMinutes: 60, totalLaps: 30, averageLapSeconds: 124, fuelPerLap: 3.4, currentFuel: 40, tankCapacity: 90, reserve: 2, extraLap: false }
+type FuelInputs = typeof defaults
 
 const copy = defineMessages({
   heading: { eyebrow: 'Fuel calculator', title: 'Start with certainty. Finish with margin.', description: 'Calculate the fuel, stops and final stint from live clean laps or your own assumptions.', reset: 'Reset manual inputs' },
@@ -41,22 +44,51 @@ function safe(value: number, fallback: number, minimum = 0) {
   return Number.isFinite(value) ? Math.max(minimum, value) : fallback
 }
 
-function Field({ label, value, unit, min = 0, step = 1, disabled = false, onChange }: { label: string; value: number; unit: string; min?: number; step?: number; disabled?: boolean; onChange: (value: number) => void }) {
-  return <label className="number-input"><span>{label}</span><div><input type="number" min={min} step={step} value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} /><em>{unit}</em></div></label>
+const numericRules: Record<Exclude<keyof FuelInputs, 'raceKind' | 'extraLap'>, { min: number; max: number; integer?: boolean }> = {
+  durationMinutes: { min: 1, max: 1440 }, totalLaps: { min: 1, max: 10000, integer: true }, averageLapSeconds: { min: 10, max: 3600 },
+  fuelPerLap: { min: 0.01, max: 1000 }, currentFuel: { min: 0, max: 1000 }, tankCapacity: { min: 1, max: 1000 }, reserve: { min: 0, max: 1000 },
 }
 
-function loadInputs() {
-  try { return { ...defaults, ...JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}') } as typeof defaults } catch { return defaults }
+export function loadFuelCalculatorInputs(storage: Pick<Storage, 'getItem' | 'setItem'> = window.localStorage): { inputs: FuelInputs; recoveredFields: string[] } {
+  const raw = storage.getItem(STORAGE_KEY)
+  if (!raw) return { inputs: { ...defaults }, recoveredFields: [] }
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch {
+    storage.setItem(RECOVERY_STORAGE_KEY, raw)
+    return { inputs: { ...defaults }, recoveredFields: ['json'] }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    storage.setItem(RECOVERY_STORAGE_KEY, raw)
+    return { inputs: { ...defaults }, recoveredFields: ['root'] }
+  }
+  const source = parsed as Record<string, unknown>
+  const inputs = { ...defaults }
+  const recoveredFields: string[] = []
+  if (source.raceKind === 'timed' || source.raceKind === 'laps') inputs.raceKind = source.raceKind
+  else if ('raceKind' in source) recoveredFields.push('raceKind')
+  if (typeof source.extraLap === 'boolean') inputs.extraLap = source.extraLap
+  else if ('extraLap' in source) recoveredFields.push('extraLap')
+  for (const [key, rule] of Object.entries(numericRules) as Array<[keyof typeof numericRules, (typeof numericRules)[keyof typeof numericRules]]>) {
+    const value = source[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value >= rule.min && value <= rule.max && (!rule.integer || Number.isInteger(value))) inputs[key] = value
+    else if (key in source) recoveredFields.push(key)
+  }
+  if (recoveredFields.length) storage.setItem(RECOVERY_STORAGE_KEY, raw)
+  return { inputs, recoveredFields }
 }
 
 export function FuelCalculatorView({ live }: { live: LiveFuelEstimate | null }) {
   const m = useMessages(copy)
   const { language } = useI18n()
   const [mode, setMode] = useState<Mode>(() => live?.fuelSamplesLiters.length ? 'automatic' : 'manual')
-  const [inputs, setInputs] = useState(loadInputs)
+  const [loaded] = useState(() => loadFuelCalculatorInputs())
+  const [inputs, setInputs] = useState(loaded.inputs)
   const automaticReady = Boolean(live && live.fuelSamplesLiters.length > 0)
   const patch = (next: Partial<typeof defaults>) => setInputs((current) => ({ ...current, ...next }))
   useEffect(() => { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(inputs)) }, [inputs])
+  useEffect(() => {
+    if (loaded.recoveredFields.length) void window.apexDesktop?.reportError({ message: `Recovered invalid fuel calculator fields: ${loaded.recoveredFields.join(', ')}`, context: 'fuel-calculator-storage' })
+  }, [loaded.recoveredFields])
 
   const effectiveRaceKind: RaceKind = mode === 'automatic' && live?.totalLaps ? 'laps' : mode === 'automatic' && live?.durationSeconds ? 'timed' : inputs.raceKind
   const samples = mode === 'automatic' && automaticReady ? live!.fuelSamplesLiters : [safe(inputs.fuelPerLap, defaults.fuelPerLap, 0.01)]
@@ -91,17 +123,17 @@ export function FuelCalculatorView({ live }: { live: LiveFuelEstimate | null }) 
         <Card><CardHeader eyebrow={m.race.eyebrow} title={m.race.title} />
           {mode === 'manual' ? <Segmented value={effectiveRaceKind} onChange={(value) => patch({ raceKind: value })} ariaLabel={m.race.aria} options={[{ value: 'timed', label: m.race.timed }, { value: 'laps', label: m.race.laps }]} /> : <Badge tone="positive">{effectiveRaceKind === 'timed' ? m.race.timed : m.race.laps}</Badge>}
           <div className="field-group field-group--two">
-            {effectiveRaceKind === 'timed' ? <Field label={m.race.duration} value={mode === 'automatic' && live?.durationSeconds ? live.durationSeconds / 60 : inputs.durationMinutes} unit={m.units.minutes} min={1} disabled={mode === 'automatic'} onChange={(durationMinutes) => patch({ durationMinutes })} /> : <Field label={m.race.totalLaps} value={mode === 'automatic' && live?.totalLaps ? live.totalLaps : inputs.totalLaps} unit={m.units.laps} min={1} disabled={mode === 'automatic'} onChange={(totalLaps) => patch({ totalLaps })} />}
-            <Field label={m.race.averageLap} value={mode === 'automatic' ? lapTimes.reduce((sum, value) => sum + value, 0) / lapTimes.length : inputs.averageLapSeconds} unit={m.units.seconds} min={10} step={0.1} disabled={mode === 'automatic'} onChange={(averageLapSeconds) => patch({ averageLapSeconds })} />
+            {effectiveRaceKind === 'timed' ? <NumericField label={m.race.duration} value={mode === 'automatic' && live?.durationSeconds ? live.durationSeconds / 60 : inputs.durationMinutes} unit={m.units.minutes} min={1} max={1440} step={1} disabled={mode === 'automatic'} onCommit={(durationMinutes) => patch({ durationMinutes })} /> : <NumericField label={m.race.totalLaps} value={mode === 'automatic' && live?.totalLaps ? live.totalLaps : inputs.totalLaps} unit={m.units.laps} min={1} max={10000} step={1} integer disabled={mode === 'automatic'} onCommit={(totalLaps) => patch({ totalLaps })} />}
+            <NumericField label={m.race.averageLap} value={mode === 'automatic' ? lapTimes.reduce((sum, value) => sum + value, 0) / lapTimes.length : inputs.averageLapSeconds} unit={m.units.seconds} min={10} max={3600} step={0.1} disabled={mode === 'automatic'} onCommit={(averageLapSeconds) => patch({ averageLapSeconds })} />
           </div>
           {effectiveRaceKind === 'timed' && <label className="toggle-row"><span><b>{m.race.extraLap}</b><small>{m.race.extraLapHelp}</small></span><input type="checkbox" checked={inputs.extraLap} onChange={(event) => patch({ extraLap: event.target.checked })} /></label>}
         </Card>
         <Card><CardHeader eyebrow={m.fuel.eyebrow} title={m.fuel.title} />
           <div className="field-group field-group--two">
-            <Field label={m.fuel.perLap} value={mode === 'automatic' && automaticReady ? plan.fuel.perLap.mean : inputs.fuelPerLap} unit={m.units.perLap} min={0.01} step={0.01} disabled={mode === 'automatic'} onChange={(fuelPerLap) => patch({ fuelPerLap })} />
-            <Field label={m.fuel.current} value={currentFuel} unit={m.units.liters} step={0.1} disabled={mode === 'automatic'} onChange={(currentFuel) => patch({ currentFuel })} />
-            <Field label={m.fuel.tank} value={tank} unit={m.units.liters} min={1} step={0.1} disabled={mode === 'automatic'} onChange={(tankCapacity) => patch({ tankCapacity })} />
-            <Field label={m.fuel.reserve} value={inputs.reserve} unit={m.units.liters} step={0.1} onChange={(reserve) => patch({ reserve })} />
+            <NumericField label={m.fuel.perLap} value={mode === 'automatic' && automaticReady ? plan.fuel.perLap.mean : inputs.fuelPerLap} unit={m.units.perLap} min={0.01} max={1000} step={0.01} disabled={mode === 'automatic'} onCommit={(fuelPerLap) => patch({ fuelPerLap })} />
+            <NumericField label={m.fuel.current} value={currentFuel} unit={m.units.liters} min={0} max={1000} step={0.1} disabled={mode === 'automatic'} onCommit={(currentFuel) => patch({ currentFuel })} />
+            <NumericField label={m.fuel.tank} value={tank} unit={m.units.liters} min={1} max={1000} step={0.1} disabled={mode === 'automatic'} onCommit={(tankCapacity) => patch({ tankCapacity })} />
+            <NumericField label={m.fuel.reserve} value={inputs.reserve} unit={m.units.liters} min={0} max={1000} step={0.1} onCommit={(reserve) => patch({ reserve })} />
           </div>
           <div className="fuel-model-facts"><span>{m.fuel.sampleSpread}<strong>{spread} {m.units.perLap}</strong></span><span>{m.fuel.conservative}<strong>{number(plan.fuel.perLap.conservative, language, 2)} {m.units.perLap}</strong></span></div>
         </Card>

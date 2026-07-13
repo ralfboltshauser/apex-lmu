@@ -13,7 +13,8 @@ function finite(value) { return typeof value === 'number' && Number.isFinite(val
 function clamp(value, minimum, maximum) { return Math.max(minimum, Math.min(maximum, value)) }
 function displayFingerprint(display) {
   const bounds = display?.bounds || {}
-  return `${bounds.width || 0}x${bounds.height || 0}@${finite(display?.scaleFactor) ? display.scaleFactor : 1}:${display?.rotation || 0}`
+  const label = String(display?.label || '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ')
+  return `display-v2|${label}|${bounds.x || 0},${bounds.y || 0},${bounds.width || 0}x${bounds.height || 0}|${finite(display?.scaleFactor) ? display.scaleFactor : 1}|${display?.rotation || 0}`
 }
 function describeDisplay(display, index, primaryId) {
   const bounds = display.bounds
@@ -72,19 +73,24 @@ function applyConfigPatch(current, patch) {
   }
   if ('widgets' in patch) {
     if (!Array.isArray(patch.widgets)) throw new TypeError('widgets must be an array.')
+    const seen = new Set()
     for (const widget of patch.widgets) {
       if (!widget || !SUPPORTED_WIDGETS.has(widget.id) || typeof widget.enabled !== 'boolean') throw new TypeError('widgets contains an unsupported or invalid entry.')
+      for (const key of Object.keys(widget)) if (!['id', 'enabled', 'bounds'].includes(key)) throw new TypeError(`Unsupported overlay widget field: ${key}`)
+      if (seen.has(widget.id)) throw new TypeError(`widgets contains duplicate ${widget.id} entries.`)
+      seen.add(widget.id)
+      if (!widget.bounds || Object.keys(widget.bounds).some((key) => !['x', 'y', 'width', 'height'].includes(key)) || !finite(widget.bounds.x) || !finite(widget.bounds.y) || !finite(widget.bounds.width) || !finite(widget.bounds.height) || widget.bounds.x < 0 || widget.bounds.y < 0 || widget.bounds.width < 0.05 || widget.bounds.height < 0.04 || widget.bounds.x + widget.bounds.width > 1 || widget.bounds.y + widget.bounds.height > 1) throw new TypeError(`widgets contains invalid bounds for ${widget.id}.`)
     }
     next.widgets = current.widgets.map((widget) => {
       const update = patch.widgets.find((candidate) => candidate.id === widget.id)
-      return update ? { ...widget, enabled: update.enabled, bounds: normalizeBounds(update.bounds, widget.bounds) } : widget
+      return update ? { ...widget, enabled: update.enabled, bounds: { ...update.bounds } } : widget
     })
   }
   return normalizeConfig(next, current)
 }
 
 class OverlayManager {
-  constructor({ app, BrowserWindow, screen, fs, diagnostics, broadcast, developmentUrl = '', preloadPath, rendererPath, readyTimeoutMs = 8000 }) {
+  constructor({ app, BrowserWindow, screen, fs, diagnostics, broadcast, developmentUrl = '', preloadPath, rendererPath, readyTimeoutMs = 8000, closeTimeoutMs = 2000 }) {
     this.app = app
     this.BrowserWindow = BrowserWindow
     this.screen = screen
@@ -95,12 +101,14 @@ class OverlayManager {
     this.preloadPath = preloadPath
     this.rendererPath = rendererPath
     this.readyTimeoutMs = readyTimeoutMs
+    this.closeTimeoutMs = closeTimeoutMs
     this.configPath = path.join(app.getPath('userData'), 'overlay-config-v1.json')
     this.config = defaultConfig()
     this.state = { status: 'closed', displayId: null, message: '', fallbackFrom: null }
     this.window = null
     this.openPromise = null
     this.rendererReady = null
+    this.closePromise = null
     this.topologyListeners = []
   }
 
@@ -221,6 +229,10 @@ class OverlayManager {
       webPreferences: { preload: this.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
     this.window = window
+    // Windows can clamp a non-resizable BrowserWindow's constructor bounds to
+    // the taskbar-excluding work area. Reapply the selected display's full DIP
+    // bounds after creation so the HUD canvas still covers borderless LMU.
+    window.setBounds(display.bounds)
     window.setAlwaysOnTop(true, 'screen-saver')
     window.setIgnoreMouseEvents(this.config.clickThrough, { forward: true })
     window.on('closed', () => {
@@ -270,11 +282,30 @@ class OverlayManager {
   }
 
   async close() {
+    if (this.closePromise) return this.closePromise
     const window = this.window
     this.rendererReady?.reject(new Error('Overlay closed.'))
-    if (window && !window.isDestroyed()) window.close()
-    else this.setState({ status: 'closed', displayId: null, message: '', fallbackFrom: null })
-    return { ok: true, state: this.getState() }
+    if (!window || window.isDestroyed()) {
+      this.setState({ status: 'closed', displayId: null, message: '', fallbackFrom: null })
+      return { ok: true, state: this.getState() }
+    }
+    this.closePromise = new Promise((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve({ ok: true, state: this.getState() })
+      }
+      window.once('closed', finish)
+      const timer = setTimeout(() => {
+        if (!window.isDestroyed()) window.destroy()
+        finish()
+      }, this.closeTimeoutMs)
+      window.close()
+      if (window.isDestroyed()) finish()
+    }).finally(() => { this.closePromise = null })
+    return this.closePromise
   }
 
   async failWindow(window, code, message, details) {

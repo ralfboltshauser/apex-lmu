@@ -69,3 +69,61 @@ Round-trip, corruption, current-decoder and Windows named-mapping tests cover
 the writer and reader. The Windows CI fixture records a separate simulated LMU
 producer, stops the recorder cleanly, reads the resulting file and replays it
 through the packaged bridge.
+
+## Real-recording regression harness
+
+The repository also contains one explicitly approved private test recording and
+an allowlisted expectation manifest under `data/recordings/`. The manifest pins
+the exact byte count and SHA-256 before any replay starts. It contains only
+reviewable aggregate expectations—track/car/class, capability timing, control
+ownership transitions, ranges, lap time, pit sequence, fuel movement, wheel
+evidence, opponent count, world-coordinate bounds, and coordinate-motion versus
+speed consistency—not driver, Steam, server, or local-path data.
+
+Run the current decoder and bridge protocol check on Linux or Windows:
+
+```bash
+npm run test:recording-replay
+```
+
+On Linux the command uses `go run`; on Windows CI it uses the compiled bridge
+from `APEX_LMU_BRIDGE_EXE`. Replay is strict, accelerated, and correlated by a
+fresh run ID. A missing/mismatched fixture, corrupt/truncated stream, absent
+completion, omitted empty-opponent array, wrong fact, or nonzero bridge exit is
+a failure.
+
+The Windows source-desktop test additionally requires a built renderer and
+bridge:
+
+```powershell
+npm run build
+npm run build:bridge:win
+npm run test:e2e:windows:replay
+```
+
+After building Windows artifacts, run the same boundary against the packaged
+application instead of source Electron:
+
+```powershell
+$env:APEX_E2E_EXECUTABLE = 'release/win-unpacked/Apex for LMU.exe'
+npm run test:e2e:windows:replay
+```
+
+It launches Electron with isolated temporary user data, starts the same replay
+through validated test-only orchestration, observes the production preload/IPC
+stream while the normal desktop adapter and React UI consume it. It also opens
+the production overlay on an enumerated display, checks exact bounds,
+non-focusable/topmost state, live opacity/widget configuration, measured replay
+content, deterministic close, lifetime-stat exclusion, track/car rendering and
+main-window responsiveness. It also requires the real recording to reconstruct
+a 99% covered route, expose all 11 stable braking zones in Live and Analysis,
+and keep the map/chart evidence distance-aligned. It then closes the entire
+process tree. The test
+disables updater side effects and accepts no arbitrary script, URL, preload, or
+recording path from the renderer.
+
+Never upload the raw recording, replay NDJSON, screenshots containing identity
+data, or temporary corrupt copies as CI artifacts. To replace the fixture,
+review publication consent, update the binary and manifest together, derive
+only allowlisted facts through the current decoder, and demonstrate that a
+deliberately wrong expectation fails before accepting the new hash.

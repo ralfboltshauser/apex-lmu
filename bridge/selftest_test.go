@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -84,6 +85,7 @@ func TestRunSelfTestEmitsExactDeterministicContract(t *testing.T) {
 }
 
 func TestParseCLIOptionsBoundsSelfTest(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "fixture.apexrec")
 	tests := []struct {
 		name string
 		args []string
@@ -91,7 +93,8 @@ func TestParseCLIOptionsBoundsSelfTest(t *testing.T) {
 		{name: "zero frames", args: []string{"--self-test", "--frames=0"}},
 		{name: "too many frames", args: []string{"--self-test", "--frames=257"}},
 		{name: "unsafe run id", args: []string{"--self-test", "--run-id=contains spaces"}},
-		{name: "empty run id", args: []string{"--self-test", "--run-id="}},
+		{name: "unsafe replay run id", args: []string{"--replay=" + replayPath, "--run-id=contains spaces"}},
+		{name: "strict outside replay", args: []string{"--replay-strict"}},
 		{name: "negative parent", args: []string{"--parent-pid=-1"}},
 		{name: "positional argument", args: []string{"--self-test", "extra"}},
 	}
@@ -109,6 +112,10 @@ func TestParseCLIOptionsBoundsSelfTest(t *testing.T) {
 	}
 	if options.frames != 256 || options.hz != 100 {
 		t.Fatalf("unexpected normalized options: %#v", options)
+	}
+	replay, err := parseCLIOptions([]string{"--replay=" + replayPath, "--replay-speed=0", "--replay-strict", "--run-id=real-fixture"})
+	if err != nil || !replay.replayStrict || replay.runID != "real-fixture" || replay.replaySpeed != 0 {
+		t.Fatalf("valid replay options: %#v, error=%v", replay, err)
 	}
 }
 

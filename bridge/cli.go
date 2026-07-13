@@ -15,15 +15,16 @@ const maxSelfTestFrames = 256
 var validRunID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 type cliOptions struct {
-	hz          int
-	selfTest    bool
-	frames      int
-	runID       string
-	parentID    int
-	recordPath  string
-	replayPath  string
-	replaySpeed float64
-	appVersion  string
+	hz           int
+	selfTest     bool
+	frames       int
+	runID        string
+	parentID     int
+	recordPath   string
+	replayPath   string
+	replaySpeed  float64
+	replayStrict bool
+	appVersion   string
 }
 
 func parseCLIOptions(arguments []string) (cliOptions, error) {
@@ -32,11 +33,12 @@ func parseCLIOptions(arguments []string) (cliOptions, error) {
 	hz := flags.Int("hz", 50, "telemetry output frequency (10-100 Hz)")
 	selfTest := flags.Bool("self-test", false, "emit a finite deterministic bridge protocol fixture")
 	frames := flags.Int("frames", 8, "number of telemetry frames emitted in self-test mode")
-	runID := flags.String("run-id", "bridge-self-test", "correlation identifier for self-test messages")
+	runID := flags.String("run-id", "", "correlation identifier for self-test or replay messages")
 	parentID := flags.Int("parent-pid", 0, "exit when this parent process is no longer running")
 	recordPath := flags.String("record", "", "write raw LMU snapshots to an Apex recording")
 	replayPath := flags.String("replay", "", "replay an Apex raw LMU recording")
 	replaySpeed := flags.Float64("replay-speed", 1, "replay speed; zero runs without timing delays")
+	replayStrict := flags.Bool("replay-strict", false, "fail instead of accepting an incomplete recording tail")
 	appVersion := flags.String("app-version", "unknown", "Apex application version stored in recording metadata")
 	if err := flags.Parse(arguments); err != nil {
 		return cliOptions{}, err
@@ -51,12 +53,18 @@ func parseCLIOptions(arguments []string) (cliOptions, error) {
 		*hz = 100
 	}
 	if *selfTest {
+		if *runID == "" {
+			*runID = "bridge-self-test"
+		}
 		if *frames < 1 || *frames > maxSelfTestFrames {
 			return cliOptions{}, fmt.Errorf("frames must be between 1 and %d", maxSelfTestFrames)
 		}
 		if !validRunID.MatchString(*runID) {
 			return cliOptions{}, fmt.Errorf("run-id must be 1-64 letters, digits, dots, underscores, or hyphens")
 		}
+	}
+	if *runID != "" && !validRunID.MatchString(*runID) {
+		return cliOptions{}, fmt.Errorf("run-id must be 1-64 letters, digits, dots, underscores, or hyphens")
 	}
 	if *parentID < 0 {
 		return cliOptions{}, fmt.Errorf("parent-pid must be zero or a positive process identifier")
@@ -80,13 +88,19 @@ func parseCLIOptions(arguments []string) (cliOptions, error) {
 	if *replayPath != "" && !filepath.IsAbs(*replayPath) {
 		return cliOptions{}, fmt.Errorf("replay path must be absolute")
 	}
+	if (*runID != "" || *replayStrict) && *replayPath == "" && !*selfTest {
+		return cliOptions{}, fmt.Errorf("run-id and replay-strict require self-test or replay mode")
+	}
+	if *replayStrict && *replayPath == "" {
+		return cliOptions{}, fmt.Errorf("replay-strict requires replay mode")
+	}
 	if *replaySpeed < 0 || *replaySpeed > 16 {
 		return cliOptions{}, fmt.Errorf("replay-speed must be between 0 and 16")
 	}
 	if len(*appVersion) == 0 || len(*appVersion) > 64 {
 		return cliOptions{}, fmt.Errorf("app-version must be 1-64 characters")
 	}
-	return cliOptions{hz: *hz, selfTest: *selfTest, frames: *frames, runID: *runID, parentID: *parentID, recordPath: *recordPath, replayPath: *replayPath, replaySpeed: *replaySpeed, appVersion: *appVersion}, nil
+	return cliOptions{hz: *hz, selfTest: *selfTest, frames: *frames, runID: *runID, parentID: *parentID, recordPath: *recordPath, replayPath: *replayPath, replaySpeed: *replaySpeed, replayStrict: *replayStrict, appVersion: *appVersion}, nil
 }
 
 func runSelfTest(writer io.Writer, options cliOptions) error {

@@ -132,6 +132,18 @@ func (view packedView) bounded64(offset int, field string, minimum, maximum floa
 	return value, nil
 }
 
+func (view packedView) worldPosition(offset int, field string) (*worldPositionM, error) {
+	values := [3]float64{}
+	for index := range values {
+		value, err := view.bounded64(offset+index*8, fmt.Sprintf("%s axis %d", field, index), -1e7, 1e7)
+		if err != nil {
+			return nil, err
+		}
+		values[index] = value
+	}
+	return &worldPositionM{X: values[0], Y: values[1], Z: values[2]}, nil
+}
+
 func (view packedView) cString(offset, size int) (string, error) {
 	value, err := view.slice(offset, size)
 	if err != nil {
@@ -362,6 +374,18 @@ func decodePlayerTelemetry(view packedView, base int) (vehicle, error) {
 	if err != nil {
 		return vehicle{}, err
 	}
+	gameElapsed, err := view.bounded64(base+12, "vehicle elapsed time", -1, 1e9)
+	if err != nil {
+		return vehicle{}, err
+	}
+	lapStart, err := view.bounded64(base+24, "vehicle lap start time", -1, 1e9)
+	if err != nil {
+		return vehicle{}, err
+	}
+	worldPosition, err := view.worldPosition(base+160, "vehicle world position")
+	if err != nil {
+		return vehicle{}, err
+	}
 	velocity := [3]float64{}
 	for index := range velocity {
 		velocity[index], err = view.bounded64(base+184+index*8, fmt.Sprintf("local velocity %d", index), -2000, 2000)
@@ -445,7 +469,8 @@ func decodePlayerTelemetry(view packedView, base int) (vehicle, error) {
 	}
 
 	result := vehicle{
-		ID: id, Name: name, Lap: lap, Sector: normalizeSector(sector),
+		ID: id, Name: name, Lap: lap, Sector: normalizeSector(sector), WorldPositionM: worldPosition,
+		GameElapsedSeconds: &gameElapsed, LapStartSeconds: &lapStart,
 		SpeedKph: math.Sqrt(velocity[0]*velocity[0]+velocity[1]*velocity[1]+velocity[2]*velocity[2]) * 3.6,
 		RPM:      rpm, MaximumRPM: maximumRPM, Gear: gear,
 		Throttle: clamp01(throttle), Brake: clamp01(brake), Steering: clamp(steering, -1, 1), Clutch: clamp01(clutch),
@@ -525,12 +550,13 @@ func decodeWheel(view packedView, base int, position string) (wheel, error) {
 }
 
 type decodedVehicleScoring struct {
-	ID       int32
-	IsPlayer bool
-	Opponent opponent
-	Driver   string
-	Name     string
-	Class    string
+	ID           int32
+	IsPlayer     bool
+	ControlOwner string
+	Opponent     opponent
+	Driver       string
+	Name         string
+	Class        string
 }
 
 func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, error) {
@@ -566,6 +592,10 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
+	control, err := view.i8(base + 197)
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
 	inPits, err := view.boolean(base + 198)
 	if err != nil {
 		return decodedVehicleScoring{}, err
@@ -598,16 +628,20 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
+	worldPosition, err := view.worldPosition(base+264, "scoring world position")
+	if err != nil {
+		return decodedVehicleScoring{}, err
+	}
 	pitState, err := view.u8(base + 457)
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
 
 	return decodedVehicleScoring{
-		ID: id, IsPlayer: isPlayer, Driver: driver, Name: name, Class: class,
+		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), Driver: driver, Name: name, Class: class,
 		Opponent: opponent{
 			ID: id, Driver: driver, Name: name, Class: class, Position: place, Laps: laps,
-			LapDistanceM: lapDistance, BestLapSeconds: bestLap, LastLapSeconds: lastLap,
+			LapDistanceM: lapDistance, WorldPositionM: worldPosition, BestLapSeconds: bestLap, LastLapSeconds: lastLap,
 			BehindLeaderSec: behindLeader, BehindNextSec: behindNext,
 			LapsBehindLeader: lapsBehindLeader, InPits: inPits, PitState: pitState,
 		},
@@ -618,6 +652,7 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.Driver = score.Driver
 	player.Name = firstNonempty(score.Name, player.Name)
 	player.Class = score.Class
+	player.ControlOwner = score.ControlOwner
 	player.Position = score.Opponent.Position
 	player.LapDistanceM = score.Opponent.LapDistanceM
 	player.BestLapSeconds = score.Opponent.BestLapSeconds
@@ -626,6 +661,26 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.TimeBehindNextSec = score.Opponent.BehindNextSec
 	player.InPits = score.Opponent.InPits
 	player.PitState = score.Opponent.PitState
+	if player.WorldPositionM == nil {
+		player.WorldPositionM = score.Opponent.WorldPositionM
+	}
+}
+
+func controlOwner(value int8) string {
+	// VehicleScoringInfoV01::mControl is a signed byte in the SDK contract:
+	// -1 nobody, 0 local player, 1 local AI, 2 remote, 3 replay.
+	switch value {
+	case 0:
+		return "local-player"
+	case 1:
+		return "ai"
+	case 2:
+		return "remote"
+	case 3:
+		return "replay"
+	default:
+		return "unknown"
+	}
 }
 
 func firstNonempty(values ...string) string {

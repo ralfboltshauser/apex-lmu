@@ -36,8 +36,19 @@ test('downloads only after an available update and installs only after completio
   updater.emit('download-progress', { percent: 42.8, transferred: 42, total: 100, bytesPerSecond: 10 })
   assert.equal(value.getState().progress.percent, 42.8)
   updater.emit('update-downloaded', { version: '1.1.0' })
-  assert.deepEqual(value.install(), { ok: true })
+  assert.deepEqual(await value.install(), { ok: true })
   assert.equal(updater.installs, 1)
+})
+
+test('does not start the installer when durable data cannot flush', async () => {
+  const updater = new FakeUpdater()
+  const value = new UpdateManager({ app: { isPackaged: true, getVersion: () => '1.0.0' }, platform: 'win32', updater, broadcast: () => {}, schedule: () => 1, beforeInstall: async () => { throw new Error('disk failure') } })
+  updater.emit('update-available', { version: '1.1.0' })
+  await value.download()
+  updater.emit('update-downloaded', { version: '1.1.0' })
+  assert.deepEqual(await value.install(), { ok: false, reason: 'data-flush-failed' })
+  assert.equal(updater.installs, 0)
+  assert.equal(value.getState().status, 'error')
 })
 
 test('does not initialize an updater in development', () => {

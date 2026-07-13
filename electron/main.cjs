@@ -9,13 +9,21 @@ const { discoverLmu, inspectLmuPath } = require('./lmu-discovery.cjs')
 const { UpdateManager } = require('./updater.cjs')
 const { buildSupportMailto } = require('./support-mail.cjs')
 const { OverlayManager } = require('./overlay-manager.cjs')
+const { WhatsNewService } = require('./whats-new.cjs')
+const { readE2EConfig } = require('./e2e-config.cjs')
+const { StatsDatabase } = require('./stats-database.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
+const e2eConfig = readE2EConfig()
+if (e2eConfig) app.setPath('userData', e2eConfig.userDataPath)
 let bridgeManager
 let overlayManager
 let mainWindow
 let diagnostics
 let updateManager
+let whatsNewService
+let statsDatabase
+let statsError = null
 const selfTestWaiters = new Map()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -127,6 +135,11 @@ ipcMain.handle('apex:run-diagnostics', async () => {
 })
 ipcMain.handle('apex:open-logs-folder', () => shell.openPath(diagnostics.dir))
 ipcMain.handle('apex:get-update-state', () => updateManager?.getState())
+ipcMain.handle('apex:get-whats-new-state', () => whatsNewService.getState())
+ipcMain.handle('apex:acknowledge-whats-new', (_event, version) => whatsNewService.acknowledge(version))
+ipcMain.handle('apex:get-lifetime-stats', () => statsDatabase ? statsDatabase.getStats() : { status: 'error', message: statsError || 'Lifetime database is unavailable.', totalDistanceMm: 0, trackedSince: null, vehicles: [] })
+ipcMain.handle('apex:get-lifetime-stats-health', () => statsDatabase ? statsDatabase.getHealth() : { status: 'error', message: statsError || 'Lifetime database is unavailable.' })
+ipcMain.handle('apex:backup-lifetime-stats', () => statsDatabase ? statsDatabase.createBackup().then((backup) => ({ ok: true, backup })).catch((error) => ({ ok: false, reason: error.message })) : { ok: false, reason: statsError || 'unavailable' })
 ipcMain.handle('apex:check-for-updates', () => updateManager?.check(false))
 ipcMain.handle('apex:download-update', () => updateManager?.download())
 ipcMain.handle('apex:install-update', () => updateManager?.install())
@@ -180,6 +193,7 @@ ipcMain.handle('apex:start-replay', async () => {
   if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true }
   return bridgeManager.startReplay(selected.filePaths[0])
 })
+ipcMain.handle('apex:start-e2e-replay', () => e2eConfig ? bridgeManager.startReplay(e2eConfig.replayPath, e2eConfig) : { ok: false, reason: 'e2e-disabled' })
 ipcMain.handle('apex:stop-replay', () => bridgeManager.stopReplay())
 ipcMain.handle('apex:inspect-telemetry', (_event, filePath) => inspectTelemetryDatabase(filePath))
 ipcMain.handle('apex:install-setup', (_event, input) => safeInstallSetup({ ...input, backupRoot: app.getPath('userData') }))
@@ -201,11 +215,15 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
+  whatsNewService = new WhatsNewService({ userDataPath: app.getPath('userData'), currentVersion: app.getVersion(), logger: diagnostics })
+  try { statsDatabase = await StatsDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics }) }
+  catch (error) { statsError = error.message; void diagnostics.record('error', 'lifetime-stats', 'open-failed', 'Lifetime statistics database was preserved but could not be opened.', { error: error.message }) }
   void diagnostics.record('info', 'app', 'started', 'Apex started.', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged })
   bridgeManager = new LmuBridgeManager({
     app,
     logger: diagnostics,
     broadcast: (message) => {
+      try { statsDatabase?.ingest(message) } catch (error) { void diagnostics.record('error', 'lifetime-stats', 'ingest-failed', 'A lifetime distance chunk could not be committed.', { error: error.message }) }
       if (message.runId && (message.state === 'self-test-complete' || message.state === 'error')) selfTestWaiters.get(message.runId)?.(message)
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:telemetry-message', message)
     },
@@ -219,6 +237,7 @@ app.whenReady().then(async () => {
     broadcast: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:update-state', state)
     },
+    beforeInstall: async () => { statsDatabase?.close({ requireDurable: true }) },
   })
   session.defaultSession.setPermissionCheckHandler(() => false)
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -237,7 +256,7 @@ app.whenReady().then(async () => {
   })
   await overlayManager.initialize()
   createWindow()
-  updateManager.start()
+  if (!e2eConfig) updateManager.start()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -252,4 +271,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => void overlayManager?.shutdown())
+app.on('before-quit', () => {
+  try { statsDatabase?.close() }
+  catch (error) { void diagnostics?.record('error', 'lifetime-stats', 'close-failed', 'Lifetime database close failed during app shutdown.', { error: error.message }) }
+  void overlayManager?.shutdown()
+})

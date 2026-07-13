@@ -115,11 +115,12 @@ test('runSelfTest reports synchronous process launch failures', () => {
 test('records useful live status transitions without logging telemetry frames', async () => {
   const child = new FakeChild()
   const entries = []
+  const broadcasts = []
   const manager = new LmuBridgeManager({
     app: { isPackaged: false },
-    broadcast: () => {},
+    broadcast: (message) => broadcasts.push(message),
     logger: { record: (...entry) => { entries.push(entry) } },
-    runtime: { platform: 'win32', fileExists: () => true, spawn: () => child },
+    runtime: { platform: 'win32', fileExists: () => true, randomUUID: () => 'live-run-1', spawn: () => child },
   })
 
   manager.start()
@@ -132,6 +133,8 @@ test('records useful live status transitions without logging telemetry frames', 
   assert.equal(status[0], 'warning')
   assert.match(status[3], /maximum lap count/)
   assert.equal(entries.filter((entry) => entry[2] === 'status').length, 1)
+  assert.equal(broadcasts.length, 2)
+  assert.equal(broadcasts.every((message) => message.runId === 'live-run-1'), true)
 })
 
 test('records raw sessions in a separate stoppable bridge process', async () => {
@@ -164,11 +167,29 @@ test('replay temporarily replaces live telemetry and resumes it afterwards', asy
     runtime: { platform: 'win32', fileExists: () => true, spawn: () => { const child = new FakeChild(); children.push(child); return child } },
   })
   manager.start()
-  assert.equal(manager.startReplay('C:\\captures\\practice.apexrec').ok, true)
+  const replay = manager.startReplay('C:\\captures\\practice.apexrec', { speed: 0, strict: true, runId: 'replay-test' })
+  assert.equal(replay.ok, true)
   assert.equal(children[0].killed, true)
-  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'status', state: 'replay-starting' })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  children[1].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'replay-test', type: 'status', state: 'replay-complete' })}\n`)
   await waitForImmediate()
   assert.equal(broadcasts.at(-1).source, 'recording-replay')
   children[1].emit('exit', 0)
   assert.equal(children.length, 3, 'live bridge restarts after replay')
+})
+
+test('replay rejects stale output and exit zero without correlated completion', async () => {
+  const children = []
+  const states = []
+  const manager = new LmuBridgeManager({
+    app: { isPackaged: false }, broadcast: () => {}, broadcastRecording: (state) => states.push(state),
+    runtime: { platform: 'win32', fileExists: () => true, spawn: () => { const child = new FakeChild(); children.push(child); return child } },
+  })
+  assert.equal(manager.startReplay('C:\\capture.apexrec', { speed: 0, strict: true, runId: 'current-run' }).ok, true)
+  children[0].stdout.write(`${JSON.stringify({ source: 'recording-replay', runId: 'old-run', type: 'status', state: 'replay-complete' })}\n`)
+  await waitForImmediate()
+  children[0].emit('exit', 0)
+  assert.equal(states.at(-1).status, 'error')
+  assert.match(states.at(-1).message, /without correlated completion/)
 })

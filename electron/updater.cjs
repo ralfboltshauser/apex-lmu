@@ -10,7 +10,7 @@ function releaseNotesText(notes) {
 }
 
 class UpdateManager extends EventEmitter {
-  constructor({ app, broadcast, logger = null, updater = null, platform = process.platform, schedule = setTimeout }) {
+  constructor({ app, broadcast, logger = null, updater = null, platform = process.platform, schedule = setTimeout, beforeInstall = async () => {} }) {
     super()
     this.app = app
     this.broadcast = broadcast
@@ -18,6 +18,7 @@ class UpdateManager extends EventEmitter {
     this.platform = platform
     this.schedule = schedule
     this.updater = updater
+    this.beforeInstall = beforeInstall
     this.state = {
       status: !app.isPackaged ? 'development' : platform !== 'win32' ? 'unsupported' : 'idle',
       currentVersion: app.getVersion(),
@@ -73,9 +74,11 @@ class UpdateManager extends EventEmitter {
     catch (error) { this.setState({ status: 'error', message: error.message || String(error), error: { message: error.message || String(error), stack: error.stack || '', code: error.code || '' } }); return { ok: false, reason: 'download-failed' } }
   }
 
-  install() {
+  async install() {
     if (!this.updater || this.state.status !== 'downloaded') return { ok: false, reason: 'update-not-downloaded' }
     this.log('info', 'install-requested', 'Installing downloaded update.', { version: this.state.availableVersion })
+    try { await this.beforeInstall() }
+    catch (error) { this.setState({ status: 'error', message: `Update installation stopped because local data could not be flushed: ${error.message}`, error: { message: error.message, stack: error.stack || '', code: error.code || '' } }); return { ok: false, reason: 'data-flush-failed' } }
     this.updater.quitAndInstall(false, true)
     return { ok: true }
   }

@@ -17,6 +17,9 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	if decoded.GameVersion != 130 || decoded.Session.Track != "Circuit de la Sarthe" || decoded.Session.ElapsedSeconds != 901.25 {
 		t.Fatalf("unexpected session: %#v", decoded.Session)
 	}
+	if decoded.Player.ControlOwner != "local-player" {
+		t.Fatalf("control owner = %q", decoded.Player.ControlOwner)
+	}
 	if decoded.Session.Rain != 0.2 || decoded.Session.Wetness != 0.35 || decoded.Session.WindSpeedMps != 5 {
 		t.Fatalf("weather offsets decoded incorrectly: %#v", decoded.Session)
 	}
@@ -25,6 +28,12 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	}
 	if decoded.Player.Name != "Porsche 963" || decoded.Player.Sector != 3 || decoded.Player.SpeedKph != 180 {
 		t.Fatalf("telemetry offsets decoded incorrectly: %#v", decoded.Player)
+	}
+	if decoded.Player.WorldPositionM == nil || *decoded.Player.WorldPositionM != (worldPositionM{X: 1200, Y: 4.5, Z: -800}) {
+		t.Fatalf("player world-position offsets decoded incorrectly: %#v", decoded.Player.WorldPositionM)
+	}
+	if decoded.Player.GameElapsedSeconds == nil || *decoded.Player.GameElapsedSeconds != 901.25 || decoded.Player.LapStartSeconds == nil || *decoded.Player.LapStartSeconds != 695.15 {
+		t.Fatalf("player time offsets decoded incorrectly: elapsed=%v lapStart=%v", decoded.Player.GameElapsedSeconds, decoded.Player.LapStartSeconds)
 	}
 	if decoded.Player.FrontCompound != "Medium" || decoded.Player.RearCompound != "Soft" {
 		t.Fatalf("compound strings decoded incorrectly: %q/%q", decoded.Player.FrontCompound, decoded.Player.RearCompound)
@@ -43,6 +52,28 @@ func TestDecodeSnapshotReadsPackedLMUContract(t *testing.T) {
 	}
 	if len(decoded.Opponents) != 2 || decoded.Opponents[0].Position != 1 || decoded.Opponents[1].Position != 3 {
 		t.Fatalf("opponents were not sorted: %#v", decoded.Opponents)
+	}
+	if decoded.Opponents[0].WorldPositionM == nil || decoded.Opponents[0].WorldPositionM.X != 1000 {
+		t.Fatalf("opponent scoring position was not decoded: %#v", decoded.Opponents[0].WorldPositionM)
+	}
+}
+
+func TestControlOwnerMapsEveryDocumentedSDKValue(t *testing.T) {
+	cases := []struct {
+		value int8
+		want  string
+	}{
+		{-1, "unknown"},
+		{0, "local-player"},
+		{1, "ai"},
+		{2, "remote"},
+		{3, "replay"},
+		{4, "unknown"},
+	}
+	for _, tc := range cases {
+		if got := controlOwner(tc.value); got != tc.want {
+			t.Fatalf("controlOwner(%d) = %q, want %q", tc.value, got, tc.want)
+		}
 	}
 }
 
@@ -150,6 +181,12 @@ func TestDecodeSnapshotRejectsTruncationCountsAndNonFiniteData(t *testing.T) {
 	if _, err := decodeSnapshot(raw); err == nil {
 		t.Fatal("expected out-of-contract throttle rejection")
 	}
+
+	raw = makeContractFixture()
+	putF64(raw, player+160, math.NaN())
+	if _, err := decodeSnapshot(raw); err == nil {
+		t.Fatal("expected non-finite world-position rejection")
+	}
 }
 
 func TestDecodeSnapshotReportsButDoesNotRejectUnknownGameVersion(t *testing.T) {
@@ -237,8 +274,13 @@ func makeContractFixture() []byte {
 
 	player := lmuTelemetryArrayBase + lmuVehicleTelemetrySize
 	putI32(raw, player, 42)
+	putF64(raw, player+12, 901.25)
 	putI32(raw, player+20, 8)
+	putF64(raw, player+24, 695.15)
 	putText(raw, player+32, 64, "Porsche 963")
+	putF64(raw, player+160, 1200)
+	putF64(raw, player+168, 4.5)
+	putF64(raw, player+176, -800)
 	putF64(raw, player+184, 30)
 	putF64(raw, player+192, 0)
 	putF64(raw, player+200, 40)
@@ -294,6 +336,9 @@ func putScoringVehicle(raw []byte, index int, id int32, driver, name, class stri
 	putI32(raw, base+240, 0)
 	putF64(raw, base+244, float64(index)*3.5)
 	putI32(raw, base+252, 0)
+	putF64(raw, base+264, 1000+float64(index)*100)
+	putF64(raw, base+272, 5+float64(index))
+	putF64(raw, base+280, -900+float64(index)*50)
 }
 
 func putText(data []byte, offset, size int, value string) {

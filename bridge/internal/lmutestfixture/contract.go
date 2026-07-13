@@ -71,6 +71,10 @@ func Populate(raw []byte, elapsedSeconds float64, sequence uint64) error {
 	putFloat64(raw, player+24, elapsedSeconds-206.15)
 	putCString(raw, player+32, 64, "Porsche 963")
 	putCString(raw, player+96, 64, "Circuit de la Sarthe")
+	angle := float64(sequence%1000) / 1000 * 2 * math.Pi
+	putFloat64(raw, player+160, 1200+math.Cos(angle)*500)
+	putFloat64(raw, player+168, 5+math.Sin(angle*2)*2)
+	putFloat64(raw, player+176, -800+math.Sin(angle)*300)
 	putFloat64(raw, player+184, 0)
 	putFloat64(raw, player+192, 0)
 	putFloat64(raw, player+200, 75.3888888889)
@@ -129,6 +133,10 @@ func populateVehicleScoring(raw []byte, offset int, id int32, driver, name, clas
 	putInt32(raw, offset+240, 0)
 	putFloat64(raw, offset+244, 6.1)
 	putInt32(raw, offset+252, 0)
+	angle := math.Mod(lapDistance, 1000) / 1000 * 2 * math.Pi
+	putFloat64(raw, offset+264, 1200+math.Cos(angle)*500)
+	putFloat64(raw, offset+272, 5+math.Sin(angle*2)*2)
+	putFloat64(raw, offset+280, -800+math.Sin(angle)*300)
 	raw[offset+457] = 0
 }
 

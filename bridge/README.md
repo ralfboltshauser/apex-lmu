@@ -20,6 +20,15 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o bin/apex-lmu-bridg
 Messages use `status`, `telemetry`, or recorder-only `recording` types. The
 TypeScript desktop adapter treats unknown fields as forward-compatible additions.
 
+The additive vehicle contract includes official packed world position
+(`mPos`), game elapsed time and lap-start time when per-vehicle telemetry is
+available. Scoring rows also expose official world position for opponents. All
+axes and times are finite/bounds checked; absence remains absence. The checked
+real recording validates 18,035 position frames and compares coordinate motion
+against integrated LMU speed, with its 5th/median/95th percentile ratios all
+within 0.99–1.01. Apex therefore does not infer positions from lap percentage
+or a demo circuit.
+
 ## Raw record and replay
 
 The bridge can record the complete shared-memory payload before decoding and

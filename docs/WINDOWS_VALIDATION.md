@@ -75,3 +75,39 @@ Before any LMU version is declared compatible, contributors must diff the
 header shipped in `Support/SharedMemoryInterface`, capture licensed fixtures,
 run offline practice, run an EAC-protected online session without privilege,
 and complete the soak and strategy-audit gates in [ROADMAP.md](ROADMAP.md).
+
+## Automated real-recording boundary
+
+The reusable Windows replay job complements rather than replaces the separate
+named-mapping fixture above. It verifies a checked real `LMU_Data` recording
+from raw reader through the current decoder, correlated NDJSON, Electron
+orchestration, preload/IPC, desktop adapter, main UI, and transparent overlay
+without LMU, administrator rights, an injected DLL, or a cloud service. The
+source test uses strict accelerated replay, stage deadlines, isolated user
+data, safe aggregate assertions, and deterministic teardown. The manual
+installer lane repeats it against `release/win-unpacked/Apex for LMU.exe` after
+building the NSIS and portable artifacts.
+
+The overlay portion checks display enumeration and selection, exact display
+bounds, non-focusable/topmost state, live opacity and supported-widget updates,
+measured replay content, unavailable-to-waiting cleanup, deterministic close,
+and a single remaining main window. The main renderer must also reconstruct the
+measured driven route from official world coordinates, reach the allowlisted
+coverage, expose the allowlisted braking-zone count, and open the matching
+distance-aligned Analysis view.
+
+This proves that the recorded session's known facts survive the current Apex
+pipeline. It still does not prove current live LMU offsets, anti-cheat behavior,
+multi-monitor/fullscreen behavior, a long-race soak, or any car/session absent
+from that recording. Those remain independent gates.
+
+## Lifetime-statistics runtime gate
+
+The Windows CI lane also executes the durable-distance acceptance smoke inside
+Electron's bundled Node runtime. It creates the SQLite ledger in isolated user
+data, integrates 100 km/h for 36 game seconds, closes durably, reopens, verifies
+exactly 1,000,000 mm, and validates a SHA-256 backup. This specifically detects
+an Electron upgrade or Windows build that lacks a working `node:sqlite` runtime.
+
+It does not replace seeded installer upgrade, forced-process, real LMU, or
+main-plus-overlay soak evidence. Those remain release gates for issue #6.

@@ -1,6 +1,6 @@
 {
   "name": "apex-lmu",
-  "version": "0.1.14",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/website"
@@ -39,11 +39,19 @@
     "typecheck:site": "npm run typecheck --workspace=apex-lmu-site",
     "test": "vitest run",
     "test:desktop": "node --test electron/*.node-test.cjs",
+    "test:electron:sqlite": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/assert-electron-sqlite.cjs",
+    "test:stats:soak": "node scripts/soak-lifetime-stats.cjs",
     "test:bridge": "cd bridge && go test -buildvcs=false ./...",
-    "test:all": "npm run i18n:check && npm test && npm run test:desktop && npm run test:bridge",
+    "test:release-notes": "node --test scripts/release-notes.node-test.cjs",
+    "test:scripts": "node --test scripts/*.node-test.cjs",
+    "test:recording-replay": "node scripts/assert-recording-replay.cjs",
+    "test:e2e:windows:replay": "node scripts/e2e-recording-replay.cjs",
+    "test:all": "npm run i18n:check && npm run release-notes:check && npm test && npm run test:desktop && npm run test:electron:sqlite && npm run test:scripts && npm run test:bridge",
     "test:watch": "vitest",
     "lint": "tsc -b --pretty false",
     "i18n:check": "node scripts/check-i18n.cjs",
+    "release-notes:check": "node scripts/check-release-notes.cjs",
+    "release-notes:write": "node scripts/check-release-notes.cjs --write",
     "hooks:install": "node scripts/install-hooks.cjs",
     "prepare": "node scripts/install-hooks.cjs",
     "release:publish": "node scripts/publish-release.cjs"
@@ -68,6 +76,7 @@
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "jsdom": "^29.1.1",
+    "playwright-core": "1.61.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.4",
     "vitest": "^4.1.10",

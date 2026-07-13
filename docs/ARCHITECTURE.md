@@ -55,9 +55,12 @@ already-computed result, but they may not generate the result.
 ## Persistence
 
 Repositories use versioned envelopes, validate imports and preserve corrupt
-payloads for diagnostics. Current browser builds use localStorage; the desktop
-database boundary is intentionally isolated so SQLite or DuckDB can replace it
-without changing UI consumers.
+payloads for diagnostics. Browser-only preferences use localStorage. Durable
+lifetime distance has one Electron-main writer backed by an immutable SQLite
+ledger; renderers receive aggregates through narrow read IPC and cannot count
+frames. Its metric, source filters, chunking, migration snapshots and recovery
+contract are defined in [PERSISTENCE.md](PERSISTENCE.md). Raw `.apexrec` and LMU
+DuckDB files remain separate source/debug formats.
 
 ## Patch-day protocol
 

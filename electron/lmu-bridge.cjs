@@ -49,15 +49,16 @@ class LmuBridgeManager {
       return { ok: false, reason: 'missing-bridge', path: binary }
     }
     let child
+    const runId = this.makeRunId()
     try { child = this.spawnProcess(binary, ['--hz=50', `--parent-pid=${process.pid}`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) }
     catch (error) { this.log('error', 'spawn-failed', error.message, { stack: error.stack, code: error.code, binary }); this.broadcast(this.statusMessage('live', null, 'error', error.message)); return { ok: false, reason: 'spawn-failed' } }
     this.process = child
     this.attachProcess(child, {
       mode: 'live',
-      runId: null,
+      runId,
       onExit: (code) => {
         if (this.process === child) this.process = null
-        if (!this.replayProcess) this.broadcast(this.statusMessage('live', null, 'stopped', `LMU bridge exited (${code ?? 'signal'}).`))
+        if (!this.replayProcess) this.broadcast(this.statusMessage('live', runId, 'stopped', `LMU bridge exited (${code ?? 'signal'}).`))
         if (this.requested) this.restartTimer = this.schedule(() => this.start(), 1500)
       },
     })
@@ -152,9 +153,14 @@ class LmuBridgeManager {
     return { ok: true }
   }
 
-  startReplay(filePath) {
+  startReplay(filePath, options = {}) {
     if (this.platform !== 'win32') return { ok: false, reason: 'unsupported-platform' }
     if (this.replayProcess || this.recordingProcess) return { ok: false, reason: 'busy' }
+    const speed = options.speed ?? 1
+    const strict = options.strict === true
+    const runId = options.runId ?? this.makeRunId()
+    if (!Number.isFinite(speed) || speed < 0 || speed > 16) return { ok: false, reason: 'invalid-speed' }
+    if (typeof runId !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(runId)) return { ok: false, reason: 'invalid-run-id' }
     const binary = this.getBinaryPath()
     if (!this.fileExists(binary)) return { ok: false, reason: 'missing-bridge', path: binary }
     this.replayResumeRequested = this.requested
@@ -164,20 +170,30 @@ class LmuBridgeManager {
     if (this.process) this.process.kill()
     this.process = null
     let child
-    try { child = this.spawnProcess(binary, [`--replay=${filePath}`, '--replay-speed=1'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) }
+    const args = [`--replay=${filePath}`, `--replay-speed=${speed}`, `--run-id=${runId}`, ...(strict ? ['--replay-strict'] : [])]
+    try { child = this.spawnProcess(binary, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) }
     catch (error) { this.finishReplay(error.message); return { ok: false, reason: 'spawn-failed' } }
     this.replayProcess = child
+    const lifecycle = { starting: false, complete: false, protocolFailed: false }
     this.setRecordingState({ status: 'replaying', path: filePath, frames: 0, bytes: 0, durationSeconds: 0, message: 'Replaying recording…' })
     this.attachProcess(child, {
-      mode: 'replay', runId: null,
+      mode: 'replay', runId,
+      onMessage: (message) => {
+        if (message.type === 'status' && message.state === 'replay-starting') lifecycle.starting = true
+        if (message.type === 'status' && message.state === 'replay-complete') lifecycle.complete = true
+        if (message.type === 'status' && message.state === 'replay-partial' && strict) lifecycle.protocolFailed = true
+      },
+      onProtocolError: () => { lifecycle.protocolFailed = true },
       onExit: (code) => {
         if (this.replayProcess === child) this.replayProcess = null
         const stopped = this.replayStopRequested
         this.replayStopRequested = false
-        this.finishReplay(stopped ? 'Replay stopped' : code === 0 ? 'Replay complete' : `Replay exited (${code ?? 'signal'}).`, stopped || code === 0)
+        const complete = !stopped && code === 0 && lifecycle.starting && lifecycle.complete && !lifecycle.protocolFailed
+        const message = stopped ? 'Replay stopped' : complete ? 'Replay complete' : code === 0 ? 'Replay exited without correlated completion.' : `Replay exited (${code ?? 'signal'}).`
+        this.finishReplay(message, stopped || complete)
       },
     })
-    return { ok: true, path: filePath }
+    return { ok: true, path: filePath, runId }
   }
 
   stopReplay() {
@@ -214,15 +230,22 @@ class LmuBridgeManager {
     return { ok: true }
   }
 
-  attachProcess(child, { mode, runId, onExit }) {
+  attachProcess(child, { mode, runId, onExit, onMessage = () => {}, onProtocolError = () => {} }) {
     const lines = this.makeLineReader({ input: child.stdout, crlfDelay: Infinity })
     lines.on('line', (line) => {
       try {
-        const parsed = JSON.parse(line)
+        let parsed = JSON.parse(line)
+        if (mode === 'live') parsed = { ...parsed, runId }
         if (mode === 'self-test' && (parsed.source !== 'self-test' || parsed.runId !== runId)) {
           this.broadcast(this.statusMessage('self-test', runId, 'error', 'Bridge self-test emitted an uncorrelated frame.'))
           return
         }
+        if (mode === 'replay' && (parsed.source !== 'recording-replay' || parsed.runId !== runId)) {
+          onProtocolError()
+          this.broadcast(this.statusMessage('replay', runId, 'error', 'Recording replay emitted an uncorrelated frame.'))
+          return
+        }
+        onMessage(parsed)
         if (parsed.type === 'status') {
           const level = ['error', 'invalid-data', 'missing', 'stopped'].includes(parsed.state) ? 'warning' : 'info'
           this.log(level, 'status', parsed.message || parsed.state || 'Bridge status changed.', {
@@ -263,7 +286,7 @@ class LmuBridgeManager {
   statusMessage(mode, runId, state, message) {
     return {
       protocolVersion: 1,
-      source: mode === 'self-test' ? 'self-test' : 'lmu-shared-memory',
+      source: mode === 'self-test' ? 'self-test' : mode === 'replay' ? 'recording-replay' : 'lmu-shared-memory',
       ...(runId ? { runId } : {}),
       type: 'status',
       state,

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, CardHeader, Segmented } from '../components/ui'
+import { ReleaseHistory } from '../components/ReleaseNotes'
 import { useI18n, useMessages } from '../i18n'
 import { formatMessage, settingsMessages } from '../i18n/view-resources'
 
@@ -78,6 +79,12 @@ export function SettingsView() {
   const [discovery, setDiscovery] = useState<ApexLmuDiscovery | null>(null)
   const [updateState, setUpdateState] = useState<ApexUpdateState | null>(null)
   const [recording, setRecording] = useState<ApexRecordingState>({ status: 'idle', path: null, frames: 0, bytes: 0, durationSeconds: 0, message: '' })
+  const [lifetime, setLifetime] = useState<ApexLifetimeStats | null>(null)
+  const [lifetimeHealth, setLifetimeHealth] = useState<ApexLifetimeStatsHealth | null>(null)
+  const [lifetimeBackup, setLifetimeBackup] = useState<'idle' | 'working' | 'done' | 'error'>('idle')
+  const [lifetimeBackupMessage, setLifetimeBackupMessage] = useState('')
+  const [overlayDisplays, setOverlayDisplays] = useState<ApexDisplay[] | null>(null)
+  const [overlayRuntime, setOverlayRuntime] = useState<ApexOverlayState | null>(null)
 
   const inspectPath = async (installationPath: string) => {
     if (!window.apexDesktop || !installationPath) {
@@ -105,7 +112,22 @@ export function SettingsView() {
       })
     })
     void window.apexDesktop?.getDiagnostics().then(setReport)
+    void window.apexDesktop?.getLifetimeStats().then(setLifetime)
+    void window.apexDesktop?.getLifetimeStatsHealth().then(setLifetimeHealth)
   }, [])
+
+  const backupLifetime = async () => {
+    if (!window.apexDesktop) return
+    setLifetimeBackup('working'); setLifetimeBackupMessage('')
+    try {
+      const result = await window.apexDesktop.backupLifetimeStats()
+      if (result.ok && result.backup) { setLifetimeBackup('done'); setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupCreated, { file: result.backup.file })); setLifetimeHealth(await window.apexDesktop.getLifetimeStatsHealth()) }
+      else { setLifetimeBackup('error'); setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupFailed, { error: result.reason || m.data.lifetime.unknown })) }
+    } catch (error) {
+      setLifetimeBackup('error')
+      setLifetimeBackupMessage(formatMessage(m.data.lifetime.backupFailed, { error: error instanceof Error ? error.message : m.data.lifetime.unknown }))
+    }
+  }
 
   useEffect(() => {
     const navigate = (event: Event) => {
@@ -126,6 +148,15 @@ export function SettingsView() {
     if (!window.apexDesktop) return
     void window.apexDesktop.getRecordingState().then(setRecording)
     return window.apexDesktop.onRecordingState(setRecording)
+  }, [])
+
+  useEffect(() => {
+    if (!window.apexDesktop) return
+    void window.apexDesktop.getDisplays().then(setOverlayDisplays).catch(() => setOverlayDisplays([]))
+    void window.apexDesktop.getOverlayState().then(setOverlayRuntime)
+    const stopDisplays = window.apexDesktop.onDisplaysChanged(setOverlayDisplays)
+    const stopState = window.apexDesktop.onOverlayState(setOverlayRuntime)
+    return () => { stopDisplays(); stopState() }
   }, [])
 
   const autoDetectLmu = async () => {
@@ -286,8 +317,12 @@ export function SettingsView() {
             {discovery && <details className="discovery-details"><summary>{formatMessage(m.connection.discovery, { count: discovery.attempts.length })}</summary><div>{discovery.attempts.map((attempt, index) => <section key={`${attempt.candidate}-${index}`}><strong>{attempt.candidate}</strong><span>{attempt.source} · {attempt.status}</span>{attempt.checks.map((check) => <small key={check.label} className={check.ok ? 'is-ok' : check.optional ? 'is-optional' : 'is-fail'}>{check.ok ? '✓' : check.optional ? '○' : '×'} {check.label}: {check.expected}</small>)}</section>)}<pre>{discovery.trace.join('\n')}</pre></div></details>}
           </Card>
           <Card>
-            <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Monitor size={19} />} />
+            <CardHeader eyebrow={m.overlay.eyebrow} title={m.overlay.title} action={<Badge tone={overlayDisplays?.length ? 'positive' : overlayDisplays ? 'warning' : 'neutral'}>{overlayDisplays ? formatMessage(m.overlay.displayCount, { count: overlayDisplays.length }) : m.status.notChecked}</Badge>} />
             <p className="diagnostics-intro">{m.overlay.copy}</p>
+            <div className="integration-checks">
+              <div><StatusIcon value={overlayDisplays ? overlayDisplays.length > 0 : null} /><span><strong>{m.overlay.displays}</strong><small>{m.overlay.displaysHint}</small></span><StatusBadge value={overlayDisplays ? overlayDisplays.length > 0 : null} available={overlayDisplays ? formatMessage(m.overlay.displayCount, { count: overlayDisplays.length }) : undefined} /></div>
+              <div><StatusIcon value={overlayRuntime ? overlayRuntime.status !== 'error' : null} /><span><strong>{m.overlay.window}</strong><small>{overlayRuntime?.displayId ? formatMessage(m.overlay.target, { display: overlayDisplays?.find((display) => display.id === overlayRuntime.displayId)?.label || overlayRuntime.displayId }) : m.overlay.windowHint}</small></span><Badge tone={overlayRuntime?.status === 'ready' ? 'positive' : overlayRuntime?.status === 'error' ? 'warning' : 'neutral'}>{overlayRuntime ? m.overlay.state[overlayRuntime.status] : m.status.notChecked}</Badge></div>
+            </div>
             <div className="support-privacy"><Info size={15} /><span><strong>{m.overlay.fullscreen}</strong></span></div>
           </Card>
           </>}
@@ -344,6 +379,21 @@ export function SettingsView() {
             <div className="support-privacy"><ShieldCheck size={15} /><span><strong>{m.data.recorder.privateTitle}</strong>{m.data.recorder.privateCopy}</span></div>
           </Card>
 
+          <Card className="lifetime-card">
+            <CardHeader eyebrow={m.data.lifetime.eyebrow} title={m.data.lifetime.title} description={m.data.lifetime.description} action={<Badge tone={lifetimeHealth?.status === 'ready' ? 'positive' : lifetimeHealth?.status === 'future-schema' || lifetimeHealth?.status === 'error' ? 'warning' : 'neutral'}>{lifetimeHealth ? m.data.lifetime.health[lifetimeHealth.status === 'future-schema' ? 'futureSchema' : lifetimeHealth.status === 'read-only' ? 'readOnly' : lifetimeHealth.status] : m.status.notChecked}</Badge>} />
+            <div className="lifetime-summary"><div><small>{m.data.lifetime.total}</small><strong>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format((lifetime?.totalDistanceMm || 0) / 1_000_000)} {m.data.lifetime.kilometers}</strong></div><div><small>{m.data.lifetime.trackedSince}</small><strong>{lifetime?.trackedSince ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(lifetime.trackedSince)) : '—'}</strong></div></div>
+            {lifetime?.vehicles.length ? <div className="lifetime-vehicles">{lifetime.vehicles.map((vehicle) => <div key={vehicle.id}><span><strong>{vehicle.name}</strong><small>{vehicle.className} · {formatMessage(m.data.lifetime.sessions, { count: vehicle.sessions })} · {formatMessage(m.data.lifetime.lastDriven, { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(vehicle.lastSeenAt)) })}</small></span><b>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(vehicle.distanceMm / 1_000_000)} {m.data.lifetime.kilometers}</b></div>)}</div> : <p className="diagnostics-intro">{lifetime?.status === 'error' ? lifetime.message : m.data.lifetime.noDistance}</p>}
+            {lifetimeHealth?.status === 'future-schema' && <p className="diagnostics-intro">{m.data.lifetime.futureSchema}</p>}
+            {lifetimeHealth?.status === 'error' && <p className="diagnostics-intro">{m.data.lifetime.recovery}{lifetimeHealth.message ? ` ${lifetimeHealth.message}` : ''}</p>}
+            <dl className="lifetime-ledger-details">
+              <div><dt>{m.data.lifetime.database}</dt><dd title={lifetimeHealth?.path}>{lifetimeHealth?.path || '—'}</dd></div>
+              <div><dt>{m.data.lifetime.lastBackup}</dt><dd>{lifetimeHealth?.lastBackup ? <><span>{lifetimeHealth.lastBackup.file}</span><code title={lifetimeHealth.lastBackup.sha256}>{lifetimeHealth.lastBackup.sha256.slice(0, 12)}…</code></> : m.data.lifetime.noBackup}</dd></div>
+            </dl>
+            <div className="support-privacy"><ShieldCheck size={15} /><span>{m.data.lifetime.coverage}</span></div>
+            <div className="diagnostic-actions"><Button variant="secondary" icon={<HardDrive size={14} />} onClick={() => void backupLifetime()} disabled={!window.apexDesktop || lifetimeBackup === 'working' || !lifetimeHealth?.path || lifetimeHealth.status === 'closed' || lifetimeHealth.status === 'read-only'}>{lifetimeBackup === 'working' ? m.data.lifetime.backingUp : m.data.lifetime.backup}</Button></div>
+            {lifetimeBackupMessage && <p className="diagnostics-intro" role="status">{lifetimeBackupMessage}</p>}
+          </Card>
+
           <Card id="settings-data">
             <CardHeader eyebrow={m.data.folderEyebrow} title={m.data.folderTitle} action={<Badge tone="neutral">{m.data.localOnly}</Badge>} />
             <div className="path-field"><div><Database size={16} /><span><small>{m.data.userData}</small><strong>{environment?.userDataPath ?? m.data.desktopOnly}</strong></span></div><Button variant="secondary" size="sm" icon={<FolderOpen size={14} />} onClick={() => void window.apexDesktop?.openDataFolder()} disabled={!window.apexDesktop}>{m.data.openFolder}</Button></div>
@@ -355,6 +405,8 @@ export function SettingsView() {
             <CardHeader eyebrow={m.about.languageEyebrow} title={m.about.languageTitle} description={m.about.languageDescription} action={<Languages size={19} />} />
             <Segmented value={language} onChange={setLanguage} ariaLabel={m.about.languageAria} options={[{ value: 'en', label: m.about.english }, { value: 'de', label: m.about.german }]} />
           </Card>}
+
+          {activeSection === 'about' && <ReleaseHistory />}
 
           {activeSection === 'about' &&
           <Card>
