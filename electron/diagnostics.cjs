@@ -77,6 +77,7 @@ class DiagnosticsService {
       app: { version: this.app.getVersion(), packaged: this.app.isPackaged },
       system: { platform: process.platform, arch: process.arch, release: this.os.release() },
       diagnostics: extra.report ?? null,
+      analysis: extra.analysis ?? null,
       logs: await this.readLogs(),
     }
   }

@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getLifetimeStats: () => ipcRenderer.invoke('apex:get-lifetime-stats'),
   getLifetimeStatsHealth: () => ipcRenderer.invoke('apex:get-lifetime-stats-health'),
   backupLifetimeStats: () => ipcRenderer.invoke('apex:backup-lifetime-stats'),
+  getAnalysisSessions: () => ipcRenderer.invoke('apex:get-analysis-sessions'),
+  getAnalysisLap: (sessionId, lapId) => ipcRenderer.invoke('apex:get-analysis-lap', sessionId, lapId),
+  getAnalysisHealth: () => ipcRenderer.invoke('apex:get-analysis-health'),
   checkForUpdates: () => ipcRenderer.invoke('apex:check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('apex:download-update'),
   installUpdate: () => ipcRenderer.invoke('apex:install-update'),
@@ -52,6 +55,11 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, state) => callback(state)
     ipcRenderer.on('apex:recording-state', listener)
     return () => ipcRenderer.removeListener('apex:recording-state', listener)
+  },
+  onAnalysisSessionsChanged: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:analysis-sessions-changed', listener)
+    return () => ipcRenderer.removeListener('apex:analysis-sessions-changed', listener)
   },
   onUpdateState: (callback) => {
     const listener = (_event, state) => callback(state)

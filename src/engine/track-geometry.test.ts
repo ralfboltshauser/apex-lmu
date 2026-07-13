@@ -1,29 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import type { TelemetryFrame } from '../core'
-import { detectBrakeZones, MeasuredTrackRecorder, type MeasuredRoutePoint } from './track-geometry'
+import { buildMeasuredTrackSnapshot, detectBrakeZones, type MeasuredLapRecord, type MeasuredRoutePoint } from './track-geometry'
 
 function point(distanceM: number, brake: number, elapsedSeconds: number): MeasuredRoutePoint {
   return { distanceM, x: distanceM, z: Math.sin(distanceM / 50) * 20, brake, speedKph: 200 - brake * 100, elapsedSeconds }
 }
 
-function frame(sequence: number, lap: number, distanceM: number, options: { pit?: boolean; owner?: 'local-player' | 'ai'; session?: string; elapsedMs?: number } = {}) {
-  const angle = distanceM / 1000 * Math.PI * 2
+function lap(number: number, state: MeasuredLapRecord['state'] = 'complete', quality: MeasuredLapRecord['quality'] = 'clean', endM = 1000): MeasuredLapRecord {
   return {
-    sequence,
-    sourceState: 'vehicle-telemetry',
-    session: { id: options.session ?? 'session-1', track: { name: 'Measured Track', layout: '', lengthM: 1000 } },
-    player: { currentLapNumber: lap },
-    sample: {
-      lapId: `session-1-lap-${lap}`,
-      distanceM,
-      sessionElapsedMs: options.elapsedMs ?? sequence * 100,
-      isInPitLane: options.pit ?? false,
-      controlOwner: options.owner ?? 'local-player',
-      inputs: { brake: distanceM >= 300 && distanceM <= 390 ? 0.7 : 0 },
-      motion: { speedKph: 226 },
-      worldPositionM: { x: Math.cos(angle) * 100, y: 5, z: Math.sin(angle) * 100 },
-    },
-  } as unknown as TelemetryFrame
+    id: `lap-${number}`,
+    number,
+    state,
+    quality,
+    samples: Array.from({ length: Math.ceil(endM / 10) }, (_, index) => {
+      const distanceM = index * 10
+      const angle = distanceM / 1000 * Math.PI * 2
+      return { distanceM, x: Math.cos(angle) * 100, z: Math.sin(angle) * 100, brake: distanceM >= 300 && distanceM <= 390 ? 0.7 : 0, speedKph: 226, elapsedSeconds: number * 100 + index * 0.1 }
+    }),
+  }
 }
 
 describe('measured track geometry', () => {
@@ -42,10 +35,7 @@ describe('measured track geometry', () => {
   })
 
   it('learns a complete route by lap distance and retains measured brake zones', () => {
-    const recorder = new MeasuredTrackRecorder(20)
-    let sequence = 1
-    for (let distance = 0; distance < 1000; distance += 10) recorder.ingest(frame(sequence++, 1, distance))
-    const completed = recorder.ingest(frame(sequence++, 2, 0))!
+    const completed = buildMeasuredTrackSnapshot({ id: 'session-1', trackName: 'Measured Track', layoutName: '', trackLengthM: 1000, laps: [lap(1)] }, 'lap-1', 20)!
 
     expect(completed.completedLapCount).toBe(1)
     expect(completed.state).toBe('complete')
@@ -57,41 +47,14 @@ describe('measured track geometry', () => {
     expect(completed.brakeZones[0].releaseDistanceM).toBe(390)
   })
 
-  it('never promotes pit, AI, duplicate, or incomplete samples into a clean lap', () => {
-    const recorder = new MeasuredTrackRecorder(20)
-    let sequence = 1
-    for (let distance = 0; distance < 1000; distance += 10) {
-      recorder.ingest(frame(sequence++, 1, distance, { pit: distance >= 400 && distance <= 500 }))
-    }
-    let snapshot = recorder.ingest(frame(sequence++, 2, 0))!
-    expect(snapshot.completedLapCount).toBe(0)
-
-    for (let distance = 0; distance < 1000; distance += 10) recorder.ingest(frame(sequence++, 2, distance, { owner: distance === 500 ? 'ai' : 'local-player' }))
-    snapshot = recorder.ingest(frame(sequence++, 3, 0))!
-    expect(snapshot.completedLapCount).toBe(0)
-    expect(recorder.ingest(frame(sequence - 1, 3, 10))).toEqual(snapshot)
-  })
-
-  it('resets geometry when the source session identity changes', () => {
-    const recorder = new MeasuredTrackRecorder(20)
-    recorder.ingest(frame(1, 1, 0))
-    recorder.ingest(frame(2, 1, 10))
-    const reset = recorder.ingest(frame(1, 1, 0, { session: 'session-2' }))!
-    expect(reset.sessionId).toBe('session-2')
-    expect(reset.completedLapCount).toBe(0)
-    expect(reset.route.length).toBe(1)
-  })
-
-  it('deduplicates repeated LMU game-time snapshots without invalidating the lap', () => {
-    const recorder = new MeasuredTrackRecorder(20)
-    let sequence = 1
-    for (let distance = 0; distance < 1000; distance += 10) {
-      const elapsedMs = sequence * 100
-      recorder.ingest(frame(sequence++, 1, distance, { elapsedMs }))
-      recorder.ingest(frame(sequence++, 1, distance, { elapsedMs }))
-    }
-    const completed = recorder.ingest(frame(sequence, 2, 0))!
-    expect(completed.completedLapCount).toBe(1)
-    expect(completed.state).toBe('complete')
+  it('uses clean completed laps for the route while keeping a partial selected lap explicit', () => {
+    const laps = [lap(1), lap(2), lap(3), lap(4, 'current', 'ineligible', 250)]
+    const snapshot = buildMeasuredTrackSnapshot({ id: 'session-1', trackName: 'Measured Track', layoutName: '', trackLengthM: 1000, laps }, 'lap-4', 20)!
+    expect(snapshot.completedLapCount).toBe(3)
+    expect(snapshot.selectedLapNumber).toBe(4)
+    expect(snapshot.selectedLap).toHaveLength(25)
+    expect(snapshot.route).toHaveLength(50)
+    expect(snapshot.coverage).toBe(1)
+    expect(snapshot.state).toBe('complete')
   })
 })
