@@ -28,11 +28,11 @@ describe('release-note UI', () => {
     const root = createRoot(container)
     await act(async () => root.render(<I18nProvider><LanguageButton /><WhatsNewDialog releases={[releaseCatalog.releases[0]]} onDone={done} onViewAll={async () => {}} /></I18nProvider>))
     expect(container.querySelector('[role="dialog"]')).not.toBeNull()
-    expect(container.textContent).toContain('Complete laps stay available in Analysis')
+    expect(container.textContent).toContain('Overlay stays above focused LMU')
     const buttons = [...container.querySelectorAll('button')]
     expect(document.activeElement).toBe(buttons[1])
     await act(async () => buttons[0].click())
-    expect(container.textContent).toContain('Abgeschlossene Runden bleiben in der Analyse verfügbar')
+    expect(container.textContent).toContain('Overlay bleibt über dem fokussierten LMU')
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
     expect(done).toHaveBeenCalledOnce()
     await act(async () => root.unmount())

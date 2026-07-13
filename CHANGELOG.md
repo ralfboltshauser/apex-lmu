@@ -4,27 +4,25 @@ This file is generated from `release-notes/catalog.json`. Do not edit it directl
 
 ## 0.2.2 — 2026-07-13
 
-### English — Complete laps stay available in Analysis
+### English — Overlay stays above focused LMU
 
-Analysis now keeps the current driving session and its completed laps when telemetry pauses or the final lap is only partial.
+Apex now restores its non-activating Windows z-order when a focused borderless LMU window moves ahead of the HUD.
 
-- **Choose the lap you meant to inspect** — A bounded main-process session store retains completed, incomplete, and current laps across bridge interruptions. Analysis defaults to the latest clean completed lap and exposes session, lap, quality, and exclusion-reason controls.
-- **Validated with the real LMU recording** — The 18,039-frame raw replay now verifies selectable clean laps, aggregate measured-route coverage, and all 11 expected braking zones through the same session-store path used by the desktop app.
+- **Keep the HUD visible while driving** — A Windows-specific guard reorders the already-topmost overlay without taking keyboard focus or mouse input, including after the game raises its own topmost window.
 
 **Known limitations**
 
-- **Measured lap history lasts for the current app run** — High-rate position and pedal traces remain private, bounded in memory, and are not silently persisted. Under memory pressure, old trace payloads may be discarded while their lap summaries remain visible; raw .apexrec recording is the lossless opt-in path.
+- **Use borderless or windowed mode** — True exclusive fullscreen can bypass composed desktop windows; Apex remains injection-free and therefore requires LMU in borderless or windowed mode for overlays.
 
-### Deutsch — Abgeschlossene Runden bleiben in der Analyse verfügbar
+### Deutsch — Overlay bleibt über dem fokussierten LMU
 
-Die Analyse behält jetzt die aktuelle Fahrsitzung und ihre abgeschlossenen Runden, wenn die Telemetrie pausiert oder die letzte Runde nur teilweise gefahren wurde.
+Apex stellt jetzt seine nicht aktivierende Windows-Z-Reihenfolge wieder her, wenn sich ein fokussiertes randloses LMU-Fenster vor das HUD schiebt.
 
-- **Wähle genau die Runde aus, die du untersuchen möchtest** — Ein begrenzter Sitzungsspeicher im Hauptprozess behält abgeschlossene, unvollständige und aktuelle Runden über Unterbrechungen der Bridge hinweg. Die Analyse wählt standardmäßig die neueste saubere abgeschlossene Runde und zeigt Steuerelemente für Sitzung, Runde, Qualität und Ausschlussgründe.
-- **Mit der echten LMU-Aufzeichnung geprüft** — Die Rohdatenwiedergabe mit 18.039 Frames prüft jetzt auswählbare saubere Runden, die zusammengefasste Abdeckung der gemessenen Fahrlinie und alle 11 erwarteten Bremszonen über denselben Sitzungsspeicher, den die Desktop-App verwendet.
+- **Das HUD bleibt während der Fahrt sichtbar** — Ein Windows-spezifischer Wächter ordnet das bereits oberste Overlay neu, ohne Tastaturfokus oder Mauseingaben zu übernehmen – auch nachdem das Spiel sein eigenes oberstes Fenster angehoben hat.
 
 **Bekannte Einschränkungen**
 
-- **Der gemessene Rundenverlauf gilt für den aktuellen App-Lauf** — Hochfrequente Positions- und Pedaldaten bleiben privat, werden begrenzt im Arbeitsspeicher gehalten und nicht unbemerkt dauerhaft gespeichert. Bei Speicherdruck können alte Detaildaten verworfen werden, während ihre Rundenübersichten sichtbar bleiben; die rohe .apexrec-Aufzeichnung ist der verlustfreie optionale Pfad.
+- **Verwende den randlosen oder Fenstermodus** — Echtes exklusives Vollbild kann zusammengesetzte Desktop-Fenster umgehen. Apex bleibt frei von Injektionen und benötigt für Overlays daher den randlosen oder Fenstermodus von LMU.
 
 ## 0.2.1 — 2026-07-13
 

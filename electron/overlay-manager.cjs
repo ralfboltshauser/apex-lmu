@@ -90,7 +90,7 @@ function applyConfigPatch(current, patch) {
 }
 
 class OverlayManager {
-  constructor({ app, BrowserWindow, screen, fs, diagnostics, broadcast, developmentUrl = '', preloadPath, rendererPath, readyTimeoutMs = 8000, closeTimeoutMs = 2000 }) {
+  constructor({ app, BrowserWindow, screen, fs, diagnostics, broadcast, developmentUrl = '', preloadPath, rendererPath, readyTimeoutMs = 8000, closeTimeoutMs = 2000, platform = process.platform, scheduleInterval = setInterval, cancelInterval = clearInterval, zOrderIntervalMs = 250 }) {
     this.app = app
     this.BrowserWindow = BrowserWindow
     this.screen = screen
@@ -102,6 +102,10 @@ class OverlayManager {
     this.rendererPath = rendererPath
     this.readyTimeoutMs = readyTimeoutMs
     this.closeTimeoutMs = closeTimeoutMs
+    this.platform = platform
+    this.scheduleInterval = scheduleInterval
+    this.cancelInterval = cancelInterval
+    this.zOrderIntervalMs = zOrderIntervalMs
     this.configPath = path.join(app.getPath('userData'), 'overlay-config-v1.json')
     this.config = defaultConfig()
     this.state = { status: 'closed', displayId: null, message: '', fallbackFrom: null }
@@ -110,6 +114,9 @@ class OverlayManager {
     this.rendererReady = null
     this.closePromise = null
     this.topologyListeners = []
+    this.zOrderTimer = null
+    this.zOrderWindow = null
+    this.zOrderFailureRecorded = false
   }
 
   async initialize() {
@@ -199,6 +206,7 @@ class OverlayManager {
   async open() {
     if (this.window && !this.window.isDestroyed() && this.state.status === 'ready') {
       this.window.showInactive()
+      this.startZOrderGuard(this.window)
       return { ok: true, state: this.getState() }
     }
     if (this.openPromise) return this.openPromise
@@ -236,6 +244,7 @@ class OverlayManager {
     window.setAlwaysOnTop(true, 'screen-saver')
     window.setIgnoreMouseEvents(this.config.clickThrough, { forward: true })
     window.on('closed', () => {
+      this.stopZOrderGuard(window)
       if (this.window === window) this.window = null
       if (this.state.status !== 'error') this.setState({ status: 'closed', displayId: null, message: '', fallbackFrom: null })
     })
@@ -249,6 +258,7 @@ class OverlayManager {
       await Promise.all([load, this.rendererReady.promise])
       if (window.isDestroyed()) throw new Error('Overlay window closed before it became ready.')
       window.showInactive()
+      this.startZOrderGuard(window)
       this.setState({ status: 'ready', displayId: display.id, message: '', fallbackFrom })
       await this.record('info', 'ready', 'Overlay opened.', { displayId: display.id, bounds: display.bounds })
       return { ok: true, state: this.getState() }
@@ -278,13 +288,47 @@ class OverlayManager {
     const { display } = await this.resolveDisplay(false)
     window.setBounds(display.bounds)
     window.setIgnoreMouseEvents(this.config.clickThrough, { forward: true })
+    this.raiseWindow(window)
     this.setState({ ...this.state, displayId: display.id })
+  }
+
+  raiseWindow(window) {
+    if (this.window !== window || window.isDestroyed()) return
+    try {
+      // setAlwaysOnTop selects the Win32 topmost band. moveTop then reapplies
+      // the overlay's order inside that band without activating it, which is
+      // required after a focused borderless game raises its own topmost HWND.
+      if (!window.isAlwaysOnTop()) window.setAlwaysOnTop(true, 'screen-saver')
+      window.moveTop()
+      this.zOrderFailureRecorded = false
+    } catch (error) {
+      if (!this.zOrderFailureRecorded) void this.record('warning', 'z-order-raise-failed', 'Overlay z-order could not be refreshed.', error)
+      this.zOrderFailureRecorded = true
+    }
+  }
+
+  startZOrderGuard(window) {
+    this.stopZOrderGuard()
+    this.zOrderWindow = window
+    this.zOrderFailureRecorded = false
+    this.raiseWindow(window)
+    if (this.platform !== 'win32') return
+    this.zOrderTimer = this.scheduleInterval(() => this.raiseWindow(window), this.zOrderIntervalMs)
+  }
+
+  stopZOrderGuard(window = null) {
+    if (window && this.zOrderWindow !== window) return
+    if (this.zOrderTimer !== null) this.cancelInterval(this.zOrderTimer)
+    this.zOrderTimer = null
+    this.zOrderWindow = null
+    this.zOrderFailureRecorded = false
   }
 
   async close() {
     if (this.closePromise) return this.closePromise
     const window = this.window
     this.rendererReady?.reject(new Error('Overlay closed.'))
+    this.stopZOrderGuard(window)
     if (!window || window.isDestroyed()) {
       this.setState({ status: 'closed', displayId: null, message: '', fallbackFrom: null })
       return { ok: true, state: this.getState() }
@@ -310,6 +354,7 @@ class OverlayManager {
 
   async failWindow(window, code, message, details) {
     if (this.window !== window) return
+    this.stopZOrderGuard(window)
     const error = details instanceof Error ? details : new Error(message)
     this.rendererReady?.reject(error)
     this.setState({ status: 'error', displayId: this.config.displayId, message, fallbackFrom: null })
