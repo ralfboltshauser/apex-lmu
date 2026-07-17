@@ -247,7 +247,7 @@ class LmuBridgeManager {
         }
         onMessage(parsed)
         if (parsed.type === 'status') {
-          const level = ['error', 'invalid-data', 'missing', 'stopped'].includes(parsed.state) ? 'warning' : 'info'
+          const level = ['error', 'invalid-data', 'degraded-data', 'stale-data', 'missing', 'stopped'].includes(parsed.state) ? 'warning' : 'info'
           this.log(level, 'status', parsed.message || parsed.state || 'Bridge status changed.', {
             mode, runId, state: parsed.state, gameVersion: parsed.gameVersion,
           })
@@ -262,7 +262,7 @@ class LmuBridgeManager {
     child.stderr.on('data', (chunk) => {
       this.log('error', 'bridge-stderr', String(chunk).trim(), { mode, runId })
       this.broadcast({
-        protocolVersion: 1,
+        protocolVersion: 2,
         source: mode === 'self-test' ? 'self-test' : 'lmu-shared-memory',
         ...(runId ? { runId } : {}),
         type: 'diagnostic',
@@ -285,7 +285,7 @@ class LmuBridgeManager {
 
   statusMessage(mode, runId, state, message) {
     return {
-      protocolVersion: 1,
+      protocolVersion: 2,
       source: mode === 'self-test' ? 'self-test' : mode === 'replay' ? 'recording-replay' : 'lmu-shared-memory',
       ...(runId ? { runId } : {}),
       type: 'status',

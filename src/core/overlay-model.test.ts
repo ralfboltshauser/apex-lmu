@@ -31,5 +31,8 @@ describe('overlay view model', () => {
     expect(buildOverlayViewModel({ ...frame(true), source: 'self-test' })).toBeNull()
     expect(closesOverlaySession({ type: 'status', state: 'waiting' })).toBe(true)
     expect(closesOverlaySession({ type: 'status', state: 'connected' })).toBe(false)
+    expect(closesOverlaySession({ type: 'status', state: 'invalid-data' })).toBe(false)
+    expect(closesOverlaySession({ type: 'status', state: 'degraded-data' })).toBe(false)
+    expect(closesOverlaySession({ type: 'status', state: 'stale-data' })).toBe(true)
   })
 })

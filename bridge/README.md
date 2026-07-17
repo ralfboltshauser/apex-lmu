@@ -20,6 +20,13 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o bin/apex-lmu-bridg
 Messages use `status`, `telemetry`, or recorder-only `recording` types. The
 TypeScript desktop adapter treats unknown fields as forward-compatible additions.
 
+Protocol v2 represents unavailable normalized session end time, lap distance,
+and relative timing as JSON `null`. A separately bounded `lapDistanceRawM`
+retains LMU's signed start/finish coordinate for lap-boundary detection; UI
+progress and analysis samples consume only the normalized non-negative field.
+Transient decode errors remain non-destructive for one second before the bridge
+reports `stale-data`, while true `waiting-for-vehicle` states remain immediate.
+
 The additive vehicle contract includes official packed world position
 (`mPos`), game elapsed time and lap-start time when per-vehicle telemetry is
 available. Scoring rows also expose official world position for opponents. All
@@ -56,7 +63,7 @@ apex-lmu-bridge.exe --self-test --frames=8 --run-id=manual-check > self-test.ndj
 node ../scripts/assert-bridge-self-test.cjs self-test.ndjson 8 manual-check
 ```
 
-Self-test messages carry `protocolVersion: 1`, `source: "self-test"`, the run
+Self-test messages carry `protocolVersion: 2`, `source: "self-test"`, the run
 ID, and the `bridge-contract-v1` fixture ID. The process emits one starting
 status, exactly the requested number of telemetry frames, one completion
 status, then exits. `--frames` is bounded to 1–256 and run IDs are restricted to

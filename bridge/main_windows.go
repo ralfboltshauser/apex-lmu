@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -157,6 +156,7 @@ func run(options cliOptions) (resultErr error) {
 		}
 		var reportedGameVersion *int32
 		var raw []byte
+		var decodeIssues decodeIssueTracker
 
 	connectedLoop:
 		for {
@@ -217,21 +217,15 @@ func run(options cliOptions) (resultErr error) {
 			}
 			decoded, decodeErr := decodeSnapshot(raw)
 			if decodeErr != nil {
-				if errors.Is(decodeErr, errLMUPlayerHasNoVehicle) {
-					if err := reportIssue("waiting-for-vehicle", decodeErr.Error()); err != nil {
-						ticker.Stop()
-						_ = memory.Close()
-						return err
-					}
-					continue
-				}
-				if err := reportIssue("invalid-data", decodeErr.Error()); err != nil {
+				state := decodeIssues.classify(time.Since(started), decodeErr)
+				if err := reportIssue(state, decodeErr.Error()); err != nil {
 					ticker.Stop()
 					_ = memory.Close()
 					return err
 				}
 				continue
 			}
+			decodeIssues.reset()
 			lastIssueState = ""
 			if reportedGameVersion == nil || *reportedGameVersion != decoded.GameVersion {
 				version := decoded.GameVersion

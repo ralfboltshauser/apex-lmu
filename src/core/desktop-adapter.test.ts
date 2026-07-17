@@ -28,7 +28,7 @@ describe('desktop LMU bridge mapping', () => {
       player: { id: 6, driver: 'Ralf Driver', name: 'Porsche 963', class: 'Hypercar', controlOwner: 'local-player', worldPositionM: { x: 123, y: 4, z: -456 }, gameElapsedSeconds: 900.5, lapStartSeconds: 700, position: 3, lap: 8, sector: 2, lapDistanceM: 6813, speedKph: 271.4, rpm: 8021, maximumRpm: 9000, gear: 6, throttle: 0.92, brake: 0, steering: -0.08, clutch: 0, fuelL: 48.2, fuelCapacityL: 90, batteryFraction: 0.64, rearBrakeBias: 0.47, deltaBestSeconds: 0.12, bestLapSeconds: 205.2, lastLapSeconds: 206.1, timeBehindLeaderSeconds: 6.1, timeBehindNextSeconds: 2.8, inPits: false, pitState: 0, frontCompound: 'Mediums', rearCompound: 'Mediums', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')] },
       opponents: [
         { id: 51, driver: 'Leader', name: 'Ferrari 499P', class: 'Hypercar', position: 1, laps: 8, lapDistanceM: 7000, worldPositionM: { x: 140, y: 4, z: -440 }, bestLapSeconds: 204.8, lastLapSeconds: 205.4, behindLeaderSeconds: 0, behindNextSeconds: 0, lapsBehindLeader: 0, inPits: false, pitState: 0 },
-        { id: 22, driver: 'LMP Driver', name: 'Oreca 07', class: 'LMP2', position: 8, laps: 7, lapDistanceM: 3000, bestLapSeconds: 212, lastLapSeconds: 213, behindLeaderSeconds: 35, behindNextSeconds: 4, lapsBehindLeader: 1, inPits: true, pitState: 3 },
+        { id: 22, driver: 'LMP Driver', name: 'Oreca 07', class: 'LMP2', position: 8, laps: 7, lapDistanceM: null, bestLapSeconds: 212, lastLapSeconds: 213, behindLeaderSeconds: null, behindNextSeconds: null, lapsBehindLeader: 1, inPits: true, pitState: 3 },
       ],
     }
     const frame = mapBridgeFrame(raw, '2026-07-11T19:45:00.000Z')
@@ -40,6 +40,10 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.weather.trackCondition).toBe('damp')
     expect(frame.opponents[1].car.vehicleClass).toBe('LMP2')
     expect(frame.opponents[1].pitState).toBe('stopped')
+    expect(frame.opponents[1].distanceM).toBeNull()
+    expect(frame.opponents[1].distanceFraction).toBeNull()
+    expect(frame.opponents[1].gapToPlayerMs).toBeNull()
+    expect(frame.opponents[1].intervalAheadMs).toBeNull()
     expect(frame.sample.sequence).toBe(42)
     expect(frame.session.id).toBe('analysis-session-authoritative')
     expect(frame.session.startedAt).toBe('2026-07-11T19:30:00.000Z')
@@ -62,8 +66,8 @@ describe('desktop LMU bridge mapping', () => {
   it('maps a pre-race scoring snapshot without claiming vehicle telemetry', () => {
     const raw: Parameters<typeof mapBridgeFrame>[0] = {
       type: 'telemetry', capturedAt: '2026-07-12T12:00:00.000Z', sequence: 1, playerTelemetryAvailable: false,
-      session: { track: 'Spa-Francorchamps', elapsedSeconds: 0, endSeconds: 3600, maximumLaps: 0, trackLengthM: 7004, phase: 2, inRealtime: false, airTempC: 18, trackTempC: 24, rain: 0, wetness: 0, windSpeedMps: 2, yellowState: 0 },
-      player: { id: 6, driver: 'Player', name: 'Porsche 963', class: 'Hypercar', position: 3, lap: 1, sector: 1, lapDistanceM: 0, speedKph: 0, rpm: 0, maximumRpm: 0, gear: 0, throttle: 0, brake: 0, steering: 0, clutch: 0, fuelL: 0, fuelCapacityL: 0, batteryFraction: 0, rearBrakeBias: 0, deltaBestSeconds: 0, bestLapSeconds: 0, lastLapSeconds: 0, timeBehindLeaderSeconds: 0, timeBehindNextSeconds: 0, inPits: true, pitState: 3, frontCompound: '', rearCompound: '', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')].map((value) => ({ ...value, pressurePsi: 0, surfaceTempC: [0, 0, 0] as [number, number, number], carcassTempC: 0, brakeTempC: 0 })) as ReturnType<typeof wheel>[] as Parameters<typeof mapBridgeFrame>[0]['player']['wheels'] },
+      session: { track: 'Spa-Francorchamps', elapsedSeconds: 0, endSeconds: null, maximumLaps: 0, trackLengthM: 7004, phase: 2, inRealtime: false, airTempC: 18, trackTempC: 24, rain: 0, wetness: 0, windSpeedMps: 2, yellowState: 0 },
+      player: { id: 6, driver: 'Player', name: 'Porsche 963', class: 'Hypercar', position: 3, lap: 1, sector: 1, lapDistanceM: null, speedKph: 0, rpm: 0, maximumRpm: 0, gear: 0, throttle: 0, brake: 0, steering: 0, clutch: 0, fuelL: 0, fuelCapacityL: 0, batteryFraction: 0, rearBrakeBias: 0, deltaBestSeconds: 0, bestLapSeconds: 0, lastLapSeconds: 0, timeBehindLeaderSeconds: null, timeBehindNextSeconds: null, inPits: true, pitState: 3, frontCompound: '', rearCompound: '', wheels: [wheel('FL'), wheel('FR'), wheel('RL'), wheel('RR')].map((value) => ({ ...value, pressurePsi: 0, surfaceTempC: [0, 0, 0] as [number, number, number], carcassTempC: 0, brakeTempC: 0 })) as ReturnType<typeof wheel>[] as Parameters<typeof mapBridgeFrame>[0]['player']['wheels'] },
       opponents: [],
     }
     const frame = mapBridgeFrame(raw, raw.capturedAt)
@@ -71,6 +75,9 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.player.car.model).toBe('Porsche 963')
     expect(frame.weather.trackTemperatureC).toBe(24)
     expect(frame.sessionState.phase).toBe('garage')
+    expect(frame.session.scheduledDurationMs).toBeNull()
+    expect(frame.player.distanceM).toBeNull()
+    expect(frame.player.distanceFraction).toBeNull()
   })
 
   it('ignores self-test traffic on the production live adapter', async () => {
@@ -125,6 +132,14 @@ describe('desktop LMU bridge mapping', () => {
       })
       expect(adapter.getLatestFrame()).not.toBeNull()
       expect(adapter.getStatus().state).toBe('connected')
+
+      bridgeListener?.({ source: 'lmu-shared-memory', type: 'status', state: 'invalid-data', message: 'Transient scoring value' })
+      expect(adapter.getLatestFrame()).not.toBeNull()
+      expect(adapter.getStatus()).toMatchObject({ state: 'connected', detail: 'Transient scoring value' })
+
+      bridgeListener?.({ source: 'lmu-shared-memory', type: 'status', state: 'stale-data', message: 'No valid data for one second' })
+      expect(adapter.getLatestFrame()).toBeNull()
+      expect(adapter.getStatus()).toMatchObject({ state: 'stale', detail: 'No valid data for one second' })
 
       bridgeListener?.({ source: 'lmu-shared-memory', type: 'status', state: 'disconnected' })
       expect(adapter.getLatestFrame()).toBeNull()

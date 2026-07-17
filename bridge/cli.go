@@ -161,22 +161,22 @@ func selfTestFrame(sequence int, capturedAt time.Time, runID string) message {
 		Sequence:        uint64(sequence),
 		Session: &session{
 			Track: "Circuit de la Sarthe", Layout: "Le Mans", ElapsedSeconds: 900 + progress/50,
-			EndSeconds: 7200, MaximumLaps: 0, TrackLengthM: 13626, Phase: 5, InRealtime: true,
+			EndSeconds: float64Pointer(7200), MaximumLaps: 0, TrackLengthM: 13626, Phase: 5, InRealtime: true,
 			AirTempC: 18, TrackTempC: 27, Rain: 0, Wetness: 0.10, WindSpeedMps: 3.2, YellowState: 0,
 		},
 		Player: &vehicle{
 			ID: 6, Driver: "Apex Self-Test", Name: "Porsche 963", Class: "Hypercar", Position: 3,
-			Lap: 8, Sector: 2, LapDistanceM: 6813 + progress*1.5, SpeedKph: 271.4 + progress*0.2,
+			Lap: 8, Sector: 2, LapDistanceM: float64Pointer(6813 + progress*1.5), LapDistanceRawM: 6813 + progress*1.5, SpeedKph: 271.4 + progress*0.2,
 			RPM: 8021 + progress*5, MaximumRPM: 9000, Gear: 6, Throttle: 0.92, Brake: 0,
 			Steering: -0.08, Clutch: 0, FuelL: 48.2 - progress*0.01, FuelCapacityL: 90,
 			BatteryFraction: 0.64, RearBrakeBias: 0.47, DeltaBestSeconds: 0.12,
-			BestLapSeconds: 205.2, LastLapSeconds: 206.1, TimeBehindLeaderSec: 6.1,
-			TimeBehindNextSec: 2.8, InPits: false, PitState: 0, FrontCompound: "Mediums",
+			BestLapSeconds: 205.2, LastLapSeconds: 206.1, TimeBehindLeaderSec: float64Pointer(6.1),
+			TimeBehindNextSec: float64Pointer(2.8), InPits: false, PitState: 0, FrontCompound: "Mediums",
 			RearCompound: "Mediums", Wheels: wheels,
 		},
 		Opponents: []opponent{
-			{ID: 51, Driver: "Fixture Leader", Name: "Ferrari 499P", Class: "Hypercar", Position: 1, Laps: 8, LapDistanceM: 7000 + progress, BestLapSeconds: 204.8, LastLapSeconds: 205.4},
-			{ID: 22, Driver: "Fixture LMP2", Name: "Oreca 07", Class: "LMP2", Position: 8, Laps: 7, LapDistanceM: 3000 + progress, BestLapSeconds: 212, LastLapSeconds: 213, BehindLeaderSec: 35, BehindNextSec: 4, LapsBehindLeader: 1, InPits: true, PitState: 3},
+			{ID: 51, Driver: "Fixture Leader", Name: "Ferrari 499P", Class: "Hypercar", Position: 1, Laps: 8, LapDistanceM: float64Pointer(7000 + progress), BestLapSeconds: 204.8, LastLapSeconds: 205.4, BehindLeaderSec: float64Pointer(0), BehindNextSec: float64Pointer(0)},
+			{ID: 22, Driver: "Fixture LMP2", Name: "Oreca 07", Class: "LMP2", Position: 8, Laps: 7, LapDistanceM: float64Pointer(3000 + progress), BestLapSeconds: 212, LastLapSeconds: 213, BehindLeaderSec: float64Pointer(35), BehindNextSec: float64Pointer(4), LapsBehindLeader: 1, InPits: true, PitState: 3},
 		},
 	}
 }

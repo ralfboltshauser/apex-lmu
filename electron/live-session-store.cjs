@@ -135,7 +135,7 @@ class LiveSessionStore {
   ingestStatus(message) {
     this.health.statuses += 1
     if (!this.active || message.source === 'self-test') return { changed: false, notify: false, revision: this.revision }
-    const interrupted = ['waiting', 'waiting-for-vehicle', 'mapping-open', 'invalid-data', 'disconnected', 'stopped', 'missing', 'error'].includes(message.state)
+    const interrupted = ['waiting', 'waiting-for-vehicle', 'mapping-open', 'stale-data', 'disconnected', 'stopped', 'missing', 'error'].includes(message.state)
     const finished = message.state === 'replay-complete'
     if (!interrupted && !finished) return { changed: false, notify: false, revision: this.revision }
     if (finished) {
@@ -273,7 +273,8 @@ class LiveSessionStore {
   }
 
   frameIdentity(message) {
-    return { runId: message.runId || '', sequence: message.sequence, elapsed: sessionElapsed(message), lapStart: lapStart(message), lap: currentLapNumber(message), distanceM: finite(message.player?.lapDistanceM) ? message.player.lapDistanceM : null }
+    const rawDistanceM = finite(message.player?.lapDistanceRawM) ? message.player.lapDistanceRawM : message.player?.lapDistanceM
+    return { runId: message.runId || '', sequence: message.sequence, elapsed: sessionElapsed(message), lapStart: lapStart(message), lap: currentLapNumber(message), distanceM: finite(rawDistanceM) ? rawDistanceM : null }
   }
 
   lapBoundary(previous, current, trackLengthM) {

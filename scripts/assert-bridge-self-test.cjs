@@ -42,7 +42,7 @@ function main() {
   const runID = expectedRunID ?? first.runId
   if (typeof runID !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(runID)) return fail(`invalid runId ${JSON.stringify(runID)}`)
   for (const [index, message] of messages.entries()) {
-    if (message.protocolVersion !== 1) return fail(`message ${index + 1} has protocolVersion ${message.protocolVersion}`)
+    if (message.protocolVersion !== 2) return fail(`message ${index + 1} has protocolVersion ${message.protocolVersion}`)
     if (message.source !== 'self-test') return fail(`message ${index + 1} has source ${JSON.stringify(message.source)}`)
     if (message.fixture !== 'bridge-contract-v1') return fail(`message ${index + 1} has fixture ${JSON.stringify(message.fixture)}`)
     if (message.runId !== runID) return fail(`message ${index + 1} has runId ${JSON.stringify(message.runId)}, expected ${JSON.stringify(runID)}`)
@@ -68,7 +68,7 @@ function main() {
     return fail('fixture multiclass pit state changed')
   }
 
-  process.stdout.write(`Bridge self-test OK: ${expectedFrames} frames, run ${runID}, protocol v1\n`)
+  process.stdout.write(`Bridge self-test OK: ${expectedFrames} frames, run ${runID}, protocol v2\n`)
 }
 
 try {

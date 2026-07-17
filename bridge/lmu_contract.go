@@ -132,6 +132,21 @@ func (view packedView) bounded64(offset int, field string, minimum, maximum floa
 	return value, nil
 }
 
+// optionalSigned64 keeps the same finite and absolute plausibility checks as a
+// required scalar while treating negative producer values as unavailable. LMU
+// emits such transitional values for online scoring even though Apex's
+// normalized lap-distance and "time behind" contracts cannot use them.
+func (view packedView) optionalSigned64(offset int, field string, absoluteMaximum float64) (*float64, error) {
+	value, err := view.bounded64(offset, field, -absoluteMaximum, absoluteMaximum)
+	if err != nil {
+		return nil, err
+	}
+	if value < 0 {
+		return nil, nil
+	}
+	return float64Pointer(value), nil
+}
+
 func (view packedView) worldPosition(offset int, field string) (*worldPositionM, error) {
 	values := [3]float64{}
 	for index := range values {
@@ -289,9 +304,20 @@ func decodeSession(view packedView) (session, error) {
 	if err != nil {
 		return session{}, err
 	}
-	end, err := view.bounded64(base+76, "session end time", -1, 1e9)
+	endValue, err := view.finite64(base+76, "session end time")
 	if err != nil {
 		return session{}, err
+	}
+	var end *float64
+	switch {
+	case endValue == -1 || endValue == float64(math.MinInt32):
+		// Current LMU builds use both sentinels while no timed-session end is
+		// available. Preserve that absence explicitly instead of inventing a
+		// duration or rejecting the otherwise coherent snapshot.
+	case endValue >= 0 && endValue <= 1e9:
+		end = float64Pointer(endValue)
+	default:
+		return session{}, fmt.Errorf("LMU session end time at byte %d is %g; expected an unavailable sentinel or [0, 1e+09]", base+76, endValue)
 	}
 	maximumLaps, err := view.i32(base + 84)
 	if err != nil {
@@ -550,16 +576,17 @@ func decodeWheel(view packedView, base int, position string) (wheel, error) {
 }
 
 type decodedVehicleScoring struct {
-	ID           int32
-	IsPlayer     bool
-	ControlOwner string
-	PathLateralM float64
-	TrackEdgeM   float64
-	CountLapFlag uint8
-	Opponent     opponent
-	Driver       string
-	Name         string
-	Class        string
+	ID              int32
+	IsPlayer        bool
+	ControlOwner    string
+	LapDistanceRawM float64
+	PathLateralM    float64
+	TrackEdgeM      float64
+	CountLapFlag    uint8
+	Opponent        opponent
+	Driver          string
+	Name            string
+	Class           string
 }
 
 func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, error) {
@@ -579,9 +606,13 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
-	lapDistance, err := view.bounded64(base+104, "vehicle lap distance", -1, 1e8)
+	lapDistanceRaw, err := view.bounded64(base+104, "vehicle lap distance", -1e8, 1e8)
 	if err != nil {
 		return decodedVehicleScoring{}, err
+	}
+	var lapDistance *float64
+	if lapDistanceRaw >= 0 {
+		lapDistance = float64Pointer(lapDistanceRaw)
 	}
 	pathLateral, err := view.bounded64(base+112, "vehicle path lateral", -1000, 1000)
 	if err != nil {
@@ -622,7 +653,7 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
-	behindNext, err := view.bounded64(base+232, "vehicle time behind next", -1, 1e7)
+	behindNext, err := view.optionalSigned64(base+232, "vehicle time behind next", 1e7)
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
@@ -631,7 +662,7 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 		return decodedVehicleScoring{}, err
 	}
 	_ = lapsBehindNext // The public opponent contract does not currently expose it.
-	behindLeader, err := view.bounded64(base+244, "vehicle time behind leader", -1, 1e7)
+	behindLeader, err := view.optionalSigned64(base+244, "vehicle time behind leader", 1e7)
 	if err != nil {
 		return decodedVehicleScoring{}, err
 	}
@@ -656,7 +687,7 @@ func decodeVehicleScoring(view packedView, base int) (decodedVehicleScoring, err
 	}
 
 	return decodedVehicleScoring{
-		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), PathLateralM: pathLateral, TrackEdgeM: trackEdge, CountLapFlag: countLapFlag, Driver: driver, Name: name, Class: class,
+		ID: id, IsPlayer: isPlayer, ControlOwner: controlOwner(control), LapDistanceRawM: lapDistanceRaw, PathLateralM: pathLateral, TrackEdgeM: trackEdge, CountLapFlag: countLapFlag, Driver: driver, Name: name, Class: class,
 		Opponent: opponent{
 			ID: id, Driver: driver, Name: name, Class: class, Position: place, Laps: laps,
 			LapDistanceM: lapDistance, WorldPositionM: worldPosition, BestLapSeconds: bestLap, LastLapSeconds: lastLap,
@@ -673,6 +704,7 @@ func applyPlayerScoring(player *vehicle, score decodedVehicleScoring) {
 	player.ControlOwner = score.ControlOwner
 	player.Position = score.Opponent.Position
 	player.LapDistanceM = score.Opponent.LapDistanceM
+	player.LapDistanceRawM = score.LapDistanceRawM
 	player.PathLateralM = score.PathLateralM
 	player.TrackEdgeM = score.TrackEdgeM
 	player.CountLapFlag = score.CountLapFlag

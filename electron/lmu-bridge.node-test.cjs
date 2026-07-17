@@ -52,9 +52,9 @@ test('runSelfTest spawns a separate finite correlated bridge process', async () 
   assert.deepEqual(calls[1].args, ['--self-test', '--frames=8', '--run-id=self-test-run-1'])
 
   const selfTestChild = children[1]
-  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'self-test', runId: 'self-test-run-1', type: 'status', state: 'self-test-starting' })}\n`)
-  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'self-test', runId: 'self-test-run-1', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
-  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'self-test', runId: 'self-test-run-1', type: 'status', state: 'self-test-complete', frames: 1 })}\n`)
+  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'self-test', runId: 'self-test-run-1', type: 'status', state: 'self-test-starting' })}\n`)
+  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'self-test', runId: 'self-test-run-1', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  selfTestChild.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'self-test', runId: 'self-test-run-1', type: 'status', state: 'self-test-complete', frames: 1 })}\n`)
   await waitForImmediate()
 
   assert.deepEqual(broadcasts.map((message) => message.state ?? message.type), [
@@ -83,7 +83,7 @@ test('runSelfTest rejects concurrent runs and drops uncorrelated output', async 
 
   assert.deepEqual(manager.runSelfTest(), { ok: true, runId: 'self-test-run-2' })
   assert.deepEqual(manager.runSelfTest(), { ok: false, reason: 'self-test-running', runId: 'self-test-run-2' })
-  child.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'self-test', runId: 'wrong-run', type: 'telemetry' })}\n`)
+  child.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'self-test', runId: 'wrong-run', type: 'telemetry' })}\n`)
   await waitForImmediate()
 
   assert.equal(broadcasts.length, 1)
@@ -124,8 +124,8 @@ test('records useful live status transitions without logging telemetry frames', 
   })
 
   manager.start()
-  child.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'lmu-shared-memory', type: 'status', state: 'invalid-data', message: 'LMU maximum lap count is invalid' })}\n`)
-  child.stdout.write(`${JSON.stringify({ protocolVersion: 1, source: 'lmu-shared-memory', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
+  child.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'lmu-shared-memory', type: 'status', state: 'invalid-data', message: 'LMU maximum lap count is invalid' })}\n`)
+  child.stdout.write(`${JSON.stringify({ protocolVersion: 2, source: 'lmu-shared-memory', type: 'telemetry', sequence: 1, session: {}, player: {}, opponents: [] })}\n`)
   await waitForImmediate()
 
   const status = entries.find((entry) => entry[2] === 'status')

@@ -48,7 +48,8 @@ interface RawBridgeVehicle {
   position: number
   lap: number
   sector: number
-  lapDistanceM: number
+  lapDistanceM: number | null
+  lapDistanceRawM?: number
   speedKph: number
   rpm: number
   maximumRpm: number
@@ -64,8 +65,8 @@ interface RawBridgeVehicle {
   deltaBestSeconds: number
   bestLapSeconds: number
   lastLapSeconds: number
-  timeBehindLeaderSeconds: number
-  timeBehindNextSeconds: number
+  timeBehindLeaderSeconds: number | null
+  timeBehindNextSeconds: number | null
   inPits: boolean
   pitState: number
   frontCompound: string
@@ -80,12 +81,12 @@ interface RawBridgeOpponent {
   class: string
   position: number
   laps: number
-  lapDistanceM: number
+  lapDistanceM: number | null
   worldPositionM?: { x: number; y: number; z: number }
   bestLapSeconds: number
   lastLapSeconds: number
-  behindLeaderSeconds: number
-  behindNextSeconds: number
+  behindLeaderSeconds: number | null
+  behindNextSeconds: number | null
   lapsBehindLeader: number
   inPits: boolean
   pitState: number
@@ -106,7 +107,7 @@ interface RawBridgeFrame {
     track: string
     layout?: string
     elapsedSeconds: number
-    endSeconds: number
+    endSeconds: number | null
     maximumLaps: number
     trackLengthM: number
     phase: number
@@ -138,6 +139,10 @@ function isRawFrame(value: unknown): value is RawBridgeFrame {
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function optionalNonnegative(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
 function optionalVector(value: unknown) {
@@ -177,7 +182,7 @@ function pitState(inPits: boolean, raw: number): PitState {
 function phase(frame: RawBridgeFrame): SessionPhase {
   if (!frame.session.inRealtime) return 'garage'
   if (frame.session.yellowState > 0) return 'full-course-yellow'
-  if (frame.session.endSeconds > 0 && frame.session.elapsedSeconds >= frame.session.endSeconds) return 'checkered'
+  if (frame.session.endSeconds !== null && frame.session.endSeconds > 0 && frame.session.elapsedSeconds >= frame.session.endSeconds) return 'checkered'
   return 'green'
 }
 
@@ -243,6 +248,7 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
   const motion = { speedKph: finite(raw.player.speedKph) }
   const powertrain = { gear: Math.trunc(finite(raw.player.gear)), rpm: finite(raw.player.rpm), maxRpm: finite(raw.player.maximumRpm), fuelLiters: finite(raw.player.fuelL), fuelPerLapEstimateLiters: null, lapsOfFuelEstimate: null }
   const hybrid = playerClass === 'HYPERCAR' ? { stateOfChargePercent: finite(raw.player.batteryFraction) * 100 } : null
+  const playerDistanceM = optionalNonnegative(raw.player.lapDistanceM)
   const playerCar = makeCar(raw.player.id, raw.player.name, raw.player.class, raw.player.fuelCapacityL)
   const player: CarState = {
     car: playerCar,
@@ -256,8 +262,8 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     bestLapTimeMs: raw.player.bestLapSeconds > 0 ? raw.player.bestLapSeconds * 1000 : null,
     sectorIndex: Math.max(1, Math.min(3, Math.trunc(finite(raw.player.sector, 1)))) as 1 | 2 | 3,
     sectorTimesMs: [null, null, null],
-    distanceM: finite(raw.player.lapDistanceM),
-    distanceFraction: Math.max(0, Math.min(1, finite(raw.player.lapDistanceM) / trackLength)),
+    distanceM: playerDistanceM,
+    distanceFraction: playerDistanceM === null ? null : Math.max(0, Math.min(1, playerDistanceM / trackLength)),
     pitState: pitState(raw.player.inPits, raw.player.pitState),
     limiterActive: false,
     headlightsActive: false,
@@ -267,17 +273,23 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
     inputs, motion, powertrain, hybrid, wheels,
     worldPositionM: optionalVector(raw.player.worldPositionM),
   }
-  const opponents: OpponentState[] = raw.opponents.map((opponent) => ({
-    car: makeCar(opponent.id, opponent.name, opponent.class), driver: makeDriver(opponent.id, opponent.driver),
-    overallPosition: Math.max(1, opponent.position), classPosition: 1 + raw.opponents.filter((candidate) => normalizeClass(candidate.class) === normalizeClass(opponent.class) && candidate.position < opponent.position).length,
-    completedLaps: Math.max(0, opponent.laps), currentLapNumber: Math.max(1, opponent.laps + 1), distanceM: finite(opponent.lapDistanceM),
-    distanceFraction: Math.max(0, Math.min(1, finite(opponent.lapDistanceM) / trackLength)),
-    gapToPlayerMs: (finite(opponent.behindLeaderSeconds) - finite(raw.player.timeBehindLeaderSeconds)) * 1000,
-    intervalAheadMs: opponent.behindNextSeconds > 0 ? opponent.behindNextSeconds * 1000 : null,
-    lastLapTimeMs: opponent.lastLapSeconds > 0 ? opponent.lastLapSeconds * 1000 : null, bestLapTimeMs: opponent.bestLapSeconds > 0 ? opponent.bestLapSeconds * 1000 : null,
-    pitState: pitState(opponent.inPits, opponent.pitState), isConnected: true, isPlayerClass: normalizeClass(opponent.class) === playerClass,
-    worldPositionM: optionalVector(opponent.worldPositionM),
-  }))
+  const playerBehindLeader = optionalNonnegative(raw.player.timeBehindLeaderSeconds)
+  const opponents: OpponentState[] = raw.opponents.map((opponent) => {
+    const distanceM = optionalNonnegative(opponent.lapDistanceM)
+    const behindLeader = optionalNonnegative(opponent.behindLeaderSeconds)
+    const behindNext = optionalNonnegative(opponent.behindNextSeconds)
+    return {
+      car: makeCar(opponent.id, opponent.name, opponent.class), driver: makeDriver(opponent.id, opponent.driver),
+      overallPosition: Math.max(1, opponent.position), classPosition: 1 + raw.opponents.filter((candidate) => normalizeClass(candidate.class) === normalizeClass(opponent.class) && candidate.position < opponent.position).length,
+      completedLaps: Math.max(0, opponent.laps), currentLapNumber: Math.max(1, opponent.laps + 1), distanceM,
+      distanceFraction: distanceM === null ? null : Math.max(0, Math.min(1, distanceM / trackLength)),
+      gapToPlayerMs: behindLeader === null || playerBehindLeader === null ? null : (behindLeader - playerBehindLeader) * 1000,
+      intervalAheadMs: behindNext !== null && behindNext > 0 ? behindNext * 1000 : null,
+      lastLapTimeMs: opponent.lastLapSeconds > 0 ? opponent.lastLapSeconds * 1000 : null, bestLapTimeMs: opponent.bestLapSeconds > 0 ? opponent.bestLapSeconds * 1000 : null,
+      pitState: pitState(opponent.inPits, opponent.pitState), isConnected: true, isPlayerClass: normalizeClass(opponent.class) === playerClass,
+      worldPositionM: optionalVector(opponent.worldPositionM),
+    }
+  })
   const sessionId = raw.desktopSessionId || `lmu-${raw.session.track || 'session'}-${startedAt}`
   const sessionStartedAt = raw.desktopSessionStartedAt || startedAt
   const weather = mapWeather(raw.session)
@@ -287,8 +299,8 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
   return {
     sequence: raw.sequence, source: raw.source,
     capturedAt: raw.capturedAt,
-    session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt: sessionStartedAt, scheduledDurationMs: raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: raw.opponents.length > 0 },
-    sessionState: { phase: phase(raw), flag: raw.session.yellowState > 0 ? 'yellow' : 'green', elapsedMs: raw.session.elapsedSeconds * 1000, remainingMs: raw.session.endSeconds > 0 ? Math.max(0, raw.session.endSeconds - raw.session.elapsedSeconds) * 1000 : null, currentLap: player.currentLapNumber, totalLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, sessionBestLapMs: null, incidentCount: 0 },
+    session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt: sessionStartedAt, scheduledDurationMs: raw.session.endSeconds !== null && raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: raw.opponents.length > 0 },
+    sessionState: { phase: phase(raw), flag: raw.session.yellowState > 0 ? 'yellow' : 'green', elapsedMs: raw.session.elapsedSeconds * 1000, remainingMs: raw.session.endSeconds !== null && raw.session.endSeconds > 0 ? Math.max(0, raw.session.endSeconds - raw.session.elapsedSeconds) * 1000 : null, currentLap: player.currentLapNumber, totalLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, sessionBestLapMs: null, incidentCount: 0 },
     weather, player, opponents, sample, events: [], sourceState: raw.playerTelemetryAvailable === false ? 'session-only' : 'vehicle-telemetry',
   }
 }
@@ -343,6 +355,12 @@ export class DesktopTelemetryAdapter implements TelemetryAdapter {
     if (isRecord(message) && message.type === 'status') {
       const status = message as unknown as RawBridgeStatus
       if (status.state === 'connected') this.setStatus({ state: 'connected', connectedAt: this.status.connectedAt ?? new Date().toISOString(), error: null, detail: status.message ?? 'LMU shared memory connected.' })
+      else if (status.state === 'invalid-data' || status.state === 'degraded-data') {
+        this.setStatus({ state: this.latestFrame ? 'connected' : 'connecting', error: null, detail: status.message ?? status.state })
+      } else if (status.state === 'stale-data') {
+        this.latestFrame = null
+        this.setStatus({ state: 'stale', connectedAt: null, lastFrameAt: null, error: null, detail: status.message ?? status.state })
+      }
       else if (status.state === 'error' || status.state === 'missing') {
         this.latestFrame = null
         this.setStatus({ state: 'error', connectedAt: null, lastFrameAt: null, error: status.message ?? status.state, detail: status.message ?? status.state })

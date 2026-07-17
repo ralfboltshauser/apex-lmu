@@ -221,8 +221,55 @@ func TestDecodeSnapshotNormalizesTimedSessionMaximumLapsSentinel(t *testing.T) {
 	if decoded.Session.MaximumLaps != 0 {
 		t.Fatalf("maximum laps = %d, want 0 for a timed session", decoded.Session.MaximumLaps)
 	}
-	if decoded.Session.EndSeconds != 21600 {
-		t.Fatalf("end seconds = %g; timed-session duration was lost", decoded.Session.EndSeconds)
+	if decoded.Session.EndSeconds == nil || *decoded.Session.EndSeconds != 21600 {
+		t.Fatalf("end seconds = %v; timed-session duration was lost", decoded.Session.EndSeconds)
+	}
+}
+
+func TestDecodeSnapshotNormalizesObservedOnlineUnavailableValues(t *testing.T) {
+	raw := makeContractFixture()
+	putF64(raw, lmuScoringOffset+76, float64(math.MinInt32))
+	player := lmuVehicleScoringBase + lmuVehicleScoringSize
+	opponent := lmuVehicleScoringBase
+	putF64(raw, player+104, -48.111328125)
+	putF64(raw, player+232, -29.0472412109375)
+	putF64(raw, player+244, -1.1450958251953125)
+	putF64(raw, opponent+104, -1711.434814453125)
+	putF64(raw, opponent+232, -114.2912368774414)
+	putF64(raw, opponent+244, -109.52371978759766)
+
+	decoded, err := decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("observed online sentinels should not reject a coherent snapshot: %v", err)
+	}
+	if decoded.Session.EndSeconds != nil {
+		t.Fatalf("session end = %v, want unavailable", decoded.Session.EndSeconds)
+	}
+	if decoded.Player.LapDistanceM != nil || decoded.Player.TimeBehindNextSec != nil || decoded.Player.TimeBehindLeaderSec != nil {
+		t.Fatalf("player transitional scoring values must be unavailable: %#v", decoded.Player)
+	}
+	if decoded.Player.LapDistanceRawM != -48.111328125 {
+		t.Fatalf("raw player lap distance = %g", decoded.Player.LapDistanceRawM)
+	}
+	if decoded.Opponents[0].LapDistanceM != nil || decoded.Opponents[0].BehindNextSec != nil || decoded.Opponents[0].BehindLeaderSec != nil {
+		t.Fatalf("opponent transitional scoring values must be unavailable: %#v", decoded.Opponents[0])
+	}
+}
+
+func TestDecodeSnapshotStillRejectsScoringValuesOutsideHardBounds(t *testing.T) {
+	for _, tc := range []struct {
+		relative int
+		value    float64
+	}{
+		{relative: 104, value: -1e8 - 1},
+		{relative: 232, value: -1e7 - 1},
+		{relative: 244, value: math.Inf(-1)},
+	} {
+		raw := makeContractFixture()
+		putF64(raw, lmuVehicleScoringBase+tc.relative, tc.value)
+		if _, err := decodeSnapshot(raw); err == nil {
+			t.Fatalf("expected scoring value %g at relative offset %d to be rejected", tc.value, tc.relative)
+		}
 	}
 }
 

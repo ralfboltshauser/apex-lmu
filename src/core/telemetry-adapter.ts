@@ -1,7 +1,7 @@
 import { createSimulationFrames, type SimulationOptions } from './simulation'
 import type { TelemetryFrame } from './types'
 
-export type AdapterConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'error'
+export type AdapterConnectionState = 'idle' | 'connecting' | 'connected' | 'stale' | 'disconnecting' | 'error'
 
 export interface TelemetryAdapterCapabilities {
   readonly liveTelemetry: boolean

@@ -80,6 +80,17 @@ test('an early LMU lap-number change does not cut off the measured end of the la
   assert.equal(finalized[0].samples.at(-1).distanceM, 990)
 })
 
+test('a signed raw lap coordinate closes the lap while normalized distance stays unavailable', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) store.ingest(source.frame(1, distanceM))
+  store.ingest(source.frame(2, -5, { player: { lapDistanceM: null, lapDistanceRawM: -5, lastLapSeconds: 19.876 } }))
+  const [lap] = store.listSessions()[0].laps
+  assert.equal(lap.state, 'complete')
+  assert.equal(lap.lapTimeMs, 19_876)
+  assert.equal(lap.sampleCount, 100)
+})
+
 test('a delayed official LMU time resolves the preceding lap without reusing the stale value', () => {
   const finalized = []
   const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
@@ -154,6 +165,18 @@ test('waiting and disconnect statuses preserve the logical session and completed
   assert.equal(after.id, before.id)
   assert.equal(after.state, 'active')
   assert.equal(after.laps[0].state, 'complete')
+})
+
+test('transient invalid data preserves an active lap while stale data interrupts it', () => {
+  const store = new LiveSessionStore({ makeId: () => 'stable' })
+  const source = fixture()
+  store.ingest(source.frame(1, 100))
+  store.ingest(source.status('invalid-data'))
+  assert.equal(store.listSessions()[0].state, 'active')
+  assert.equal(store.listSessions()[0].interruptionCount, 0)
+  store.ingest(source.status('stale-data'))
+  assert.equal(store.listSessions()[0].state, 'interrupted')
+  assert.equal(store.listSessions()[0].interruptionCount, 1)
 })
 
 test('a bridge run change becomes a source segment without erasing a compatible LMU session', () => {

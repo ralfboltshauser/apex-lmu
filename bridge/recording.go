@@ -303,6 +303,7 @@ func runReplay(output io.Writer, options cliOptions) error {
 	wallStart := time.Now()
 	var sequence uint64
 	lastIssue := ""
+	var decodeIssues decodeIssueTracker
 	for {
 		record, readErr := reader.Next()
 		if readErr == io.EOF {
@@ -329,16 +330,14 @@ func runReplay(output io.Writer, options cliOptions) error {
 		}
 		decoded, decodeErr := decodeSnapshot(record.Raw)
 		if decodeErr != nil {
-			state := "invalid-data"
-			if errors.Is(decodeErr, errLMUPlayerHasNoVehicle) {
-				state = "waiting-for-vehicle"
-			}
+			state := decodeIssues.classify(record.Elapsed, decodeErr)
 			if state != lastIssue {
 				_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: state, Message: decodeErr.Error()})
 				lastIssue = state
 			}
 			continue
 		}
+		decodeIssues.reset()
 		lastIssue = ""
 		sequence++
 		capturedAt := startTime.Add(record.Elapsed)

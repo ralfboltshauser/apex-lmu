@@ -185,8 +185,8 @@ export interface CarState {
   readonly bestLapTimeMs: number | null
   readonly sectorIndex: 1 | 2 | 3
   readonly sectorTimesMs: readonly [number | null, number | null, number | null]
-  readonly distanceM: number
-  readonly distanceFraction: number
+  readonly distanceM: number | null
+  readonly distanceFraction: number | null
   readonly pitState: PitState
   readonly limiterActive: boolean
   readonly headlightsActive: boolean
@@ -210,10 +210,10 @@ export interface OpponentState {
   readonly classPosition: number
   readonly completedLaps: number
   readonly currentLapNumber: number
-  readonly distanceM: number
-  readonly distanceFraction: number
+  readonly distanceM: number | null
+  readonly distanceFraction: number | null
   readonly speedKph?: number
-  readonly gapToPlayerMs: number
+  readonly gapToPlayerMs: number | null
   readonly intervalAheadMs: number | null
   readonly lastLapTimeMs: number | null
   readonly bestLapTimeMs: number | null
@@ -231,8 +231,8 @@ export interface TelemetrySample {
   readonly capturedAt: IsoDateTime
   readonly sessionElapsedMs: number
   readonly lapElapsedMs: number
-  readonly distanceM: number
-  readonly distanceFraction: number
+  readonly distanceM: number | null
+  readonly distanceFraction: number | null
   readonly sectorIndex: 1 | 2 | 3
   readonly isInPitLane: boolean
   readonly inputs: DriverInputs

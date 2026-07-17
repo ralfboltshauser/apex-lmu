@@ -31,12 +31,12 @@ const EMPTY: FuelTrackerState = {
 
 export function emptyFuelTracker(): FuelTrackerState { return EMPTY }
 
-function base(frame: TelemetryFrame) {
+function base(frame: TelemetryFrame, fallbackProgress: number) {
   return {
     sessionId: frame.session.id, trackName: frame.session.track.name, carName: frame.player.car.model,
     currentFuelLiters: frame.player.powertrain.fuelLiters,
     tankCapacityLiters: frame.player.car.maxFuelLiters,
-    completedLaps: frame.player.completedLaps, currentLapProgress: frame.player.distanceFraction,
+    completedLaps: frame.player.completedLaps, currentLapProgress: frame.player.distanceFraction ?? fallbackProgress,
     totalLaps: frame.sessionState.totalLaps,
     durationSeconds: frame.session.scheduledDurationMs === null ? null : frame.session.scheduledDurationMs / 1000,
     elapsedSeconds: frame.sessionState.elapsedMs / 1000,
@@ -45,7 +45,8 @@ function base(frame: TelemetryFrame) {
 
 export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFrame): FuelTrackerState {
   if (frame.sourceState === 'session-only') return previous
-  const current = base(frame)
+  const fallbackProgress = previous.sessionId === frame.session.id ? previous.currentLapProgress : 0
+  const current = base(frame, fallbackProgress)
   if (previous.sessionId !== frame.session.id || previous.currentLapNumber <= 0 || frame.player.currentLapNumber < previous.currentLapNumber) {
     return { ...EMPTY, ...current, currentLapNumber: frame.player.currentLapNumber, lapStartFuelLiters: current.currentFuelLiters, lastFuelLiters: current.currentFuelLiters }
   }

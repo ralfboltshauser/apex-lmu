@@ -55,5 +55,6 @@ export function buildOverlayViewModel(value: unknown): OverlayViewModel | null {
 }
 
 export function closesOverlaySession(value: unknown): boolean {
-  return record(value) && value.type === 'status' && value.source !== 'self-test' && value.state !== 'connected'
+  return record(value) && value.type === 'status' && value.source !== 'self-test'
+    && !['connected', 'invalid-data', 'degraded-data'].includes(String(value.state))
 }

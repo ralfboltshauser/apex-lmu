@@ -2,6 +2,32 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.2.6 — 2026-07-17
+
+### English — Reliable online LMU telemetry
+
+Online races now stay live when LMU publishes transitional scoring values, while unavailable distances and gaps remain explicit instead of becoming invented timing.
+
+- **Keep multi-car races connected** — The bridge now recognizes bounded signed lap-distance and timing transitions plus LMU's unavailable session-end sentinel. One opponent's transitional scoring no longer discards an otherwise coherent player snapshot.
+- **Show absence instead of a false number** — Protocol v2 carries unavailable normalized lap distances, session timing and relative gaps as null. Apex keeps the bounded signed lap coordinate separately for start/finish detection, but never presents it as lap progress or opponent timing.
+- **Verified across online and offline races** — A private raw recording replayed 422,467 usable frames through the current decoder, Electron, Live view and analysis store: 358,720 multi-car frames across two online races plus the complete solo session, with no invalid-data rejection.
+
+**Known limitations**
+
+- **Transitional gaps remain unavailable** — When LMU publishes a negative or unavailable relative-timing value, Apex shows no gap until a non-negative value arrives rather than guessing what the producer meant.
+
+### Deutsch — Zuverlässige Online-LMU-Telemetrie
+
+Online-Rennen bleiben jetzt live, wenn LMU vorübergehende Wertungswerte veröffentlicht. Nicht verfügbare Distanzen und Abstände bleiben ausdrücklich unbekannt, statt erfundene Zeiten zu erzeugen.
+
+- **Rennen mit mehreren Fahrzeugen bleiben verbunden** — Die Bridge erkennt jetzt begrenzte vorzeichenbehaftete Übergänge bei Rundendistanz und Zeit sowie den LMU-Platzhalter für eine nicht verfügbare Session-Endzeit. Ein vorübergehender Wert eines Gegners verwirft dadurch keinen ansonsten stimmigen Spieler-Snapshot mehr.
+- **Zeige Abwesenheit statt einer falschen Zahl** — Protokoll v2 überträgt nicht verfügbare normalisierte Rundendistanzen, Sessionzeiten und relative Abstände als null. Apex behält die begrenzte vorzeichenbehaftete Rundenkoordinate separat für die Erkennung von Start und Ziel, zeigt sie aber nie als Rundenfortschritt oder Gegnerabstand an.
+- **Mit Online- und Offline-Rennen geprüft** — Eine private Rohdatenaufzeichnung spielte 422.467 nutzbare Frames durch den aktuellen Decoder, Electron, die Live-Ansicht und den Analysespeicher: 358.720 Mehrfahrzeug-Frames aus zwei Online-Rennen sowie die vollständige Solo-Session – ohne Zurückweisung wegen ungültiger Daten.
+
+**Bekannte Einschränkungen**
+
+- **Vorübergehende Abstände bleiben nicht verfügbar** — Wenn LMU einen negativen oder nicht verfügbaren relativen Zeitwert veröffentlicht, zeigt Apex keinen Abstand, bis ein nicht negativer Wert eintrifft, statt die Bedeutung des Produzenten zu erraten.
+
 ## 0.2.5 — 2026-07-13
 
 ### English — Durable lap analysis and private feedback

@@ -120,7 +120,7 @@ function MeasuredLiveView({ frame, measuredTrack }: { frame: TelemetryFrame; mea
       position: opponent.overallPosition,
       driver: opponent.driver.displayName,
       car: opponent.car.model,
-      gap: opponent.gapToPlayerMs === 0 ? '—' : `${opponent.gapToPlayerMs > 0 ? '+' : '−'}${formatNumber(Math.abs(opponent.gapToPlayerMs / 1000), language, 1)}`,
+      gap: opponent.gapToPlayerMs === null || opponent.gapToPlayerMs === 0 ? '—' : `${opponent.gapToPlayerMs > 0 ? '+' : '−'}${formatNumber(Math.abs(opponent.gapToPlayerMs / 1000), language, 1)}`,
       pit: opponent.pitState,
       player: false,
     })),
@@ -128,8 +128,8 @@ function MeasuredLiveView({ frame, measuredTrack }: { frame: TelemetryFrame; mea
   const routeState = measuredTrack?.state === 'complete' ? m.measured.routeComplete : measuredTrack?.state === 'partial' ? m.measured.routePartial : m.measured.routeLearning
   const routePoints = measuredTrack?.route.map((point) => ({ x: point.x, y: point.z, distanceM: point.distanceM })) ?? []
   const mapCars = [
-    ...(frame.player.worldPositionM ? [{ id: frame.player.car.id, number: frame.player.car.carNumber, distanceM: frame.player.distanceM, position: { x: frame.player.worldPositionM.x, y: frame.player.worldPositionM.z }, label: frame.player.driver.displayName, selected: true }] : []),
-    ...frame.opponents.filter((opponent) => opponent.worldPositionM).map((opponent) => ({ id: opponent.car.id, number: opponent.car.carNumber, distanceM: opponent.distanceM, position: { x: opponent.worldPositionM!.x, y: opponent.worldPositionM!.z }, label: opponent.driver.displayName, className: opponent.car.vehicleClass })),
+    ...(frame.player.worldPositionM ? [{ id: frame.player.car.id, number: frame.player.car.carNumber, distanceM: frame.player.distanceM ?? undefined, position: { x: frame.player.worldPositionM.x, y: frame.player.worldPositionM.z }, label: frame.player.driver.displayName, selected: true }] : []),
+    ...frame.opponents.filter((opponent) => opponent.worldPositionM).map((opponent) => ({ id: opponent.car.id, number: opponent.car.carNumber, distanceM: opponent.distanceM ?? undefined, position: { x: opponent.worldPositionM!.x, y: opponent.worldPositionM!.z }, label: opponent.driver.displayName, className: opponent.car.vehicleClass })),
   ]
   const brakeSegments = measuredTrack?.brakeZones.map((zone) => ({ from: zone.startDistanceM / measuredTrack.trackLengthM, to: zone.releaseDistanceM / measuredTrack.trackLengthM, color: '#ff5d57', label: `${Math.round(zone.startDistanceM)}–${Math.round(zone.releaseDistanceM)} m` })) ?? []
 
