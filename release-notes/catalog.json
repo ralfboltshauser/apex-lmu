@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "releases": [
     {
-      "version": "0.3.1",
+      "version": "0.3.2",
       "releasedAt": "2026-07-18",
       "en": {
         "title": "Private race memory from raw recordings",

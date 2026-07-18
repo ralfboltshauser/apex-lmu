@@ -264,7 +264,7 @@ async function main() {
     await checkpoint('official session debrief did not render', page.getByText('Official pace and lap quality', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('imported synchronized trace did not load', page.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await page.locator('select[aria-label="Measured session"]').inputValue(), importState.sessionIds[0], 'selected imported session')
-    await checkpoint('published imported route did not render', page.getByText('Locally learned centre path', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('published imported route did not render', page.getByRole('heading', { name: 'Locally learned centre path', exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await page.getByText('The centre path is still learning; the selected driven line remains exact.', { exact: true }).count(), 0, 'imported route learning warning count')
     exact((await page.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after private import')
 
@@ -298,7 +298,7 @@ async function main() {
     await checkpoint('durable imported debrief did not survive restart', restartedPage.getByText('Imported raw recording', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('durable imported trace did not survive restart', restartedPage.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await restartedPage.locator('select[aria-label="Measured session"]').inputValue(), importState.sessionIds[0], 'selected imported session after restart')
-    await checkpoint('published imported route did not survive restart in Analysis', restartedPage.getByText('Locally learned centre path', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('published imported route did not survive restart in Analysis', restartedPage.getByRole('heading', { name: 'Locally learned centre path', exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await restartedPage.getByText('The centre path is still learning; the selected driven line remains exact.', { exact: true }).count(), 0, 'route learning warning count after restart')
     const duplicate = await restartedPage.evaluate(() => window.apexDesktop.startAnalysisImportForTest())
     if (!duplicate.ok || !duplicate.duplicate) fail(`durable duplicate import was not rejected before replay: ${JSON.stringify(duplicate)}`)

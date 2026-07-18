@@ -46,7 +46,7 @@ describe('release-note UI', () => {
     const root = createRoot(container)
     await act(async () => root.render(<I18nProvider><ReleaseHistory /></I18nProvider>))
     expect(container.querySelectorAll('details')).toHaveLength(releaseCatalog.releases.length)
-    expect(container.textContent).toContain('v0.3.1')
+    expect(container.textContent).toContain('v0.3.2')
     expect(container.textContent).toContain('v0.1.0')
     await act(async () => root.unmount())
     container.remove()

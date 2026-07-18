@@ -2,7 +2,7 @@ import { compareReleaseVersions, pendingReleaseNotes, releaseCatalog } from './r
 
 describe('bundled release-note catalog', () => {
   it('is newest-first, bilingual, and contains the package release history', () => {
-    expect(releaseCatalog.releases[0].version).toBe('0.3.1')
+    expect(releaseCatalog.releases[0].version).toBe('0.3.2')
     expect(releaseCatalog.releases.at(-1)?.version).toBe('0.1.0')
     expect(releaseCatalog.releases).toHaveLength(23)
     for (const release of releaseCatalog.releases) {
