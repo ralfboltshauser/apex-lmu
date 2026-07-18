@@ -2,7 +2,7 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
-## 0.4.0 — 2026-07-18
+## 0.4.1 — 2026-07-18
 
 ### English — Evidence-linked deterministic driver debrief
 

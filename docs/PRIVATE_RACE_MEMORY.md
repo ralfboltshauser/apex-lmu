@@ -193,7 +193,7 @@ and locally learned track geometry.
 
 ## Deterministic driver debrief
 
-Release 0.4.0 adds a second, deliberately stricter analysis layer. The factual
+Release 0.4.1 adds a second, deliberately stricter analysis layer. The factual
 session summary above can use complete limited laps for authoritative pace, but
 the Driver debrief accepts a lap only when it is complete, clean, officially
 timed, reference-eligible, replayable and backed by a validated canonical
