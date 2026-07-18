@@ -2,7 +2,7 @@
 
 Status: implementation contract
 Decision date: 2026-07-17
-First target release: 0.3.0
+First target release: 0.3.1
 
 ## Product decision
 

@@ -2,7 +2,7 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
-## 0.3.0 — 2026-07-18
+## 0.3.1 — 2026-07-18
 
 ### English — Private race memory from raw recordings
 

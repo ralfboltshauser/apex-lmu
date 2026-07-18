@@ -66,6 +66,7 @@
       "motionRatio": [0.99, 1.01]
     },
     "measuredRoute": {
+      "transientBinM": 12,
       "minimumCoveragePercent": 99,
       "minimumCleanLaps": 2,
       "minimumCleanLapCoveragePercent": 97,

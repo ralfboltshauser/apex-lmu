@@ -236,6 +236,11 @@ async function run(options = {}) {
     atLeast(cleanLaps.at(-1).coverage * 100, manifest.expected.measuredRoute.minimumCleanLapCoveragePercent, 'clean analysis lap coverage')
     const cleanPayloads = cleanLaps.map((lap) => analysis.getLap(sessions[0].id, lap.id)).filter((payload) => payload?.samples?.length)
     if (cleanPayloads.length !== cleanLaps.length) fail('one or more clean analysis lap payloads are unavailable')
+    const transientBinM = manifest.expected.measuredRoute.transientBinM
+    if (!Number.isFinite(transientBinM) || transientBinM <= 0) fail('transient renderer bin width is invalid')
+    const transientTotalBins = Math.ceil(sessions[0].track.lengthM / transientBinM)
+    const transientRouteBins = new Set(cleanPayloads.slice(-3).flatMap((payload) => payload.samples.map((sample) => Math.max(0, Math.min(transientTotalBins - 1, Math.floor(sample.distanceM / transientBinM))))))
+    atLeast(transientRouteBins.size / transientTotalBins * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'transient analysis route coverage')
     const totalBins = Math.ceil(sessions[0].track.lengthM / COVERAGE_BIN_M)
     const routeBins = new Set(cleanPayloads.flatMap((payload) => payload.samples.map((sample) => Math.max(0, Math.min(totalBins - 1, Math.floor(sample.distanceM / COVERAGE_BIN_M))))))
     atLeast(routeBins.size / totalBins * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'aggregated analysis route coverage')

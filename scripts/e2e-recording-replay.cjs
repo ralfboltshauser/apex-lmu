@@ -191,25 +191,30 @@ async function main() {
       fuelWidgets: await overlayPage.locator('.overlay-slot--fuel').count(),
     }))
     const measuredRouteVisible = checkpoint('measured route description did not appear', page.getByText('Locally reconstructed driven line', { exact: true }).waitFor({ state: 'visible', timeout: 90000 }))
-    const measuredRouteComplete = checkpoint('durable measured route did not publish', page.waitForFunction(({ brakeZones, coverage }) => {
+    const measuredTransientRoute = checkpoint('transient measured route did not stabilize', page.waitForFunction(({ brakeZones, coverage }) => {
       const badge = document.querySelector('.live-measured-map-card .badge')?.textContent ?? ''
       const percent = Number.parseInt(badge.match(/(\d+)%/)?.[1] ?? '', 10)
       return document.querySelectorAll('.measured-brake-zones li').length === brakeZones
-        && badge.includes('Measured route')
+        && badge.includes('Partial route')
         && Number.isFinite(percent)
         && percent >= coverage
     }, { brakeZones: manifest.expected.measuredRoute.brakeZones, coverage: manifest.expected.measuredRoute.minimumCoveragePercent }, { timeout: 90000 }))
-    const measuredLiveState = Promise.all([measuredRouteVisible, measuredRouteComplete]).then(async () => ({
-      brakeZones: await page.locator('.measured-brake-zones li').count(),
-      badge: await page.locator('.live-measured-map-card .badge').textContent(),
-    }))
+    const measuredLiveState = Promise.all([measuredRouteVisible, measuredTransientRoute]).then(async () => {
+      const badge = await page.locator('.live-measured-map-card .badge').textContent()
+      return {
+        brakeZones: await page.locator('.measured-brake-zones li').count(),
+        badge,
+        coverage: Number.parseInt(badge?.match(/(\d+)%/)?.[1] ?? '', 10),
+      }
+    })
     await checkpoint('raw recording replay did not complete', page.waitForFunction(() => ['complete', 'error'].includes(window.__apexReplaySummary.recordingStatus), null, { timeout: 120000 }))
     const [, , liveOverlay, measuredLive] = await Promise.all([trackVisible, carVisible, overlayLiveState, measuredLiveState])
     exact(liveOverlay.opacity, '0.61', 'live overlay opacity')
     exact(liveOverlay.deltaWidgets, 0, 'disabled overlay widget count')
     exact(liveOverlay.fuelWidgets, 1, 'enabled overlay widget count')
     exact(measuredLive.brakeZones, manifest.expected.measuredRoute.brakeZones, 'measured live brake zones')
-    if (!measuredLive.badge.includes('Measured route') || !measuredLive.badge.includes(`${manifest.expected.measuredRoute.minimumCoveragePercent}%`)) fail(`measured route badge: ${measuredLive.badge}`)
+    if (!measuredLive.badge.includes('Partial route')) fail(`transient route badge: ${measuredLive.badge}`)
+    atLeast(measuredLive.coverage, manifest.expected.measuredRoute.minimumCoveragePercent, 'transient measured route coverage')
     const summary = await page.evaluate(() => window.__apexReplaySummary)
     if (summary.recordingStatus !== 'complete') fail(`recording state ended as ${summary.recordingStatus}`)
     exact(summary.statuses, manifest.expected.statusSequence, 'status sequence'); exact(summary.frames, manifest.expected.telemetryFrames, 'frames'); exact(summary.completionFrames, manifest.expected.telemetryFrames, 'completion frames'); exact(summary.scoringOnly, manifest.expected.scoringOnlyFrames, 'scoring-only frames'); exact(summary.firstVehicle, manifest.expected.firstVehicleTelemetryFrame, 'first vehicle frame')
@@ -247,10 +252,20 @@ async function main() {
     exact(imported[0].id, importState.sessionIds[0], 'committed session identifier')
     if (!imported[0].endedAt || imported[0].importProvenance?.processingVersion !== PROCESSING_VERSION) fail('committed import provenance or finalized session end is missing')
     if (JSON.stringify(imported[0]).includes(fixturePath) || JSON.stringify(imported[0]).includes(path.basename(fixturePath))) fail('analysis history exposed the private recording path')
+    const durableModelLap = [...imported[0].laps].reverse().find((lap) => lap.trackModelEligible && lap.replayable && lap.samplesAvailable)
+    if (!durableModelLap) fail('imported recording has no durable track-model lap')
+    const durableModelPayload = await page.evaluate(({ sessionId, lapId }) => window.apexDesktop.getAnalysisLap(sessionId, lapId), { sessionId: imported[0].id, lapId: durableModelLap.id })
+    if (!durableModelPayload?.trackModel?.published) fail('explicit import did not publish the durable measured route')
+    atLeast(durableModelPayload.trackModel.coverage * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'imported durable route coverage')
+    const durableModelHash = durableModelPayload.trackModel.geometryHash
+    if (typeof durableModelHash !== 'string' || !/^[a-f0-9]{64}$/.test(durableModelHash)) fail('imported durable route hash is invalid')
     await checkpoint('private race memory status did not render', page.getByText('Private race memory', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('imported recording debrief did not render', page.getByText('Imported raw recording', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('official session debrief did not render', page.getByText('Official pace and lap quality', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('imported synchronized trace did not load', page.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await page.locator('select[aria-label="Measured session"]').inputValue(), importState.sessionIds[0], 'selected imported session')
+    await checkpoint('published imported route did not render', page.getByText('Locally learned centre path', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await page.getByText('The centre path is still learning; the selected driven line remains exact.', { exact: true }).count(), 0, 'imported route learning warning count')
     exact((await page.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after private import')
 
     await page.locator('button.nav-item').filter({ hasText: 'Settings' }).click()
@@ -273,9 +288,18 @@ async function main() {
     exact(durableSessions.length, 1, 'durable session count after restart')
     exact(durableSessions[0].source, 'imported-recording', 'durable source after restart')
     exact(durableSessions[0].id, importState.sessionIds[0], 'durable session identifier after restart')
+    const restartedModelLap = [...durableSessions[0].laps].reverse().find((lap) => lap.trackModelEligible && lap.replayable && lap.samplesAvailable)
+    if (!restartedModelLap) fail('durable track-model lap did not survive restart')
+    const restartedModelPayload = await restartedPage.evaluate(({ sessionId, lapId }) => window.apexDesktop.getAnalysisLap(sessionId, lapId), { sessionId: durableSessions[0].id, lapId: restartedModelLap.id })
+    if (!restartedModelPayload?.trackModel?.published) fail('durable measured route did not survive restart')
+    exact(restartedModelPayload.trackModel.geometryHash, durableModelHash, 'durable route hash after restart')
+    atLeast(restartedModelPayload.trackModel.coverage * 100, manifest.expected.measuredRoute.minimumCoveragePercent, 'durable route coverage after restart')
     await restartedPage.locator('button.nav-item').filter({ hasText: 'Analyze' }).click()
     await checkpoint('durable imported debrief did not survive restart', restartedPage.getByText('Imported raw recording', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('durable imported trace did not survive restart', restartedPage.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await restartedPage.locator('select[aria-label="Measured session"]').inputValue(), importState.sessionIds[0], 'selected imported session after restart')
+    await checkpoint('published imported route did not survive restart in Analysis', restartedPage.getByText('Locally learned centre path', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await restartedPage.getByText('The centre path is still learning; the selected driven line remains exact.', { exact: true }).count(), 0, 'route learning warning count after restart')
     const duplicate = await restartedPage.evaluate(() => window.apexDesktop.startAnalysisImportForTest())
     if (!duplicate.ok || !duplicate.duplicate) fail(`durable duplicate import was not rejected before replay: ${JSON.stringify(duplicate)}`)
     const duplicateState = await restartedPage.evaluate(() => window.apexDesktop.getAnalysisImportState())
