@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { buildTrackModel } = require('./track-model.cjs')
+const { buildTrackModel, DEFAULT_BIN_M, TRACK_MODEL_ALGORITHM } = require('./track-model.cjs')
 
 function circleLap({ radius = 100, lateral = 0, offtrackAt = -1, id = 'lap', stepM = 1 } = {}) {
   const length = 2 * Math.PI * radius
@@ -47,8 +47,11 @@ test('two complete laps publish when LMU scoring distance advances less often th
   const model = buildTrackModel({
     trackKey: 'test',
     trackLengthM: length,
-    laps: [circleLap({ id: 'first', stepM: 8.5 }), circleLap({ id: 'second', stepM: 8.5 })],
+    laps: [circleLap({ id: 'first', stepM: 15.5 }), circleLap({ id: 'second', stepM: 15.5 })],
   })
+  assert.equal(DEFAULT_BIN_M, 16)
+  assert.equal(model.algorithmVersion, TRACK_MODEL_ALGORITHM)
+  assert.equal(model.algorithmVersion, 'telemetry-centerline-v2')
   assert.equal(model.coverage > 0.97, true)
   assert.equal(model.published, true)
 })

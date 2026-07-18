@@ -1,6 +1,6 @@
 {
   "name": "apex-lmu",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "private": true,
   "workspaces": [
     "apps/website",
@@ -49,6 +49,7 @@
     "test:scripts": "node --test scripts/*.node-test.cjs",
     "test:feedback-api": "npm run test --workspace=apex-lmu-feedback-api",
     "test:recording-replay": "node scripts/assert-recording-replay.cjs",
+    "audit:recording-import": "node scripts/audit-recording-import.cjs",
     "test:e2e:windows:replay": "node scripts/e2e-recording-replay.cjs",
     "test:all": "npm run i18n:check && npm run release-notes:check && npm test && npm run test:desktop && npm run test:electron:sqlite && npm run test:scripts && npm run test:feedback-api && npm run test:bridge",
     "test:watch": "vitest",

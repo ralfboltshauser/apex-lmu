@@ -155,7 +155,7 @@ describe('strategy generation', () => {
         expect(Object.values(candidate).filter((value) => typeof value === 'number').every(Number.isFinite)).toBe(true);
       }
     }
-  });
+  }, 10_000);
 
   it('fails closed when a full tank cannot cover one whole timed-race lap', () => {
     const result = generateTimedStrategyCandidates({

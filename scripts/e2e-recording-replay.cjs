@@ -5,6 +5,7 @@ const crypto = require('node:crypto')
 const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const { _electron: electron } = require('playwright-core')
+const { PROCESSING_VERSION } = require('../electron/recording-import-service.cjs')
 
 const root = path.join(__dirname, '..')
 const manifestPath = path.join(root, 'data', 'recordings', 'apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.expected.json')
@@ -18,6 +19,17 @@ function between(value, range, label) { if (!Number.isFinite(value) || value < r
 function atLeast(value, minimum, label) { if (!Number.isFinite(value) || value < minimum) fail(`${label} ${value} below ${minimum}`) }
 async function checkpoint(label, promise) {
   try { return await promise } catch (error) { fail(`${label}: ${error instanceof Error ? error.message : String(error)}`) }
+}
+
+async function waitForImportTerminal(page, timeoutMs = 180000) {
+  const deadline = Date.now() + timeoutMs
+  let state = null
+  while (Date.now() < deadline) {
+    state = await page.evaluate(() => window.apexDesktop.getAnalysisImportState())
+    if (['complete', 'cancelled', 'error'].includes(state.status)) return state
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  fail(`analysis import timed out in ${state?.status || 'unknown'} state`)
 }
 
 async function fixtureHash() { return crypto.createHash('sha256').update(await fs.readFile(fixturePath)).digest('hex') }
@@ -80,10 +92,13 @@ async function main() {
   try {
     const packagedExecutable = process.env.APEX_E2E_EXECUTABLE ? path.resolve(root, process.env.APEX_E2E_EXECUTABLE) : null
     if (packagedExecutable) await fs.access(packagedExecutable)
-    application = await electron.launch({
+    const launchOptions = {
       ...(packagedExecutable ? { executablePath: packagedExecutable } : {}),
       args: packagedExecutable ? [] : ['.'], cwd: root, timeout: 30000,
       env: { ...process.env, APEX_E2E: '1', APEX_E2E_REPLAY: fixturePath, APEX_E2E_USER_DATA: temporary, APEX_E2E_RUN_ID: runId, APEX_E2E_REPLAY_SPEED: '0' },
+    }
+    application = await electron.launch({
+      ...launchOptions,
     })
     application.on('console', (message) => { if (message.type() === 'error') errors.push(`main-console: ${message.text()}`) })
     const page = await application.firstWindow({ timeout: 30000 })
@@ -204,18 +219,73 @@ async function main() {
     for (const [key, value] of Object.entries(manifest.expected.minimumWheelMaximums)) atLeast(summary.wheelMaximums[key], value, key)
     const lifetimeAfter = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
     exact(lifetimeAfter.totalDistanceMm, 0, 'lifetime distance after replay')
+    const transientSessions = await page.evaluate(() => window.apexDesktop.getAnalysisSessions())
+    exact(transientSessions.filter((session) => session.source === 'recording-replay').length, 1, 'transient replay session count')
+    exact(transientSessions.filter((session) => session.source === 'imported-recording').length, 0, 'premature imported session count')
     await page.locator('button.nav-item').filter({ hasText: 'Analyze' }).click()
-    await checkpoint('durable lap replay analysis did not load', page.getByText('Lap replay and comparison', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('transient lap replay analysis did not load', page.getByText('Lap replay and comparison', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     await checkpoint('synchronized analysis trace did not load', page.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await page.locator('.measured-zone-list li').count(), manifest.expected.measuredRoute.brakeZones, 'measured analysis brake zones')
     await overlayPage.locator('.overlay-waiting').waitFor({ state: 'visible', timeout: 10000 })
     const overlayClosed = await page.evaluate(() => window.apexDesktop.closeOverlay())
     exact(overlayClosed.state.status, 'closed', 'overlay close state')
     exact(application.windows().length, 1, 'remaining window count')
+
+    const importStarted = await page.evaluate(() => window.apexDesktop.startAnalysisImportForTest())
+    if (!importStarted.ok || importStarted.duplicate || !importStarted.runId) fail(`explicit analysis import did not start: ${JSON.stringify(importStarted)}`)
+    const importState = await waitForImportTerminal(page)
+    if (importState.status !== 'complete' || importState.duplicate) fail(`explicit analysis import did not commit: ${JSON.stringify(importState)}`)
+    exact(importState.frames, manifest.expected.telemetryFrames, 'imported frame count')
+    exact(importState.sessions, 1, 'imported session count')
+    atLeast(importState.laps, manifest.expected.measuredRoute.minimumCleanLaps, 'imported lap count')
+    exact(importState.importedSessions, 1, 'newly imported session count')
+    exact(importState.importedLaps, importState.laps, 'newly imported lap count')
+    exact(importState.sessionIds.length, 1, 'imported session identifiers')
+    const importedSessions = await page.evaluate(() => window.apexDesktop.getAnalysisSessions())
+    const imported = importedSessions.filter((session) => session.source === 'imported-recording')
+    exact(imported.length, 1, 'visible imported session count')
+    exact(imported[0].id, importState.sessionIds[0], 'committed session identifier')
+    if (!imported[0].endedAt || imported[0].importProvenance?.processingVersion !== PROCESSING_VERSION) fail('committed import provenance or finalized session end is missing')
+    if (JSON.stringify(imported[0]).includes(fixturePath) || JSON.stringify(imported[0]).includes(path.basename(fixturePath))) fail('analysis history exposed the private recording path')
+    await checkpoint('private race memory status did not render', page.getByText('Private race memory', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('imported recording debrief did not render', page.getByText('Imported raw recording', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('official session debrief did not render', page.getByText('Official pace and lap quality', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('imported synchronized trace did not load', page.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact((await page.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after private import')
+
     await page.locator('button.nav-item').filter({ hasText: 'Settings' }).click()
     await page.getByText('Settings', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 })
+    await application.close()
+    application = undefined
+
+    application = await electron.launch({ ...launchOptions })
+    application.on('console', (message) => { if (message.type() === 'error') errors.push(`restart-main-console: ${message.text()}`) })
+    const restartedPage = await application.firstWindow({ timeout: 30000 })
+    restartedPage.on('pageerror', (error) => errors.push(`restart-renderer: ${error.message}`))
+    await restartedPage.evaluate(async () => {
+      localStorage.setItem('apex:onboarded', 'true')
+      localStorage.setItem('apex:language', 'en')
+      const state = await window.apexDesktop.getWhatsNewState()
+      await window.apexDesktop.acknowledgeWhatsNew(state.currentVersion)
+    })
+    await restartedPage.reload({ waitUntil: 'domcontentloaded' })
+    const durableSessions = await restartedPage.evaluate(() => window.apexDesktop.getAnalysisSessions())
+    exact(durableSessions.length, 1, 'durable session count after restart')
+    exact(durableSessions[0].source, 'imported-recording', 'durable source after restart')
+    exact(durableSessions[0].id, importState.sessionIds[0], 'durable session identifier after restart')
+    await restartedPage.locator('button.nav-item').filter({ hasText: 'Analyze' }).click()
+    await checkpoint('durable imported debrief did not survive restart', restartedPage.getByText('Imported raw recording', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('durable imported trace did not survive restart', restartedPage.getByText('Synchronized speed and brake trace', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    const duplicate = await restartedPage.evaluate(() => window.apexDesktop.startAnalysisImportForTest())
+    if (!duplicate.ok || !duplicate.duplicate) fail(`durable duplicate import was not rejected before replay: ${JSON.stringify(duplicate)}`)
+    const duplicateState = await restartedPage.evaluate(() => window.apexDesktop.getAnalysisImportState())
+    exact(duplicateState.status, 'complete', 'duplicate import state')
+    exact(duplicateState.duplicate, true, 'duplicate import flag')
+    exact(duplicateState.frames, 0, 'duplicate decoded frame count')
+    exact((await restartedPage.evaluate(() => window.apexDesktop.getAnalysisSessions())).length, 1, 'idempotent durable session count')
+    exact((await restartedPage.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after restart and duplicate')
     if (errors.length) fail(errors.join('; '))
-    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, ui: ['track', 'car', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'settings-responsive'] }))
+    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, importedSessions: importState.sessions, importedLaps: importState.laps, ui: ['track', 'car', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'private-race-memory', 'session-debrief', 'durable-restart', 'duplicate-no-op', 'settings-responsive'] }))
   } finally {
     await application?.close().catch(() => {})
     await fs.rm(temporary, { recursive: true, force: true })

@@ -20,8 +20,10 @@ GitHub issue live in [the open-issue roadmap](roadmap/issues/README.md).
 - Convert DuckDB channels into the normalized session model; the alpha importer
   currently performs safe schema discovery and extracts metadata, channel,
   event, lap, and lap-time indexes.
-- Persist recorded live samples and overlay layouts through clean shutdown,
-  crash recovery, and schema migrations.
+- Complete packaged-Windows soak, crash-recovery, retention and migration
+  acceptance for the existing durable normalized lap history and overlay
+  configuration. Explicit `.apexrec` import remains separate from native LMU
+  DuckDB channel ingestion.
 - Test setup installation across Steam library locations, track folders, read-
   only folders, name collisions, malformed files, and rollback.
 - Complete keyboard-only, screen-reader, 125–200% scaling, ultrawide, and
@@ -46,5 +48,8 @@ GitHub issue live in [the open-issue roadmap](roadmap/issues/README.md).
 - No copying commercial setup packs, coaching videos, reference telemetry, or
   branding.
 - No cloud account, telemetry upload, advertising, or hidden analytics.
+- No guessed online/offline session label. Both modes use the same official
+  shared-memory contract; Apex reports only the state the recorded or live
+  source actually exposes.
 - No strategic certainty where the game provides insufficient information;
   uncertainty is part of the answer.

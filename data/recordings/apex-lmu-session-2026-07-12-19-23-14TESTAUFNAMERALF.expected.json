@@ -9,7 +9,14 @@
     "privacy": "private-raw-lmu-memory"
   },
   "expected": {
-    "statusSequence": ["replay-starting", "waiting-for-vehicle", "replay-complete"],
+    "statusSequence": [
+      "replay-starting",
+      "waiting", "waiting", "waiting", "waiting", "waiting", "waiting", "waiting",
+      "waiting", "waiting", "waiting", "waiting", "waiting", "waiting", "waiting",
+      "mapping-open", "waiting-for-vehicle", "connected", "disconnected",
+      "waiting", "waiting", "waiting",
+      "replay-complete"
+    ],
     "telemetryFrames": 18039,
     "scoringOnlyFrames": 4,
     "firstVehicleTelemetryFrame": 5,

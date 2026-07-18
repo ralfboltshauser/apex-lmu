@@ -1,15 +1,18 @@
 const crypto = require('node:crypto')
 
 const SCHEMA_VERSION = 1
-const QUALITY_POLICY_VERSION = 'lap-quality-v1'
-const COVERAGE_BIN_M = 12
+const QUALITY_POLICY_VERSION = 'lap-quality-v2'
+const COVERAGE_BIN_M = 16
 const CLEAN_COVERAGE = 0.97
 const LIMITED_COVERAGE = 0.8
+const MAX_CLEAN_GAP_M = COVERAGE_BIN_M * 2
 const MAX_FINAL_SAMPLES = 4096
-const MAX_CURRENT_SAMPLES = 500000
+const MAX_CURRENT_SAMPLES = 16384
+const ESTIMATED_SAMPLE_BYTES = 512
 const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024
 const OFFICIAL_LAP_TIME_GRACE_SECONDS = 1
 const OFFICIAL_LAP_TIME_GRACE_FRAMES = 100
+const REPLAY_IDENTITY_VERSION = 'recording-replay-identity-v1'
 
 function finite(value) { return typeof value === 'number' && Number.isFinite(value) }
 function normalize(value) { return String(value || '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') }
@@ -25,9 +28,13 @@ function sessionElapsed(message) {
 function lapStart(message) { return finite(message.player?.lapStartSeconds) ? message.player.lapStartSeconds : null }
 function currentLapNumber(message) { return Number.isSafeInteger(message.player?.lap) ? Math.max(1, message.player.lap) : 1 }
 function sourceKind(message) { return message.source === 'recording-replay' ? 'recording-replay' : 'live' }
+function sourceRunId(message) { return typeof message.runId === 'string' ? message.runId : '' }
 function safeLength(message) { return Math.max(1, finite(message.session?.trackLengthM) ? message.session.trackLengthM : 1) }
 function officialLapSeconds(message) { return finite(message.player?.lastLapSeconds) ? message.player.lastLapSeconds : null }
-function changedOfficialLapSeconds(current, previous) { return finite(current) && current > 0 && (!finite(previous) || previous <= 0 || Math.abs(current - previous) > 0.000001) }
+function officialPublicationExpected(lap) {
+  const flags = lap.samples.map((sample) => sample.countLapFlag).filter((value) => value !== null)
+  return flags.length === 0 || flags.some((value) => value === 2)
+}
 
 function compactSamples(samples, maximum = MAX_FINAL_SAMPLES) {
   if (samples.length <= maximum) return samples.map((sample) => ({ ...sample }))
@@ -67,11 +74,16 @@ function compactSamples(samples, maximum = MAX_FINAL_SAMPLES) {
 
 function lapCoverage(lap, trackLengthM) {
   if (!lap.samples?.length) return { coverage: 0, maximumGapM: trackLengthM }
-  const bins = new Set(lap.samples.map((sample) => clamp(Math.floor(sample.distanceM / COVERAGE_BIN_M), 0, Math.ceil(trackLengthM / COVERAGE_BIN_M) - 1)))
+  const distances = lap.samples.map((sample) => sample.distanceM).filter(finite).map((distanceM) => clamp(distanceM, 0, trackLengthM))
+  if (!distances.length) return { coverage: 0, maximumGapM: trackLengthM }
+  const bins = new Set(distances.map((distanceM) => clamp(Math.floor(distanceM / COVERAGE_BIN_M), 0, Math.ceil(trackLengthM / COVERAGE_BIN_M) - 1)))
   const totalBins = Math.max(1, Math.ceil(trackLengthM / COVERAGE_BIN_M))
-  const ordered = [...lap.samples].sort((left, right) => left.distanceM - right.distanceM)
-  let maximumGapM = Math.max(0, ordered[0].distanceM, trackLengthM - ordered.at(-1).distanceM)
-  for (let index = 1; index < ordered.length; index += 1) maximumGapM = Math.max(maximumGapM, ordered[index].distanceM - ordered[index - 1].distanceM)
+  const ordered = distances.sort((left, right) => left - right)
+  // A lap is circular: the unsampled seam is the distance from the final
+  // sample to the first sample through start/finish, not the larger of those
+  // two partial distances. Treating them separately hid real seam gaps.
+  let maximumGapM = Math.max(0, ordered[0] + trackLengthM - ordered.at(-1))
+  for (let index = 1; index < ordered.length; index += 1) maximumGapM = Math.max(maximumGapM, ordered[index] - ordered[index - 1])
   return { coverage: Math.min(1, bins.size / totalBins), maximumGapM }
 }
 
@@ -79,9 +91,10 @@ function classifyLap(lap, trackLengthM) {
   const { coverage, maximumGapM } = lapCoverage(lap, trackLengthM)
   const reasons = new Set(lap.reasons)
   if (lap.state !== 'complete') reasons.add('incomplete')
-  if (coverage < CLEAN_COVERAGE) reasons.add('coverage-low')
+  const routeIncomplete = coverage < CLEAN_COVERAGE || maximumGapM > MAX_CLEAN_GAP_M
+  if (routeIncomplete) reasons.add('coverage-low')
   const disqualifying = ['pit', 'ai-control', 'remote-control', 'replay-control', 'time-reset', 'lap-counter-jump']
-  const quality = lap.state === 'complete' && coverage >= CLEAN_COVERAGE && !disqualifying.some((reason) => reasons.has(reason))
+  const quality = lap.state === 'complete' && !routeIncomplete && !disqualifying.some((reason) => reasons.has(reason))
     ? 'clean'
     : lap.samples?.length > 1 && coverage >= LIMITED_COVERAGE && !['pit', 'ai-control', 'remote-control', 'replay-control'].some((reason) => reasons.has(reason))
       ? 'limited'
@@ -90,16 +103,18 @@ function classifyLap(lap, trackLengthM) {
 }
 
 class LiveSessionStore {
-  constructor({ logger = null, makeId = crypto.randomUUID, memoryBudgetBytes = DEFAULT_MEMORY_BUDGET, now = () => new Date(), onLapFinalized = null } = {}) {
+  constructor({ logger = null, makeId = crypto.randomUUID, memoryBudgetBytes = DEFAULT_MEMORY_BUDGET, now = () => new Date(), onLapFinalized = null, onSessionFinalized = null } = {}) {
     this.logger = logger
     this.makeId = makeId
     this.memoryBudgetBytes = memoryBudgetBytes
+    this.currentLapSampleLimit = Math.max(1, Math.min(MAX_CURRENT_SAMPLES, Math.floor(memoryBudgetBytes / ESTIMATED_SAMPLE_BYTES)))
     this.now = now
     this.onLapFinalized = onLapFinalized
+    this.onSessionFinalized = onSessionFinalized
     this.sessions = []
     this.active = null
     this.revision = 0
-    this.health = { telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }
+    this.health = { telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0, sampleOverflowLaps: 0 }
   }
 
   ingest(message) {
@@ -118,10 +133,11 @@ class LiveSessionStore {
     }
     this.updateSessionSource(message)
 
-    const officialSeconds = officialLapSeconds(message)
-    this.reconcilePendingLap(message, officialSeconds)
-    if (this.active.currentLap && finite(officialSeconds) && officialSeconds <= 0) this.active.currentLap.officialResetObserved = true
-    if (message.playerTelemetryAvailable !== false) this.ingestVehicleFrame(message, officialSeconds)
+    let officialPublication = this.observeOfficialPublication(message)
+    officialPublication = this.consumeQuarantinedPublication(officialPublication, message)
+    officialPublication = this.reconcilePendingLap(message, officialPublication)
+    if (message.playerTelemetryAvailable !== false) this.ingestVehicleFrame(message, officialPublication)
+    else this.discardUnownedPublication(officialPublication)
     this.active.lastFrame = this.frameIdentity(message)
     this.active.updatedAt = message.capturedAt || this.now().toISOString()
     this.revision += 1
@@ -171,12 +187,25 @@ class LiveSessionStore {
   startSession(message) {
     const createdAt = message.capturedAt || this.now().toISOString()
     const generation = this.sessions.length + 1
-    const id = stableId('analysis-session', `${this.makeId()}|${generation}|${sourceKind(message)}|${sessionTrackKey(message)}`)
+    const source = sourceKind(message)
+    const runId = sourceRunId(message)
+    const replayGeneration = source === 'recording-replay'
+      ? this.sessions.filter((session) => session.source === source && session.sourceRunId === runId).length + 1
+      : null
+    const id = source === 'recording-replay'
+      ? stableId('analysis-session', JSON.stringify([REPLAY_IDENTITY_VERSION, runId, replayGeneration, message.sequence ?? null, sessionTrackKey(message)]))
+      : stableId('analysis-session', `${this.makeId()}|${generation}|${source}|${sessionTrackKey(message)}`)
     this.active = {
-      id, revision: this.revision, source: sourceKind(message), state: 'active', startedAt: createdAt, updatedAt: createdAt, endedAt: null,
+      id, revision: this.revision, source, sourceRunId: runId, state: 'active', startedAt: createdAt, updatedAt: createdAt, endedAt: null,
       trackKey: sessionTrackKey(message), track: { name: message.session.track, layout: message.session.layout || '', lengthM: safeLength(message) },
       car: { id: Number.isSafeInteger(message.player.id) ? message.player.id : 0, name: message.player.name || '', class: message.player.class || '' },
-      sourceSegments: [], interruptionCount: 0, laps: [], currentLap: null, pendingLap: null, lastFrame: null, lastVehicleFrame: null,
+      sourceSegments: [], interruptionCount: 0, laps: [], currentLap: null, pendingLap: null, lastFrame: null, lastVehicleFrame: null, lapGeneration: 0,
+      officialTiming: {
+        observedSeconds: officialLapSeconds(message),
+        resetObserved: finite(officialLapSeconds(message)) && officialLapSeconds(message) <= 0,
+        publicationSerial: 0,
+        quarantinedOwners: [],
+      },
     }
     this.sessions.push(this.active)
     this.health.sessions += 1
@@ -192,15 +221,71 @@ class LiveSessionStore {
     else segment.lastSequence = message.sequence
   }
 
-  ingestVehicleFrame(message, officialSeconds) {
+  observeOfficialPublication(message) {
+    const timing = this.active?.officialTiming
+    const seconds = officialLapSeconds(message)
+    if (!timing || !finite(seconds)) return null
+    if (seconds <= 0) {
+      timing.observedSeconds = seconds
+      timing.resetObserved = true
+      return null
+    }
+    const changed = !finite(timing.observedSeconds) || timing.observedSeconds <= 0 || Math.abs(seconds - timing.observedSeconds) > 0.000001
+    const published = timing.resetObserved || changed
+    timing.observedSeconds = seconds
+    timing.resetObserved = false
+    if (!published) return null
+    timing.publicationSerial += 1
+    return { id: timing.publicationSerial, lapTimeMs: seconds * 1000 }
+  }
+
+  consumeQuarantinedPublication(publication, message) {
+    const timing = this.active?.officialTiming
+    if (!publication || !timing?.quarantinedOwners.length) return publication
+    const scoringLap = currentLapNumber(message)
+    timing.quarantinedOwners = timing.quarantinedOwners.filter((owner) => owner.throughLapNumber >= scoringLap)
+    if (!timing.quarantinedOwners.length) return publication
+    const owner = timing.quarantinedOwners.shift()
+    this.record('info', 'analysis-lap-score-quarantined', 'A late LMU scoring publication was withheld from the active lap.', { sessionId: this.active.id, lapNumber: owner.lapNumber })
+    return null
+  }
+
+  expireQuarantinedOwners(completedLapNumber) {
+    const timing = this.active?.officialTiming
+    if (!timing) return
+    timing.quarantinedOwners = timing.quarantinedOwners.filter((owner) => owner.throughLapNumber > completedLapNumber)
+  }
+
+  assignOfficialPublication(lap, publication) {
+    if (!lap || !publication) return
+    lap.officialPublication = publication
+  }
+
+  discardUnownedPublication(publication) {
+    if (!publication) return
+    this.record('info', 'analysis-lap-score-unowned', 'An LMU scoring publication had no completed-lap owner and was withheld.', { sessionId: this.active.id })
+  }
+
+  ingestVehicleFrame(message, officialPublication) {
     const identity = this.frameIdentity(message)
     const previous = this.active.lastVehicleFrame
     const boundary = previous && this.lapBoundary(previous, identity, this.active.track.lengthM)
-    if (!this.active.currentLap) this.startLap(message, identity)
+    if (!this.active.currentLap) {
+      this.startLap(message, identity)
+      this.discardUnownedPublication(officialPublication)
+    }
     else if (boundary) {
       if (boundary === 'lap-counter-jump') this.active.currentLap.reasons.add(boundary)
-      this.completeCurrentAtBoundary(message, officialSeconds)
-      this.startLap(message, identity)
+      // Distance is the physical lap boundary. LMU can publish that wrap one
+      // snapshot before its scoring lap counter advances, so derive the new
+      // analysis-lap number from both signals and never start a second lap
+      // with the number that just completed.
+      const nextLapNumber = Math.max(identity.lap, this.active.currentLap.number + 1)
+      this.completeCurrentAtBoundary(message, officialPublication)
+      this.startLap(message, identity, nextLapNumber)
+    } else if (officialPublication) {
+      if (identity.lap > this.active.currentLap.number) this.assignOfficialPublication(this.active.currentLap, officialPublication)
+      else this.discardUnownedPublication(officialPublication)
     }
     this.active.lastVehicleFrame = identity
     const lap = this.active.currentLap
@@ -221,18 +306,24 @@ class LiveSessionStore {
       if (movement > plausible && !boundary) { lap.reasons.add('position-discontinuity'); return }
     }
     sample.distanceIndexM = last ? Math.max(last.distanceIndexM, sample.rawDistanceM) : Math.max(0, sample.rawDistanceM)
-    lap.samples.push(sample)
-    lap.lastSequence = message.sequence
-    if (lap.samples.length > MAX_CURRENT_SAMPLES) {
-      lap.samples.shift()
+    if (lap.samples.length < this.currentLapSampleLimit) {
+      lap.samples.push(sample)
+    } else {
+      // Keep the first bounded route evidence and the newest accepted sample.
+      // Replacing one slot is O(1); shifting a long array on every frame is not.
+      lap.samples[this.currentLapSampleLimit - 1] = sample
+      if (!lap.reasons.has('sample-overflow')) this.health.sampleOverflowLaps += 1
       lap.reasons.add('sample-overflow')
     }
+    lap.lastSequence = message.sequence
   }
 
-  startLap(message, identity) {
-    const number = identity.lap
-    const id = stableId('analysis-lap', `${this.active.id}|${number}|${identity.lapStart ?? identity.elapsed}|${this.makeId()}`)
-    this.active.currentLap = { id, number, state: 'current', startedAt: message.capturedAt || this.now().toISOString(), endedAt: null, samples: [], reasons: new Set(), lastSequence: null, ownerCandidate: null, ownerCount: 0, pitCount: 0, justStarted: true, officialBaselineLapSeconds: officialLapSeconds(message), officialResetObserved: false }
+  startLap(message, identity, number = identity.lap) {
+    this.active.lapGeneration += 1
+    const id = this.active.source === 'recording-replay'
+      ? stableId('analysis-lap', JSON.stringify([REPLAY_IDENTITY_VERSION, this.active.id, this.active.lapGeneration, number, identity.sequence ?? null, identity.lapStart ?? identity.elapsed ?? null]))
+      : stableId('analysis-lap', `${this.active.id}|${number}|${identity.lapStart ?? identity.elapsed}|${this.makeId()}`)
+    this.active.currentLap = { id, number, state: 'current', startedAt: message.capturedAt || this.now().toISOString(), endedAt: null, samples: [], reasons: new Set(), lastSequence: null, ownerCandidate: null, ownerCount: 0, pitCount: 0, justStarted: true, officialPublication: null }
   }
 
   trackControlState(lap, message) {
@@ -291,22 +382,24 @@ class LiveSessionStore {
     return null
   }
 
-  completeCurrentAtBoundary(message, currentOfficialSeconds) {
+  completeCurrentAtBoundary(message, boundaryPublication) {
     const lap = this.active?.currentLap
     if (!lap) return
-    if (this.active.pendingLap) this.resolvePendingLap(null, 'next-lap-boundary')
-    const officialChanged = changedOfficialLapSeconds(currentOfficialSeconds, lap.officialBaselineLapSeconds)
-      || (finite(currentOfficialSeconds) && currentOfficialSeconds > 0 && lap.officialResetObserved)
-    if (officialChanged) {
-      this.finalizeLap(lap, 'complete', currentOfficialSeconds * 1000)
+    if (this.active.pendingLap) this.resolvePendingLap(null, 'next-lap-boundary', { quarantineMissing: true })
+    // A missing publication can only remain plausibly owned by the timed-out
+    // lap while the immediately following lap is active. Expiring that claim
+    // at this boundary prevents one genuinely untimed lap from shifting every
+    // later official publication by one lap forever.
+    this.expireQuarantinedOwners(lap.number)
+    const publication = boundaryPublication || lap.officialPublication
+    if (publication) {
+      this.finalizeLap(lap, 'complete', publication.lapTimeMs)
       return
     }
-    const observedCountFlags = lap.samples.map((sample) => sample.countLapFlag).filter((value) => value !== null)
-    const needsOfficialDecision = observedCountFlags.some((value) => value !== 2)
-    if (!needsOfficialDecision) {
-      this.finalizeLap(lap, 'complete')
-      return
-    }
+    // A scoring flag can announce that a time should count, but only the
+    // published last-lap value supplies that time. Give every completed lap
+    // the same bounded publication grace instead of converting an all-2 flag
+    // sequence into a synthetic duration.
     lap.state = 'complete'
     lap.endedAt = message.capturedAt || this.active.updatedAt
     lap.scoringPending = true
@@ -314,35 +407,41 @@ class LiveSessionStore {
     this.active.currentLap = null
     this.active.pendingLap = {
       lap,
-      baselineOfficialLapSeconds: lap.officialBaselineLapSeconds,
-      officialResetObserved: lap.officialResetObserved,
+      expectsOfficialPublication: officialPublicationExpected(lap),
       boundaryElapsedSeconds: sessionElapsed(message),
       boundarySequence: message.sequence,
     }
     this.record('info', 'analysis-lap-awaiting-score', 'A completed analysis lap is waiting briefly for its official LMU scoring result.', { sessionId: this.active.id, lapNumber: lap.number })
   }
 
-  reconcilePendingLap(message, currentOfficialSeconds) {
+  reconcilePendingLap(message, officialPublication) {
     const pending = this.active?.pendingLap
-    if (!pending) return
-    if (changedOfficialLapSeconds(currentOfficialSeconds, pending.baselineOfficialLapSeconds)
-      || (finite(currentOfficialSeconds) && currentOfficialSeconds > 0 && pending.officialResetObserved)) {
-      this.resolvePendingLap(currentOfficialSeconds * 1000, 'official-time-published')
-      return
+    if (!pending) return officialPublication
+    if (officialPublication) {
+      this.resolvePendingLap(officialPublication, 'official-time-published')
+      return null
     }
     const elapsed = sessionElapsed(message)
     const elapsedExpired = finite(elapsed) && finite(pending.boundaryElapsedSeconds) && elapsed - pending.boundaryElapsedSeconds >= OFFICIAL_LAP_TIME_GRACE_SECONDS
     const sequenceExpired = Number.isSafeInteger(message.sequence) && Number.isSafeInteger(pending.boundarySequence)
       && message.sequence - pending.boundarySequence >= OFFICIAL_LAP_TIME_GRACE_FRAMES
-    if (elapsedExpired || sequenceExpired) this.resolvePendingLap(null, 'official-time-timeout')
+    if (elapsedExpired || sequenceExpired) this.resolvePendingLap(null, 'official-time-timeout', { quarantineMissing: true })
+    return null
   }
 
-  resolvePendingLap(officialLapTimeMs, reason) {
+  resolvePendingLap(officialPublication, reason, { quarantineMissing = false } = {}) {
     const pending = this.active?.pendingLap
     if (!pending) return
     this.active.pendingLap = null
-    this.finalizeLap(pending.lap, 'complete', officialLapTimeMs)
-    this.record('info', 'analysis-lap-score-resolved', 'A pending analysis lap scoring result was resolved.', { sessionId: this.active.id, lapNumber: pending.lap.number, reason, officialTimeAvailable: finite(officialLapTimeMs) })
+    if (!officialPublication && quarantineMissing && pending.expectsOfficialPublication) {
+      this.active.officialTiming.quarantinedOwners.push({
+        lapId: pending.lap.id,
+        lapNumber: pending.lap.number,
+        throughLapNumber: this.active.currentLap?.number ?? pending.lap.number + 1,
+      })
+    }
+    this.finalizeLap(pending.lap, 'complete', officialPublication?.lapTimeMs ?? null)
+    this.record('info', 'analysis-lap-score-resolved', 'A pending analysis lap scoring result was resolved.', { sessionId: this.active.id, lapNumber: pending.lap.number, reason, officialTimeAvailable: Boolean(officialPublication) })
   }
 
   finalizeCurrent(state, officialLapTimeMs = null) {
@@ -359,13 +458,15 @@ class LiveSessionStore {
     if (state !== 'complete') lap.reasons.add('incomplete')
     const fullSamples = lap.samples.map((sample) => ({ ...sample }))
     lap.sampleCount = fullSamples.length
-    lap.lapTimeMs = state === 'complete' && finite(officialLapTimeMs)
-      ? Math.max(0, officialLapTimeMs)
-      : state === 'complete' && lap.samples.length > 1
-        ? Math.max(0, (lap.samples.at(-1).elapsedSeconds - lap.samples[0].elapsedSeconds) * 1000)
-        : null
+    const officialTimeAvailable = state === 'complete' && finite(officialLapTimeMs) && officialLapTimeMs > 0
+    // lapTimeMs has one deliberately narrow meaning: the lap time LMU
+    // published through scoring. Sample timestamps still provide exact replay
+    // duration, but are never promoted into an "official" time or PB.
+    lap.lapTimeMs = officialTimeAvailable ? officialLapTimeMs : null
+    lap.timingSource = officialTimeAvailable ? 'official' : 'unavailable'
     const classified = classifyLap(lap, this.active.track.lengthM)
-    lap.quality = classified.quality
+    const sampleOverflow = lap.reasons.has('sample-overflow')
+    lap.quality = sampleOverflow ? 'ineligible' : classified.quality
     lap.coverage = classified.coverage
     lap.maximumGapM = classified.maximumGapM
     lap.finalReasons = classified.reasons
@@ -373,29 +474,27 @@ class LiveSessionStore {
     // LMU exposes three distinct scoring states: do not count, count without a
     // time, and count with a time. Capture integrity is independent from that
     // scoring decision, so keep an otherwise-complete lap replayable while
-    // preventing an untimed lap from becoming a PB. Older recordings without
-    // this additive field retain the pre-existing eligibility behavior.
-    const countLapTimed = observedCountFlags.length === 0
-      || finite(officialLapTimeMs)
-      || observedCountFlags.every((value) => value === 2)
-    if (!countLapTimed) {
+    // preventing an untimed lap from becoming a PB. The flag describes the
+    // scoring decision; it is not itself the published lap-time value.
+    const scoringRejected = !officialTimeAvailable
+      && observedCountFlags.length > 0
+      && observedCountFlags.some((value) => value !== 2)
+    if (scoringRejected) {
       lap.finalReasons = [...new Set([...lap.finalReasons, 'lap-invalidated'])].sort()
     }
-    lap.replayable = fullSamples.length > 1
-    lap.referenceEligible = lap.state === 'complete' && lap.quality === 'clean' && countLapTimed
-    lap.trackModelEligible = lap.state === 'complete'
-      && lap.quality === 'clean'
-      && countLapTimed
+    lap.replayable = fullSamples.length > 1 && !sampleOverflow
+    lap.referenceEligible = lap.state === 'complete' && lap.quality === 'clean' && officialTimeAvailable
+    lap.trackModelEligible = lap.referenceEligible
       && fullSamples.some((sample) => sample.pathLateralM !== null && (sample.countLapFlag === null || sample.countLapFlag === 2))
     const finalized = {
       schemaVersion: SCHEMA_VERSION,
       qualityPolicyVersion: QUALITY_POLICY_VERSION,
       session: {
-        id: this.active.id, source: this.active.source, state: this.active.state, startedAt: this.active.startedAt, updatedAt: this.active.updatedAt,
+        id: this.active.id, source: this.active.source, sourceRunId: this.active.sourceRunId, state: this.active.state, startedAt: this.active.startedAt, updatedAt: this.active.updatedAt,
         trackKey: this.active.trackKey, track: { ...this.active.track }, car: { ...this.active.car }, interruptionCount: this.active.interruptionCount,
       },
       lap: {
-        id: lap.id, number: lap.number, state: lap.state, startedAt: lap.startedAt, endedAt: lap.endedAt, lapTimeMs: lap.lapTimeMs,
+        id: lap.id, number: lap.number, state: lap.state, startedAt: lap.startedAt, endedAt: lap.endedAt, lapTimeMs: lap.lapTimeMs, timingSource: lap.timingSource,
         quality: lap.quality, reasons: [...lap.finalReasons], coverage: lap.coverage, maximumGapM: lap.maximumGapM, sampleCount: lap.sampleCount,
         replayable: lap.replayable, referenceEligible: lap.referenceEligible, trackModelEligible: lap.trackModelEligible,
       },
@@ -423,18 +522,31 @@ class LiveSessionStore {
     if (this.active.currentLap) this.finalizeCurrent('incomplete')
     this.active.state = 'finished'
     this.active.endedAt = this.active.updatedAt || this.now().toISOString()
-    this.record('info', 'analysis-session-archived', 'In-memory analysis session archived.', { sessionId: this.active.id, reason, laps: this.active.laps.length })
+    const finalized = this.sessionSummary(this.active)
+    const sessionId = this.active.id
+    const lapCount = this.active.laps.length
     this.active = null
+    this.record('info', 'analysis-session-archived', 'In-memory analysis session archived.', { sessionId, reason, laps: lapCount })
+    if (this.onSessionFinalized) {
+      try {
+        Promise.resolve(this.onSessionFinalized(finalized)).catch((error) => this.record('error', 'session-persist-failed', 'A finalized analysis session could not be persisted.', { error: error instanceof Error ? error.message : String(error), sessionId }))
+      } catch (error) {
+        this.record('error', 'session-persist-failed', 'A finalized analysis session could not be queued for persistence.', { error: error instanceof Error ? error.message : String(error), sessionId })
+      }
+    }
   }
 
   enforceMemoryBudget() {
-    const bytes = () => this.sessions.reduce((total, session) => total + session.laps.reduce((lapTotal, lap) => lapTotal + (lap.samples?.length ?? 0) * 18 * 8, 0) + (session.currentLap?.samples?.length ?? 0) * 18 * 8, 0)
+    const bytes = () => this.sessions.reduce((total, session) => total + session.laps.reduce((lapTotal, lap) => lapTotal + (lap.samples?.length ?? 0) * ESTIMATED_SAMPLE_BYTES, 0) + (session.currentLap?.samples?.length ?? 0) * ESTIMATED_SAMPLE_BYTES, 0)
     if (bytes() <= this.memoryBudgetBytes) return
     const clean = this.sessions.flatMap((session) => session.laps.filter((lap) => lap.quality === 'clean' && lap.samples).map((lap) => ({ session, lap })))
     const pinned = new Set(clean.slice(-3).map(({ lap }) => lap.id))
     const all = this.sessions.flatMap((session) => session.laps.filter((lap) => lap.samples).map((lap) => ({ session, lap })))
-    const newestCleanId = clean.at(-1)?.lap.id
-    const candidates = [...all.filter(({ lap }) => !pinned.has(lap.id)), ...all.filter(({ lap }) => pinned.has(lap.id) && lap.id !== newestCleanId)]
+    const newestLapId = all.at(-1)?.lap.id
+    const candidates = [
+      ...all.filter(({ lap }) => lap.id !== newestLapId && !pinned.has(lap.id)),
+      ...all.filter(({ lap }) => lap.id !== newestLapId && pinned.has(lap.id)),
+    ]
     for (const { lap } of candidates) {
       if (bytes() <= this.memoryBudgetBytes) break
       lap.samples = null
@@ -451,7 +563,7 @@ class LiveSessionStore {
     if (session.currentLap) laps.push(this.lapSummary(session.currentLap, session.track.lengthM))
     return {
       schemaVersion: SCHEMA_VERSION, qualityPolicyVersion: QUALITY_POLICY_VERSION, revision: session.revision,
-      id: session.id, source: session.source, state: session.state, startedAt: session.startedAt, endedAt: session.endedAt,
+      id: session.id, source: session.source, sourceRunId: session.sourceRunId, state: session.state, startedAt: session.startedAt, endedAt: session.endedAt,
       track: { ...session.track }, car: { ...session.car }, laps, currentLapId: session.currentLap?.id ?? null,
       interruptionCount: session.interruptionCount, sourceSegmentCount: session.sourceSegments.length,
     }
@@ -459,10 +571,9 @@ class LiveSessionStore {
 
   lapSummary(lap, trackLengthM) {
     const classified = lap.quality ? { quality: lap.quality, reasons: lap.finalReasons, coverage: lap.coverage, maximumGapM: lap.maximumGapM } : classifyLap(lap, trackLengthM)
-    const first = lap.samples?.[0]
-    const last = lap.samples?.at(-1)
-    const lapTimeMs = lap.lapTimeMs !== undefined ? lap.lapTimeMs : lap.state === 'complete' && first && last ? Math.max(0, (last.elapsedSeconds - first.elapsedSeconds) * 1000) : null
-    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length), replayable: lap.replayable ?? Boolean(lap.samples?.length > 1), referenceEligible: lap.referenceEligible ?? false, trackModelEligible: lap.trackModelEligible ?? false, officialTimePending: Boolean(lap.scoringPending) }
+    const timingSource = lap.timingSource === 'official' ? 'official' : 'unavailable'
+    const lapTimeMs = timingSource === 'official' && finite(lap.lapTimeMs) && lap.lapTimeMs > 0 ? lap.lapTimeMs : null
+    return { id: lap.id, number: lap.number, state: lap.state, quality: classified.quality, reasons: classified.reasons, lapTimeMs, timingSource, coverage: classified.coverage, maximumGapM: classified.maximumGapM, sampleCount: lap.sampleCount ?? lap.samples?.length ?? 0, samplesAvailable: Boolean(lap.samples?.length), replayable: lap.replayable ?? Boolean(lap.samples?.length > 1), referenceEligible: lap.referenceEligible ?? false, trackModelEligible: lap.trackModelEligible ?? false, officialTimePending: Boolean(lap.scoringPending) }
   }
 
   getLap(sessionId, lapId) {
@@ -473,8 +584,16 @@ class LiveSessionStore {
     return { schemaVersion: SCHEMA_VERSION, session: this.sessionSummary(session), lap: this.lapSummary(lap, session.track.lengthM), samples: lap.samples?.map((sample) => ({ ...sample })) ?? null }
   }
 
-  getHealth() { return { schemaVersion: SCHEMA_VERSION, qualityPolicyVersion: QUALITY_POLICY_VERSION, revision: this.revision, memoryBudgetBytes: this.memoryBudgetBytes, ...this.health } }
+  /** Lightweight import progress that never reclassifies or sorts lap samples. */
+  getProgress() {
+    return {
+      sessions: this.sessions.length,
+      laps: this.sessions.reduce((total, session) => total + session.laps.length + (session.currentLap ? 1 : 0), 0),
+    }
+  }
+
+  getHealth() { return { schemaVersion: SCHEMA_VERSION, qualityPolicyVersion: QUALITY_POLICY_VERSION, revision: this.revision, memoryBudgetBytes: this.memoryBudgetBytes, currentLapSampleLimit: this.currentLapSampleLimit, ...this.health } }
   record(level, event, message, details) { void this.logger?.record(level, 'analysis-session', event, message, details) }
 }
 
-module.exports = { LiveSessionStore, compactSamples, classifyLap, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_FINAL_SAMPLES, DEFAULT_MEMORY_BUDGET, OFFICIAL_LAP_TIME_GRACE_SECONDS, OFFICIAL_LAP_TIME_GRACE_FRAMES } }
+module.exports = { LiveSessionStore, compactSamples, classifyLap, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_CLEAN_GAP_M, MAX_FINAL_SAMPLES, MAX_CURRENT_SAMPLES, ESTIMATED_SAMPLE_BYTES, DEFAULT_MEMORY_BUDGET, OFFICIAL_LAP_TIME_GRACE_SECONDS, OFFICIAL_LAP_TIME_GRACE_FRAMES, REPLAY_IDENTITY_VERSION } }

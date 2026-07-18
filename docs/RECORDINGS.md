@@ -1,8 +1,10 @@
 # Raw session recordings
 
-The session recorder exists to reproduce LMU integration bugs without the game.
-It captures the source bytes before Apex decodes them, so a recording can test a
-new bridge rather than merely replaying conclusions produced by an old bridge.
+The session recorder captures source bytes before Apex decodes them. A recording
+can therefore reproduce an LMU integration bug without the game. When a decoder
+or quality-policy change intentionally bumps the processing contract, the same
+raw evidence can rebuild private analysis instead of preserving conclusions
+produced by an older build.
 
 ## User flow
 
@@ -12,9 +14,60 @@ new bridge rather than merely replaying conclusions produced by an old bridge.
 3. Start LMU, join the relevant practice or race session, and drive normally.
 4. Return to Apex and choose **Stop & save**. Wait for **Complete** before
    sharing the file.
-5. A developer can choose **Replay a recording** on the same card. Apex pauses
-   the live bridge, streams the recording through the current decoder at its
-   original timing, and resumes the live bridge afterwards.
+5. Choose **Replay a recording** on the same card to inspect it transiently.
+   Apex pauses the live bridge, streams the recording through the current
+   decoder at its original timing, feeds the measured Live workspace, overlay
+   and transient Analysis, and resumes the live bridge afterwards. Replay never
+   writes durable Analysis history or lifetime statistics.
+6. Choose **Import .apexrec** in **Analysis** only when the recording should
+   become durable private history. Apex checks and decodes the complete file,
+   then publishes validated normalized history under bounded retention in one
+   local transaction.
+
+## Replay versus Import into Analysis
+
+| Action | Intended use | Visible while decoding | Durable effect |
+| --- | --- | --- | --- |
+| **Replay a recording** | Reproduce or inspect the captured run | Live workspace, overlay and transient Analysis | None; lifetime statistics and durable Analysis history are unchanged |
+| **Import .apexrec** | Rebuild private session history | Import progress only | Bounded validated history appears atomically in Analysis |
+
+Import hashes the file locally and runs strict unthrottled replay through the
+current decoder. A matching hash and processing version is a no-op while its
+complete imported batch remains retained. If bounded retention later removes
+part of that batch, provenance is invalidated and re-import can restore it
+without duplicating retained rows. A dedicated accumulator and staging database
+receive only that correlated run. Truncation, corruption, cancellation, a
+changed source file, any current-decoder rejection, or any storage fault
+discards staging and exposes no partial history. `waiting-for-vehicle` is not a
+decoder fault: it is the expected scoring-before-telemetry lifecycle and can
+occur in both user-described online and offline sessions.
+Imported frames do not enter the Live workspace, overlay, fuel calibration or
+lifetime-distance ledger. Apex does not infer whether the captured session was
+online or offline; recordings from either user-described mode contain the
+official snapshots that were actually captured and use the same decoder.
+If scoring identifies a transient session that ends before any player lap is
+available, Import skips that zero-lap segment. A missing database row for a
+session that does contain lap evidence remains a hard failure.
+
+A first import deliberately reads the complete source to calculate SHA-256,
+hashes the exact opened stream while decoding every snapshot without
+captured-time delays, reads the selected source again at the commit boundary,
+requires all three digests to agree, and validates every staged lap payload.
+This is whole-file work with local progress, not a fixed completion-time
+promise. Cancellation before finalization discards staging; after finalization
+begins, Apex waits for the all-or-nothing result.
+
+The import accumulator accepts at most 40 finalized session segments, including
+zero-lap scoring-only segments; it can commit at most 2 GiB of compressed lap
+payloads and 2,048 laps. A current lap is capped at 16,384
+samples and becomes explicitly ineligible/non-replayable on overflow. The
+bounded payload remains ledger integrity evidence, but is not exposed as exact
+lap replay. Staging
+writes use decoder-pipe backpressure (pause at four outstanding writes, resume
+at two) plus a hard eight-write bound for output already buffered in transit.
+Compressed-size enforcement occurs as writes resolve, so private staging can
+briefly exceed 2 GiB by that bounded in-flight work before a fail-closed discard.
+Crossing any limit publishes no partial history.
 
 ## What is captured
 
@@ -45,6 +98,12 @@ capture, replay consumes all complete records and reports the incomplete tail.
 Readers enforce metadata, payload and decompression limits. Writers stop at an
 8 GiB safety limit.
 
+Replay reproduces an allowlisted set of captured source-lifecycle transitions
+(mapping, waiting, connection and disconnect) with generic text. It deliberately
+does not replay historical decoder-error messages: the current decoder derives
+those states again from the raw snapshots, and old free text can contain private
+identity data.
+
 ## Privacy
 
 Raw LMU shared memory can contain driver names, Steam IDs, server name/address
@@ -52,6 +111,12 @@ details and local LMU paths. Exact raw bytes are necessary for contract and
 offset debugging, so these fields are not redacted. Apex stores the file only
 at the path chosen by the user and never uploads it. Treat `.apexrec` files as
 private debugging attachments.
+
+An Analysis import stores derived normalized session/lap evidence and sanitized
+provenance in Apex's private local database. Provenance includes the recording
+hash, format, processing contract, import time and counts; it does not store the
+raw source path. The raw file remains authoritative and is not copied into the
+database or uploaded.
 
 ## Command-line replay
 
@@ -88,9 +153,11 @@ npm run test:recording-replay
 
 On Linux the command uses `go run`; on Windows CI it uses the compiled bridge
 from `APEX_LMU_BRIDGE_EXE`. Replay is strict, accelerated, and correlated by a
-fresh run ID. A missing/mismatched fixture, corrupt/truncated stream, absent
-completion, omitted empty-opponent array, wrong fact, or nonzero bridge exit is
-a failure.
+fresh run ID. The harness then exercises the explicit Analysis import, restart
+persistence and hash/version deduplication against a temporary private database.
+A missing/mismatched fixture, corrupt/truncated stream, absent completion,
+omitted empty-opponent array, wrong fact, non-atomic import or nonzero bridge
+exit is a failure.
 
 The Windows source-desktop test additionally requires a built renderer and
 bridge:

@@ -77,7 +77,8 @@ export interface SessionDescriptor {
   readonly startedAt: IsoDateTime
   readonly scheduledDurationMs: number | null
   readonly scheduledLaps: number | null
-  readonly isMultiplayer: boolean
+  /** Null when the telemetry source does not expose authoritative session mode. */
+  readonly isMultiplayer: boolean | null
 }
 
 export interface SessionState {

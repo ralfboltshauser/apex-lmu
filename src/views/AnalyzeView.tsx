@@ -1,5 +1,4 @@
 import {
-  ArrowDownRight,
   ArrowLeftRight,
   ArrowRight,
   Check,
@@ -7,28 +6,23 @@ import {
   CircleDot,
   Clock3,
   Download,
-  Filter,
-  Flag,
   Gauge,
-  GitCompareArrows,
   Info,
   MousePointer2,
-  Pause,
-  Play,
-  RotateCcw,
-  Search,
   Share2,
   Sparkles,
   Target,
   TrendingDown,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Badge, Button, Card, CardHeader, Progress, Segmented, Select, TooltipHint } from '../components/ui'
 import { demoInsights, demoSessions, lapTrace, referenceTrace } from '../data/demo'
 import { defineMessages, formatMessage, useI18n, useMessages, type Language } from '../i18n'
-import { CircuitTrackMap } from '../components/visuals/CircuitTrackMap'
-import { buildMeasuredTrackSnapshot, deltaAtDistance, normalizedPlayhead, playbackMaximum, sampleLapAt, type BrakeZone, type MeasuredTrackSnapshot, type PlaybackMode } from '../engine'
+import type { MeasuredTrackSnapshot } from '../engine'
+import { MeasuredAnalysisView } from '../features/analysis/MeasuredAnalysisView'
+import { RecordingImportControl, useRecordingImport } from '../features/analysis/RecordingImportControl'
+import { formatDecimal, formatPercent } from '../features/analysis/format'
 
 type Channel = 'speed' | 'throttle' | 'brake' | 'delta'
 
@@ -53,7 +47,6 @@ const copy = defineMessages({
   breakdown: { eyebrow: 'Lap anatomy', title: 'Where the difference comes from', corners: 'corners', braking: 'Braking', midCorner: 'Mid-corner', exit: 'Exit', conclusionTitle: 'Brake release is the recurring pattern.', conclusionBody: 'Five of seven losing corners show an abrupt release before turn-in.' },
   session: { eyebrow: 'Session quality', cleanLaps: 'clean laps', consistency: 'Consistency', top: 'Top 12%', topSessions: 'of your sessions', averagePace: 'Average pace', lastCleanLaps: 'clean laps', trackLimits: 'Track limits', raidillon: 'Both at Raidillon exit', improvement: 'Improvement', acrossSession: 'Across the session' },
   units: { seconds: '{value} s' },
-  measured: { badge: 'Measured local session', title: 'Lap replay and comparison', description: 'Replay the exact recorded car position and controls over a locally learned centre path. The displayed track width is illustrative, not a surveyed boundary.', route: 'Locally learned centre path', routeLearning: 'Centre path learning in progress', selectedLap: 'Selected lap', coverage: 'route coverage', evidence: 'Brake-zone evidence', applied: 'Brake applied', peak: 'Peak pressure', released: 'Released', duration: 'Duration', entry: 'Entry', minimum: 'minimum', exit: 'exit', noZones: 'No stable brake zones were detected on this lap.', trace: 'Synchronized speed and brake trace', speed: 'Speed', brake: 'Brake', metres: 'm', secondUnit: 's', speedUnit: 'km/h', sessionSelector: 'Measured session', lapSelector: 'Measured lap', current: 'Current partial lap', complete: 'Completed lap', incomplete: 'Incomplete lap', clean: 'Clean', limited: 'Limited', ineligible: 'Not eligible as reference', loading: 'Loading measured lap…', samplesUnavailable: 'Detailed samples for this lap are no longer retained in memory.', noMeasuredLaps: 'No measured lap samples are available yet.', quality: 'Lap quality', play: 'Play lap', pause: 'Pause replay', restart: 'Return to lap start', timeline: 'Replay position', timeMode: 'Time', distanceMode: 'Distance', playbackMode: 'Replay axis', playbackSpeed: 'Playback speed', personalBest: 'Personal best', noReference: 'No eligible personal best yet', deltaToPb: 'Delta to PB', exactPosition: 'Exact recorded position', learningPath: 'The centre path is still learning; the selected driven line remains exact.', reasons: { 'ai-control': 'AI controlled part of the lap', 'coverage-low': 'route coverage is incomplete', incomplete: 'the lap did not reach a confirmed boundary', 'lap-counter-jump': 'the lap counter skipped', 'lap-invalidated': 'LMU marked the lap as not countable', 'missing-sample': 'one or more samples were unavailable', pit: 'the car entered the pit lane', 'position-discontinuity': 'position telemetry jumped', 'remote-control': 'remote control was reported', 'replay-control': 'replay control was reported', 'sample-compacted': 'the live sample buffer was compacted', 'sample-overflow': 'the safety sample limit was reached', 'sequence-gap': 'bridge sequences were missing', 'source-interrupted': 'the telemetry source was interrupted', 'telemetry-gap': 'game-time samples contain a gap', 'time-reset': 'game time moved backwards', 'unknown-control': 'control ownership was unavailable' } },
   fixtures: {
     sessions: {
       'spa-race': 'Spa-Francorchamps · Race · Today, 20:41',
@@ -96,7 +89,6 @@ const copy = defineMessages({
   breakdown: { eyebrow: 'Rundenanatomie', title: 'Woher die Differenz kommt', corners: 'Kurven', braking: 'Bremsen', midCorner: 'Kurvenmitte', exit: 'Ausgang', conclusionTitle: 'Das Lösen der Bremse ist das wiederkehrende Muster.', conclusionBody: 'Fünf von sieben langsamen Kurven zeigen ein abruptes Lösen vor dem Einlenken.' },
   session: { eyebrow: 'Sitzungsqualität', cleanLaps: 'saubere Runden', consistency: 'Konstanz', top: 'Top 12 %', topSessions: 'deiner Sitzungen', averagePace: 'Durchschnittstempo', lastCleanLaps: 'saubere Runden zuletzt', trackLimits: 'Streckenbegrenzungen', raidillon: 'Beide am Ausgang von Raidillon', improvement: 'Verbesserung', acrossSession: 'Über die gesamte Sitzung' },
   units: { seconds: '{value} s' },
-  measured: { badge: 'Gemessene lokale Sitzung', title: 'Rundenwiedergabe und Vergleich', description: 'Spiele die exakt aufgezeichnete Fahrzeugposition und Eingaben auf einer lokal gelernten Mittellinie ab. Die dargestellte Streckenbreite ist illustrativ, keine vermessene Begrenzung.', route: 'Lokal gelernte Mittellinie', routeLearning: 'Mittellinie wird noch gelernt', selectedLap: 'Ausgewählte Runde', coverage: 'Streckenabdeckung', evidence: 'Belege der Bremszonen', applied: 'Bremse betätigt', peak: 'Maximaldruck', released: 'Gelöst', duration: 'Dauer', entry: 'Eingang', minimum: 'Minimum', exit: 'Ausgang', noZones: 'Auf dieser Runde wurden keine stabilen Bremszonen erkannt.', trace: 'Synchronisierte Geschwindigkeits- und Bremskurve', speed: 'Geschwindigkeit', brake: 'Bremse', metres: 'm', secondUnit: 's', speedUnit: 'km/h', sessionSelector: 'Gemessene Sitzung', lapSelector: 'Gemessene Runde', current: 'Aktuelle Teilrunde', complete: 'Abgeschlossene Runde', incomplete: 'Unvollständige Runde', clean: 'Sauber', limited: 'Eingeschränkt', ineligible: 'Nicht als Referenz geeignet', loading: 'Gemessene Runde wird geladen…', samplesUnavailable: 'Die Detaildaten dieser Runde werden nicht mehr im Arbeitsspeicher vorgehalten.', noMeasuredLaps: 'Noch keine gemessenen Rundendaten verfügbar.', quality: 'Rundenqualität', play: 'Runde abspielen', pause: 'Wiedergabe pausieren', restart: 'Zum Rundenstart', timeline: 'Wiedergabeposition', timeMode: 'Zeit', distanceMode: 'Distanz', playbackMode: 'Wiedergabeachse', playbackSpeed: 'Wiedergabegeschwindigkeit', personalBest: 'Persönliche Bestzeit', noReference: 'Noch keine gültige persönliche Bestzeit', deltaToPb: 'Delta zur PB', exactPosition: 'Exakt aufgezeichnete Position', learningPath: 'Die Mittellinie wird noch gelernt; die ausgewählte Fahrlinie bleibt exakt.', reasons: { 'ai-control': 'Die KI steuerte einen Teil der Runde', 'coverage-low': 'die Streckenabdeckung ist unvollständig', incomplete: 'die Runde erreichte keine bestätigte Grenze', 'lap-counter-jump': 'der Rundenzähler sprang', 'lap-invalidated': 'LMU markierte die Runde als nicht zählbar', 'missing-sample': 'ein oder mehrere Messpunkte waren nicht verfügbar', pit: 'das Auto fuhr in die Boxengasse', 'position-discontinuity': 'die Positionstelemetrie sprang', 'remote-control': 'Fernsteuerung wurde gemeldet', 'replay-control': 'Replay-Steuerung wurde gemeldet', 'sample-compacted': 'der Live-Messpuffer wurde verdichtet', 'sample-overflow': 'Das Sicherheitslimit der Messpunkte wurde erreicht', 'sequence-gap': 'Bridge-Sequenzen fehlten', 'source-interrupted': 'die Telemetriequelle wurde unterbrochen', 'telemetry-gap': 'die Spielzeitdaten enthalten eine Lücke', 'time-reset': 'die Spielzeit sprang zurück', 'unknown-control': 'die Steuerungszuordnung war nicht verfügbar' } },
   fixtures: {
     sessions: {
       'spa-race': 'Spa-Francorchamps · Rennen · Heute, 20:41',
@@ -142,18 +134,6 @@ function requireSessionFixtureId(id: string): SessionFixtureId {
 function requireInsightFixtureId(id: string): InsightFixtureId {
   if (!hasOwnKey(copy.en.fixtures.insights, id)) throw new Error(`Missing insight localization for fixture ID: ${id}`)
   return id
-}
-
-function formatDecimal(language: Language, value: number, digits: number, signDisplay: 'auto' | 'always' = 'auto') {
-  return new Intl.NumberFormat(language, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-    signDisplay,
-  }).format(value)
-}
-
-function formatPercent(language: Language, value: number) {
-  return new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(value / 100)
 }
 
 function pointsFor(values: typeof lapTrace, channel: Channel, width: number, height: number, min: number, max: number) {
@@ -213,209 +193,17 @@ function SegmentRibbon({ selected, onSelect }: { selected: number; onSelect: (in
   )
 }
 
-function measuredTracePoints(samples: readonly ApexAnalysisSample[], channel: 'speed' | 'brake', mode: PlaybackMode, maximum: number, maximumSpeed: number) {
-  const width = 1000
-  const height = 130
-  return samples.map((sample) => {
-    const axis = mode === 'time' ? sample.lapElapsedSeconds : sample.distanceIndexM ?? sample.distanceM
-    const x = axis / Math.max(1, maximum) * width
-    const value = channel === 'speed' ? sample.speedKph / maximumSpeed : sample.brake
-    return `${x.toFixed(1)},${(height - value * height).toFixed(1)}`
-  }).join(' ')
-}
-
-function zoneLabel(zone: BrakeZone, language: Language, metres: string) {
-  return `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(zone.startDistanceM)}–${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(zone.releaseDistanceM)} ${metres}`
-}
-
-function formatMeasuredLapTime(language: Language, milliseconds: number | null) {
-  if (milliseconds === null) return null
-  const minutes = Math.floor(milliseconds / 60_000)
-  const seconds = (milliseconds - minutes * 60_000) / 1000
-  return `${minutes}:${new Intl.NumberFormat(language, { minimumIntegerDigits: 2, minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(seconds)}`
-}
-
-function MeasuredAnalysisView({ snapshot, controls = null, lap = null, reference = null }: { snapshot: MeasuredTrackSnapshot; controls?: ReactNode; lap?: ApexAnalysisLapSummary | null; reference?: ApexAnalysisLapPayload['personalBest'] }) {
-  const m = useMessages(copy)
-  const { language } = useI18n()
-  const [selectedId, setSelectedId] = useState<string | null>(snapshot.brakeZones[0]?.id ?? null)
-  const [mode, setMode] = useState<PlaybackMode>('distance')
-  const [playhead, setPlayhead] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [rate, setRate] = useState(1)
-  const animationFrame = useRef<number | null>(null)
-  const previousFrame = useRef<number | null>(null)
-  const subjectSamples = useMemo<ApexAnalysisSample[]>(() => snapshot.selectedLap.map((sample) => ({ throttle: 0, steering: 0, lapElapsedSeconds: sample.elapsedSeconds, ...sample })), [snapshot.selectedLap])
-  const referenceSamples = reference?.samples ?? []
-  const maximum = playbackMaximum(subjectSamples, mode, lap?.lapTimeMs)
-  const lapDuration = Math.max(0.001, playbackMaximum(subjectSamples, 'time', lap?.lapTimeMs))
-  const cursorProgress = normalizedPlayhead(subjectSamples, mode, playhead, lap?.lapTimeMs)
-  const current = sampleLapAt(subjectSamples, mode, playhead)
-  const referenceValue = current ? mode === 'time' ? playhead : current.distanceIndexM ?? current.distanceM : 0
-  const referenceCurrent = sampleLapAt(referenceSamples, mode, referenceValue)
-  const currentDelta = current && referenceSamples.length ? deltaAtDistance(subjectSamples, referenceSamples, current.distanceIndexM ?? current.distanceM) : null
-  const selected = snapshot.brakeZones.find((zone) => zone.id === selectedId) ?? snapshot.brakeZones[0]
-  const points = useMemo(() => snapshot.route.map((point) => ({ x: point.x, y: point.z, distanceM: point.distanceM })), [snapshot.route])
-  const traces = useMemo(() => [
-    { id: 'selected-lap', points: subjectSamples.map((sample) => ({ x: sample.x, y: sample.z, distanceM: sample.distanceIndexM ?? sample.distanceM })), color: '#f5f7fb' },
-    ...(referenceSamples.length && reference?.lap.id !== lap?.id ? [{ id: 'personal-best', points: referenceSamples.map((sample) => ({ x: sample.x, y: sample.z, distanceM: sample.distanceIndexM ?? sample.distanceM })), color: '#b8f34a', className: 'is-reference' }] : []),
-  ], [lap?.id, reference?.lap.id, referenceSamples, subjectSamples])
-  const segments = useMemo(() => snapshot.brakeZones.map((zone) => ({
-    from: zone.startDistanceM / snapshot.trackLengthM,
-    to: zone.releaseDistanceM / snapshot.trackLengthM,
-    color: zone.id === selected?.id ? '#ffb45d' : '#ff5d57',
-    label: zoneLabel(zone, language, m.measured.metres),
-  })), [language, m.measured.metres, selected?.id, snapshot.brakeZones, snapshot.trackLengthM])
-  const maximumSpeed = Math.max(1, ...subjectSamples.map((sample) => sample.speedKph), ...referenceSamples.map((sample) => sample.speedKph))
-
-  useEffect(() => {
-    if (!playing) { previousFrame.current = null; return }
-    const tick = (timestamp: number) => {
-      const previous = previousFrame.current ?? timestamp
-      previousFrame.current = timestamp
-      const elapsed = Math.min(0.1, Math.max(0, (timestamp - previous) / 1000))
-      setPlayhead((value) => {
-        const increment = mode === 'time' ? elapsed * rate : maximum * elapsed * rate / lapDuration
-        const next = value + increment
-        if (next >= maximum) { setPlaying(false); return maximum }
-        return next
-      })
-      animationFrame.current = requestAnimationFrame(tick)
-    }
-    animationFrame.current = requestAnimationFrame(tick)
-    return () => { if (animationFrame.current !== null) cancelAnimationFrame(animationFrame.current); animationFrame.current = null; previousFrame.current = null }
-  }, [lapDuration, maximum, mode, playing, rate])
-
-  const seekBrakeZone = (zone: BrakeZone) => {
-    setSelectedId(zone.id)
-    setMode('distance')
-    setPlayhead(zone.peakDistanceM)
-    setPlaying(false)
-  }
-  const changeMode = (nextMode: PlaybackMode) => {
-    const progress = normalizedPlayhead(subjectSamples, mode, playhead, lap?.lapTimeMs)
-    setPlaying(false)
-    setMode(nextMode)
-    setPlayhead(progress * playbackMaximum(subjectSamples, nextMode, lap?.lapTimeMs))
-  }
-  const cars = current ? [
-    { id: 'selected-lap', number: snapshot.selectedLapNumber ?? '•', distanceM: current.distanceIndexM ?? current.distanceM, position: { x: current.x, y: current.z }, selected: true, label: m.measured.exactPosition },
-    ...(referenceCurrent && reference?.lap.id !== lap?.id ? [{ id: 'personal-best', number: 'PB', distanceM: referenceCurrent.distanceIndexM ?? referenceCurrent.distanceM, position: { x: referenceCurrent.x, y: referenceCurrent.z }, color: '#b8f34a', label: m.measured.personalBest }] : []),
-  ] : []
-  const playheadLabel = mode === 'time' ? `${formatDecimal(language, playhead, 3)} ${m.measured.secondUnit}` : `${formatDecimal(language, playhead, 0)} ${m.measured.metres}`
-  const routeTitle = snapshot.state === 'complete' ? m.measured.route : m.measured.routeLearning
-
-  return <div className="view view--analyze measured-analysis" data-feedback-redact="measured-lap-telemetry">
-    <div className="page-heading page-heading--compact"><div><div className="eyebrow">{m.heading.eyebrow}</div><h1>{m.measured.title}</h1><p>{m.measured.description}</p></div></div>
-    {controls}
-    <div className="data-provenance-banner"><Badge tone="positive">{m.measured.badge}</Badge><span>{snapshot.trackName} · {m.measured.selectedLap} {snapshot.selectedLapNumber ?? '—'} · {formatPercent(language, snapshot.coverage * 100)} {m.measured.coverage}{lap ? ` · ${m.measured.quality}: ${m.measured[lap.quality]}` : ''}{lap?.reasons.length ? ` · ${lap.reasons.map((reason) => m.measured.reasons[reason]).join('; ')}` : ''}</span></div>
-    <Card className="lap-playback-controls">
-      <div className="lap-playback-controls__buttons"><Button size="sm" icon={playing ? <Pause size={14} /> : <Play size={14} />} onClick={() => setPlaying((value) => !value)} disabled={maximum <= 0}>{playing ? m.measured.pause : m.measured.play}</Button><Button variant="secondary" size="sm" icon={<RotateCcw size={14} />} onClick={() => { setPlaying(false); setPlayhead(0) }}>{m.measured.restart}</Button></div>
-      <input type="range" min="0" max={maximum || 1} step={mode === 'time' ? 0.001 : 0.1} value={Math.min(playhead, maximum || 1)} aria-label={m.measured.timeline} onChange={(event) => { setPlaying(false); setPlayhead(Number(event.target.value)) }} />
-      <strong data-testid="playback-value">{playheadLabel}</strong>
-      <Segmented value={mode} onChange={changeMode} ariaLabel={m.measured.playbackMode} options={[{ value: 'time', label: m.measured.timeMode }, { value: 'distance', label: m.measured.distanceMode }]} />
-      <Select value={String(rate)} onChange={(value) => setRate(Number(value))} ariaLabel={m.measured.playbackSpeed} options={[{ value: '0.5', label: '0.5×' }, { value: '1', label: '1×' }, { value: '2', label: '2×' }, { value: '4', label: '4×' }]} />
-    </Card>
-    <div className="lap-playback-readout"><span><small>{m.measured.speed}</small><strong>{formatDecimal(language, current?.speedKph ?? 0, 0)} {m.measured.speedUnit}</strong></span><span><small>{m.channels.throttle}</small><strong>{formatPercent(language, (current?.throttle ?? 0) * 100)}</strong></span><span><small>{m.channels.brake}</small><strong>{formatPercent(language, (current?.brake ?? 0) * 100)}</strong></span><span><small>{m.measured.deltaToPb}</small><strong className={currentDelta !== null && currentDelta <= 0 ? 'positive' : 'negative'}>{currentDelta === null ? '—' : `${formatDecimal(language, currentDelta, 3, 'always')} ${m.measured.secondUnit}`}</strong></span></div>
-    <div className="measured-analysis__grid">
-      <CircuitTrackMap points={points} traces={traces} cars={cars} segments={segments} trackLengthM={snapshot.trackLengthM} closed={snapshot.state === 'complete'} circuitName={snapshot.trackName} layoutName={snapshot.layoutName} currentLap={snapshot.selectedLapNumber ?? undefined} activeSegment={selected ? segments.find((_, index) => snapshot.brakeZones[index].id === selected.id) : undefined} ariaLabel={routeTitle} />
-      <Card className="measured-zone-card"><CardHeader eyebrow={m.measured.evidence} title={routeTitle} action={<Badge tone="neutral">{snapshot.brakeZones.length}</Badge>} />
-        {snapshot.state !== 'complete' && <p className="measured-zone-empty">{m.measured.learningPath}</p>}
-        {snapshot.brakeZones.length === 0 ? <p className="measured-zone-empty">{m.measured.noZones}</p> : <ol className="measured-zone-list">{snapshot.brakeZones.map((zone, index) => <li key={zone.id}><button type="button" aria-pressed={zone.id === selected?.id} onClick={() => seekBrakeZone(zone)}><i>{String(index + 1).padStart(2, '0')}</i><span><strong>{zoneLabel(zone, language, m.measured.metres)}</strong><small>{m.measured.applied} {formatDecimal(language, zone.startDistanceM, 0)} {m.measured.metres} · {m.measured.peak} {formatPercent(language, zone.peakPressure * 100)} · {m.measured.released} {formatDecimal(language, zone.releaseDistanceM, 0)} {m.measured.metres}</small><em>{m.measured.entry} {formatDecimal(language, zone.entrySpeedKph, 0)} · {m.measured.minimum} {formatDecimal(language, zone.minimumSpeedKph, 0)} · {m.measured.exit} {formatDecimal(language, zone.exitSpeedKph, 0)} {m.measured.speedUnit}</em></span><b>{formatDecimal(language, zone.durationSeconds, 2)} {m.measured.secondUnit}</b></button></li>)}</ol>}
-      </Card>
-    </div>
-    <Card className="measured-trace-card"><CardHeader eyebrow={m.telemetry.eyebrow} title={m.measured.trace} action={<div className="measured-trace-legend"><span><i className="speed" />{m.measured.speed}</span><span><i className="brake" />{m.measured.brake}</span></div>} />
-      <div className="measured-trace" role="img" aria-label={m.measured.trace}><svg viewBox="0 0 1000 150" preserveAspectRatio="none"><line x1="0" x2="1000" y1="130" y2="130" />{referenceSamples.length > 0 && <polyline className="reference-speed" points={measuredTracePoints(referenceSamples, 'speed', mode, maximum, maximumSpeed)} />}<polyline className="speed" points={measuredTracePoints(subjectSamples, 'speed', mode, maximum, maximumSpeed)} /><polyline className="brake" points={measuredTracePoints(subjectSamples, 'brake', mode, maximum, maximumSpeed)} /><line className="cursor" data-testid="telemetry-cursor" x1={cursorProgress * 1000} x2={cursorProgress * 1000} y1="0" y2="135" /></svg><div className="measured-trace-axis"><span>0 {mode === 'time' ? m.measured.secondUnit : m.measured.metres}</span><span>{formatDecimal(language, maximum / 2, mode === 'time' ? 1 : 0)} {mode === 'time' ? m.measured.secondUnit : m.measured.metres}</span><span>{formatDecimal(language, maximum, mode === 'time' ? 1 : 0)} {mode === 'time' ? m.measured.secondUnit : m.measured.metres}</span></div></div>
-    </Card>
-  </div>
-}
-
-function defaultAnalysisSession(sessions: readonly ApexAnalysisSessionSummary[]) {
-  return sessions.find((session) => session.laps.some((lap) => lap.state === 'complete' && lap.samplesAvailable)) ?? sessions[0] ?? null
-}
-
-function defaultAnalysisLap(session: ApexAnalysisSessionSummary | null) {
-  if (!session) return null
-  const reversed = [...session.laps].reverse()
-  return reversed.find((lap) => lap.state === 'complete' && lap.quality === 'clean' && lap.samplesAvailable)
-    ?? reversed.find((lap) => lap.state === 'complete' && lap.quality === 'limited' && lap.samplesAvailable)
-    ?? reversed.find((lap) => lap.id === session.currentLapId && lap.samplesAvailable)
-    ?? reversed.find((lap) => lap.samplesAvailable)
-    ?? reversed[0]
-    ?? null
-}
-
-function MeasuredSessionAnalysisView({ sessions }: { sessions: readonly ApexAnalysisSessionSummary[] }) {
-  const m = useMessages(copy)
-  const { language } = useI18n()
-  const initialSession = defaultAnalysisSession(sessions)
-  const [sessionId, setSessionId] = useState(initialSession?.id ?? '')
-  const selectedSession = sessions.find((session) => session.id === sessionId) ?? initialSession
-  const initialLap = defaultAnalysisLap(selectedSession)
-  const [lapId, setLapId] = useState(initialLap?.id ?? '')
-  const selectedLap = selectedSession?.laps.find((lap) => lap.id === lapId) ?? defaultAnalysisLap(selectedSession)
-  const [payload, setPayload] = useState<ApexAnalysisLapPayload | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!selectedSession || sessionId === selectedSession.id) return
-    setSessionId(selectedSession.id)
-  }, [selectedSession, sessionId])
-
-  useEffect(() => {
-    if (!selectedLap || lapId === selectedLap.id) return
-    setLapId(selectedLap.id)
-  }, [selectedLap, lapId])
-
-  useEffect(() => {
-    if (!selectedSession || !selectedLap || !window.apexDesktop) { setPayload(null); return }
-    let cancelled = false
-    setLoading(true)
-    void window.apexDesktop.getAnalysisLap(selectedSession.id, selectedLap.id)
-      .then((next) => { if (!cancelled) setPayload(next) })
-      .catch((error) => void window.apexDesktop?.reportError({ message: error instanceof Error ? error.message : String(error), context: 'analysis-lap-load' }))
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [selectedSession?.id, selectedLap?.id, selectedLap?.sampleCount])
-
-  const snapshot = useMemo(() => {
-    if (!selectedSession || !selectedLap || payload?.lap.id !== selectedLap.id || !payload.samples?.length) return null
-    return buildMeasuredTrackSnapshot({
-      id: selectedSession.id,
-      trackName: selectedSession.track.name,
-      layoutName: selectedSession.track.layout,
-      trackLengthM: selectedSession.track.lengthM,
-      laps: selectedSession.laps.map((lap) => ({ id: lap.id, number: lap.number, state: lap.state, quality: lap.quality, samples: lap.id === selectedLap.id ? payload.samples! : [] })),
-      trackModel: payload.trackModel,
-    }, selectedLap.id)
-  }, [payload, selectedLap, selectedSession])
-
-  const sessionOptions = sessions.map((session) => ({ value: session.id, label: `${session.track.name} · ${session.car.name}` }))
-  const lapOptions = selectedSession?.laps.map((lap) => {
-    const state = lap.state === 'current' ? m.measured.current : lap.state === 'complete' ? m.measured.complete : m.measured.incomplete
-    const time = formatMeasuredLapTime(language, lap.lapTimeMs)
-    return { value: lap.id, label: `${m.toolbar.lap} ${formatDecimal(language, lap.number, 0)} · ${time ?? state} · ${m.measured[lap.quality]}` }
-  }) ?? []
-  const controls = <div className="analysis-toolbar measured-analysis-toolbar">
-    <Select value={selectedSession?.id ?? ''} onChange={(nextId) => { const next = sessions.find((session) => session.id === nextId) ?? null; setSessionId(nextId); setLapId(defaultAnalysisLap(next)?.id ?? ''); setPayload(null) }} options={sessionOptions} ariaLabel={m.measured.sessionSelector} />
-    <div className="analysis-toolbar__separator" />
-    <Select value={selectedLap?.id ?? ''} onChange={(nextId) => { setLapId(nextId); setPayload(null) }} options={lapOptions} ariaLabel={m.measured.lapSelector} />
-    <div className="analysis-toolbar__spacer" />
-    {selectedLap && <Badge tone={selectedLap.quality === 'clean' ? 'positive' : selectedLap.quality === 'limited' ? 'warning' : 'neutral'}>{m.measured[selectedLap.quality]}</Badge>}
-  </div>
-
-  if (snapshot) return <MeasuredAnalysisView key={selectedLap?.id} snapshot={snapshot} controls={controls} lap={selectedLap} reference={payload?.personalBest} />
-  return <div className="view view--analyze measured-analysis" data-feedback-redact="measured-lap-metadata"><div className="page-heading page-heading--compact"><div><div className="eyebrow">{m.heading.eyebrow}</div><h1>{m.measured.title}</h1><p>{m.measured.description}</p></div></div>{controls}<Card><p className="measured-zone-empty">{loading ? m.measured.loading : selectedLap && !selectedLap.samplesAvailable ? m.measured.samplesUnavailable : m.measured.noMeasuredLaps}</p></Card></div>
-}
-
 export function AnalyzeView({ measuredTrack = null, analysisSessions = [] }: { measuredTrack?: MeasuredTrackSnapshot | null; analysisSessions?: readonly ApexAnalysisSessionSummary[] }) {
-  if (analysisSessions.length > 0) return <MeasuredSessionAnalysisView sessions={analysisSessions} />
-  return measuredTrack && measuredTrack.route.length > 1 && measuredTrack.selectedLap.length > 1
-    ? <MeasuredAnalysisView snapshot={measuredTrack} />
-    : <DemoAnalysisView />
+  const recordingImport = useRecordingImport()
+  const hasMeasuredTrack = Boolean(measuredTrack && measuredTrack.route.length > 1 && measuredTrack.selectedLap.length > 1)
+  if (analysisSessions.length > 0 || hasMeasuredTrack) {
+    return <MeasuredAnalysisView measuredTrack={measuredTrack} analysisSessions={analysisSessions} recordingImport={recordingImport} />
+  }
+  const importControl = <RecordingImportControl controller={recordingImport} />
+  return <DemoAnalysisView importControl={importControl} />
 }
 
-function DemoAnalysisView() {
+function DemoAnalysisView({ importControl }: { importControl: ReactNode }) {
   const m = useMessages(copy)
   const { language } = useI18n()
   const [comparisonMode, setComparisonMode] = useState<'reference' | 'personal'>('reference')
@@ -442,6 +230,8 @@ function DemoAnalysisView() {
         <div><div className="eyebrow">{m.heading.eyebrow}</div><h1>{m.heading.title}</h1><p>{m.heading.description}</p></div>
         <div className="page-heading__actions"><Button variant="secondary" icon={<Share2 size={16} />} disabled>{m.heading.shareUnavailable}</Button><Button variant="secondary" icon={<Download size={16} />} disabled>{m.heading.exportUnavailable}</Button></div>
       </div>
+
+      {importControl}
 
       <div className="data-provenance-banner"><Badge tone="accent">{m.provenance.badge}</Badge><span>{m.provenance.description}</span></div>
 

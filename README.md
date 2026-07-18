@@ -76,17 +76,17 @@ Portable ZIP builds cannot reliably replace their own running directory. They re
 | Live session | Reads the `LMU_Data` mapping out of process; shows car/session/weather/standings before the race, then measured position, laps, speed, controls, fuel, hybrid state, tyres and brakes when player telemetry becomes available. |
 | Track & braking | Reconstructs the measured driven line locally from official world coordinates, places measured cars, detects stable brake zones, and links map/text/speed/brake evidence by LMU lap distance. It does not claim surveyed track limits or invented corner names. |
 | Lifetime activity | Durably tracks local-player driving distance by raw LMU vehicle name/class with idempotent SQLite checkpoints, recovery, verified backups and replay/AI/demo exclusion. |
-| Session recorder | One-click raw `.apexrec` capture starts before LMU, records every official shared-memory snapshot at 50 Hz, and replays through the current decoder without the game. Files remain local and are explicitly user-shared. See [recording format and workflow](docs/RECORDINGS.md). |
+| Session recorder | One-click raw `.apexrec` capture starts before LMU and records every official shared-memory snapshot at 50 Hz. Normal Replay runs the current decoder without the game but stays transient: it feeds Live, the overlay and Analysis during the current app run, but never writes durable Analysis history or lifetime statistics. Files remain local and are explicitly user-shared. See [recording format and workflow](docs/RECORDINGS.md). |
 | Fuel calculator | Manual timed/lap planning plus automatic clean-lap consumption capture. Excludes pit/refuel laps, retains car/track samples locally, protects timed extra-lap boundaries, and reports total fuel, starting load, stops, final stint, reserve and confidence. |
 | Overlay | Separate transparent, always-on-top, click-through Electron window with stale-data clearing when LMU disconnects. |
 | Recorded telemetry | Opens LMU DuckDB files read-only and indexes metadata, tables, channels, events, laps and lap times. Converting those channels into full analysis traces is not implemented yet. |
-| Analysis | Current-runtime measured sessions retain selectable completed, incomplete and current laps in bounded main-process memory, with explicit quality reasons and distance-aligned braking evidence. Generated comparison/coaching fixtures remain visibly labeled and separate from measured data. |
+| Analysis | Finalized live laps survive restarts within bounded local retention. An explicit private `.apexrec` import runs strict current-decoder replay into isolated staging, then commits validated sessions atomically. A matching recording/processing version is a no-op while its complete imported batch remains retained; re-import can restore a batch later reduced by bounded retention without duplicating retained rows. The factual debrief uses complete clean and limited official times for pace while reserving PB/comparison-reference and learned-track sources for the stricter reference-eligible clean set. Generated fixtures remain visibly labeled and separate. |
 | Strategy | Deterministic manual fuel-only candidates with integer-lap stints and pit/refuel time coupled back into timed-race distance. VE, tyres, traffic, weather and driver rules are explicitly not modeled until verified inputs exist. |
 | Setups | Imports `.svm` files only into LMU settings folders, creates durable collision backups, handles read-only files and rolls back a failed replacement. |
 | Demo | Seeded multiclass telemetry makes every workflow explorable without LMU or a network connection. |
 
-Durable cross-restart recording-to-analysis ingestion, real community content
-and freeform overlay positioning are deliberately still marked unavailable.
+Native LMU DuckDB channel-to-trace ingestion, real community content and
+freeform overlay positioning are deliberately still marked unavailable.
 
 The finite shipped/rejected scope—including why cloud, “pro” data and
 fixture-less import/setup features are not claimed—is documented in the
@@ -126,6 +126,8 @@ fixture-less import/setup features are not claimed—is documented in the
 - sandboxed renderer with a narrow preload API;
 - unprivileged native bridge in a separate process;
 - DuckDB recordings opened read-only;
+- raw recording imports decoded and committed locally without storing their
+  source path or feeding live statistics/overlay state;
 - setup writes are user-initiated, narrow and reversible.
 
 All preferences and databases live in Electron's per-user application-data
@@ -144,7 +146,9 @@ LMU_Data mapping ──> Go bridge.exe ──NDJSON──> Electron main/preload
                           ▼                         ▼                      ▼
                     measured UI              overlay window       local engines
 
-LMU_Data mapping ──raw snapshots──> .apexrec ──current decoder──> same NDJSON path
+LMU_Data mapping ──raw snapshots──> .apexrec
+                                      ├── Replay/current decoder ──> measured UI + overlay (transient)
+                                      └── Import/current decoder ──> isolated staging ──atomic──> durable Analysis
 
 LMU DuckDB recording ──read only──> schema/lap/channel inspector
 User-selected .svm ──validate + backup + atomic replace──> LMU settings
@@ -161,14 +165,15 @@ practice/online-session compatibility pass. See the
 
 ## Verification
 
-The current tree passes:
+The release gate covers:
 
-- 110 React/domain/renderer tests;
-- 54 Electron service, durability, lifecycle and rollback tests;
+- React, domain and renderer tests;
+- Electron service, durability, lifecycle and rollback tests;
 - script contract tests and Electron-runtime SQLite acceptance;
 - Linux Go tests and a Windows bridge cross-compile;
 - strict replay of all 18,039 frames in the approved real raw recording,
-  including position/speed physical consistency;
+  including position/speed physical consistency, explicit atomic Analysis
+  import, restart persistence and idempotent re-import;
 - source and packaged native-Windows replay definitions covering renderer/IPC,
   measured route/braking, overlay lifecycle and lifetime-stat exclusion;
 - production renderer and website builds;

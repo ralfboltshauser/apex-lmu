@@ -1,11 +1,12 @@
 const crypto = require('node:crypto')
 
-const TRACK_MODEL_ALGORITHM = 'telemetry-centerline-v1'
+const TRACK_MODEL_ALGORITHM = 'telemetry-centerline-v2'
 // LMU publishes scoring distance and path offsets more slowly than vehicle
-// telemetry. Twelve-metre bins match the validated capture-coverage policy
-// and are wide enough for the observed scoring cadence, so complete laps can
-// cover the route without inventing values between scoring snapshots.
-const DEFAULT_BIN_M = 12
+// telemetry. The validated recordings show an effective 14–15.5 m scoring
+// cadence. Sixteen-metre bins are the smallest tested width above that cadence;
+// the lap-quality policy separately rejects circular gaps above two bins, so
+// wider binning cannot disguise a genuinely missing route segment.
+const DEFAULT_BIN_M = 16
 
 function finite(value) { return typeof value === 'number' && Number.isFinite(value) }
 function median(values) {

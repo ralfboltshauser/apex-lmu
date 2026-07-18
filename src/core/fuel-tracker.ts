@@ -31,6 +31,10 @@ const EMPTY: FuelTrackerState = {
 
 export function emptyFuelTracker(): FuelTrackerState { return EMPTY }
 
+export function isDurableFuelCalibrationFrame(frame: TelemetryFrame): boolean {
+  return frame.source !== 'recording-replay'
+}
+
 function base(frame: TelemetryFrame, fallbackProgress: number) {
   return {
     sessionId: frame.session.id, trackName: frame.session.track.name, carName: frame.player.car.model,
@@ -44,7 +48,7 @@ function base(frame: TelemetryFrame, fallbackProgress: number) {
 }
 
 export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFrame): FuelTrackerState {
-  if (frame.sourceState === 'session-only') return previous
+  if (!isDurableFuelCalibrationFrame(frame) || frame.sourceState === 'session-only') return previous
   const fallbackProgress = previous.sessionId === frame.session.id ? previous.currentLapProgress : 0
   const current = base(frame, fallbackProgress)
   if (previous.sessionId !== frame.session.id || previous.currentLapNumber <= 0 || frame.player.currentLapNumber < previous.currentLapNumber) {

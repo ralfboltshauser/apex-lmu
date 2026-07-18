@@ -33,9 +33,27 @@ the bottom.
 
 ## Analysis
 
-The user first sees the largest time losses, then one concrete action, then the
-trace supporting it. Comparing incompatible conditions visibly reduces match
-quality. Raw graphs never disappear behind generated prose.
+The user can review finalized live laps across restarts under bounded local
+retention or explicitly import a private `.apexrec` through the current decoder.
+Import is strict, local and atomic. A fully retained matching recording and
+processing version is not duplicated; bounded retention can later make a
+re-import restore missing rows. Normal Replay remains a transient tool for Live,
+the overlay and Analysis during the current app run and never writes durable
+history. Imported decoding exposes progress only and cannot feed the overlay,
+fuel calibration or lifetime statistics.
+
+The session debrief stays descriptive. Complete clean and limited laps with a
+finite official LMU time contribute best, median, variation, later-half pace and
+coverage facts. Limited laps remain visibly limited: only the stricter clean,
+reference-eligible set may become PB/comparison-reference or learned-track
+sources.
+Incomplete, untimed and ineligible laps remain in the ledger with reasons but
+cannot silently become pace evidence. The selected-lap route, controls and
+braking traces support every comparison; generated examples remain separate.
+
+The raw recording remains authoritative, its source path is not stored in
+analysis history, and Apex does not guess whether a captured session was online
+or offline. No debrief metric is presented as causal coaching.
 
 ## Strategy
 

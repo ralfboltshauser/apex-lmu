@@ -38,12 +38,12 @@ describe('measured analysis view', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
     const samples = route.map((sample) => ({ ...sample, throttle: 0.8, steering: 0, lapElapsedSeconds: sample.elapsedSeconds }))
     const laps: ApexAnalysisLapSummary[] = [
-      { id: 'lap-1', number: 1, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 100_000, coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
-      { id: 'lap-2', number: 2, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 99_000, coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
-      { id: 'lap-3', number: 3, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 98_000, coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
-      { id: 'lap-4', number: 4, state: 'current', quality: 'ineligible', reasons: ['coverage-low', 'incomplete'], lapTimeMs: null, coverage: 0.25, maximumGapM: 750, sampleCount: 6, samplesAvailable: true },
+      { id: 'lap-1', number: 1, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 100_000, timingSource: 'official', coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
+      { id: 'lap-2', number: 2, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 99_000, timingSource: 'official', coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
+      { id: 'lap-3', number: 3, state: 'complete', quality: 'clean', reasons: [], lapTimeMs: 98_000, timingSource: 'official', coverage: 1, maximumGapM: 50, sampleCount: samples.length, samplesAvailable: true },
+      { id: 'lap-4', number: 4, state: 'current', quality: 'ineligible', reasons: ['coverage-low', 'incomplete'], lapTimeMs: null, timingSource: 'unavailable', coverage: 0.25, maximumGapM: 750, sampleCount: 6, samplesAvailable: true },
     ]
-    const session: ApexAnalysisSessionSummary = { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 10, id: 'session-1', source: 'live', state: 'active', startedAt: '2026-07-13T10:00:00Z', endedAt: null, track: { name: 'Measured Track', layout: '', lengthM: 1000 }, car: { id: 1, name: 'Measured Car', class: 'GT3' }, laps, currentLapId: 'lap-4', interruptionCount: 1, sourceSegmentCount: 2 }
+    const session: ApexAnalysisSessionSummary = { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v2', revision: 10, id: 'session-1', source: 'live', state: 'active', startedAt: '2026-07-13T10:00:00Z', endedAt: null, track: { name: 'Measured Track', layout: '', lengthM: 1000 }, car: { id: 1, name: 'Measured Car', class: 'GT3' }, laps, currentLapId: 'lap-4', interruptionCount: 1, sourceSegmentCount: 2 }
     const originalDesktop = window.apexDesktop
     window.apexDesktop = { getAnalysisLap: async (_sessionId: string, lapId: string) => ({ schemaVersion: 1, session, lap: laps.find((lap) => lap.id === lapId)!, samples: lapId === 'lap-4' ? samples.slice(0, 6) : samples }), reportError: async () => ({ ok: true }) } as unknown as ApexDesktopApi
     const container = document.createElement('div'); document.body.append(container)

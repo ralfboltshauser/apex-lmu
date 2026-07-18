@@ -70,6 +70,7 @@ interface ApexDesktopApi {
   getAnalysisSessions(): Promise<ApexAnalysisSessionSummary[]>
   getAnalysisLap(sessionId: string, lapId: string): Promise<ApexAnalysisLapPayload | null>
   getAnalysisHealth(): Promise<ApexAnalysisHealth>
+  getAnalysisImportState(): Promise<ApexAnalysisImportState>
   getFeedbackState(): Promise<ApexFeedbackState>
   listFeedback(): Promise<ApexFeedbackItem[]>
   getFeedback(feedbackId: string): Promise<ApexFeedbackItem | null>
@@ -95,6 +96,9 @@ interface ApexDesktopApi {
   startReplay(): Promise<{ ok: boolean; canceled?: boolean; reason?: string; path?: string }>
   startReplayForTest(): Promise<{ ok: boolean; reason?: string; path?: string; runId?: string }>
   stopReplay(): Promise<{ ok: boolean; reason?: string }>
+  startAnalysisImport(): Promise<{ ok: boolean; canceled?: boolean; duplicate?: boolean; reason?: string; runId?: string; state?: ApexAnalysisImportState }>
+  startAnalysisImportForTest(): Promise<{ ok: boolean; duplicate?: boolean; reason?: string; runId?: string; state?: ApexAnalysisImportState }>
+  stopAnalysisImport(): Promise<{ ok: boolean; reason?: string }>
   inspectTelemetry(filePath: string): Promise<{
     path: string
     bytes: number
@@ -115,7 +119,8 @@ interface ApexDesktopApi {
   overlayRendererReady(): Promise<{ ok: boolean }>
   onTelemetryMessage(callback: (message: unknown) => void): () => void
   onRecordingState(callback: (state: ApexRecordingState) => void): () => void
-  onAnalysisSessionsChanged(callback: (state: { schemaVersion: 1; revision: number; kind: 'sample' | 'lap' | 'session' | 'status' }) => void): () => void
+  onAnalysisSessionsChanged(callback: (state: { schemaVersion: 1; revision: number; kind: 'sample' | 'lap' | 'session' | 'status' | 'import' }) => void): () => void
+  onAnalysisImportState(callback: (state: ApexAnalysisImportState) => void): () => void
   onFeedbackChanged(callback: (state: ApexFeedbackState) => void): () => void
   onFeedbackShortcut(callback: () => void): () => void
   onOpenFeedbackThread(callback: (feedbackId: string) => void): () => void
@@ -131,14 +136,17 @@ interface ApexLifetimeVehicleStats { id: string; name: string; className: string
 interface ApexLifetimeStats { status: 'ready' | 'future-schema' | 'error' | 'closed'; schemaVersion?: number; algorithmVersion?: string; message?: string; trackedSince: string | null; totalDistanceMm: number; vehicles: ApexLifetimeVehicleStats[] }
 interface ApexLifetimeStatsHealth { status: 'ready' | 'future-schema' | 'error' | 'closed' | 'read-only'; schemaVersion?: number; algorithmVersion?: string; message?: string; path?: string; lastBackup?: { file: string; bytes: number; sha256: string; createdAt: string } | null }
 interface ApexRecordingState { status: 'idle' | 'starting' | 'recording' | 'stopping' | 'replaying' | 'complete' | 'error'; path: string | null; frames: number; bytes: number; durationSeconds: number; message: string }
+interface ApexAnalysisImportState { schemaVersion: 1; status: 'idle' | 'hashing' | 'importing' | 'cancelling' | 'committing' | 'complete' | 'cancelled' | 'error'; fileName: string | null; bytesProcessed: number; bytesTotal: number; frames: number; sessions: number; laps: number; importedSessions: number; importedLaps: number; duplicate: boolean; sessionIds: string[]; reason: string | null }
 
-type ApexAnalysisSource = 'live' | 'recording-replay'
+type ApexAnalysisSource = 'live' | 'recording-replay' | 'imported-recording'
 type ApexAnalysisSessionState = 'active' | 'interrupted' | 'finished'
 type ApexAnalysisLapState = 'current' | 'complete' | 'incomplete'
 type ApexAnalysisLapQuality = 'clean' | 'limited' | 'ineligible'
+type ApexAnalysisTimingSource = 'official' | 'unavailable' | 'legacy-unknown'
 type ApexAnalysisLapReason = 'ai-control' | 'coverage-low' | 'incomplete' | 'lap-counter-jump' | 'lap-invalidated' | 'missing-sample' | 'pit' | 'position-discontinuity' | 'remote-control' | 'replay-control' | 'sample-compacted' | 'sample-overflow' | 'sequence-gap' | 'source-interrupted' | 'telemetry-gap' | 'time-reset' | 'unknown-control'
-interface ApexAnalysisLapSummary { id: string; number: number; state: ApexAnalysisLapState; quality: ApexAnalysisLapQuality; reasons: ApexAnalysisLapReason[]; lapTimeMs: number | null; coverage: number; maximumGapM: number; sampleCount: number; samplesAvailable: boolean; replayable?: boolean; referenceEligible?: boolean; trackModelEligible?: boolean; officialTimePending?: boolean; payloadHash?: string }
-interface ApexAnalysisSessionSummary { schemaVersion: 1; qualityPolicyVersion: string; revision: number; id: string; source: ApexAnalysisSource; state: ApexAnalysisSessionState; startedAt: string; endedAt: string | null; track: { name: string; layout: string; lengthM: number }; car: { id: number; name: string; class: string }; laps: ApexAnalysisLapSummary[]; currentLapId: string | null; interruptionCount: number; sourceSegmentCount: number }
+interface ApexAnalysisLapSummary { id: string; number: number; state: ApexAnalysisLapState; quality: ApexAnalysisLapQuality; reasons: ApexAnalysisLapReason[]; lapTimeMs: number | null; timingSource: ApexAnalysisTimingSource; coverage: number; maximumGapM: number; sampleCount: number; samplesAvailable: boolean; replayable?: boolean; referenceEligible?: boolean; trackModelEligible?: boolean; officialTimePending?: boolean; payloadHash?: string }
+interface ApexAnalysisImportProvenance { id: string; recordingSha256: string; recordingFormat: string; processingVersion: string; importedAt: string; appVersion: string; sessionCount: number; lapCount: number }
+interface ApexAnalysisSessionSummary { schemaVersion: 1; qualityPolicyVersion: string; revision: number; id: string; source: ApexAnalysisSource; sourceRunId?: string; state: ApexAnalysisSessionState; startedAt: string; endedAt: string | null; track: { name: string; layout: string; lengthM: number }; car: { id: number; name: string; class: string }; laps: ApexAnalysisLapSummary[]; currentLapId: string | null; interruptionCount: number; sourceSegmentCount: number; importProvenance?: ApexAnalysisImportProvenance }
 interface ApexAnalysisSample { distanceM: number; rawDistanceM?: number; distanceIndexM?: number; x: number; y?: number; z: number; brake: number; throttle: number; steering: number; clutch?: number; gear?: number; rpm?: number; pathLateralM?: number | null; trackEdgeM?: number | null; countLapFlag?: number | null; speedKph: number; elapsedSeconds: number; lapElapsedSeconds: number }
 interface ApexTrackModel { schemaVersion: 1; algorithmVersion: string; trackKey: string; trackLengthM: number; binSizeM: number; coverage: number; published: boolean; lateralSign: number; seamGapM: number; maximumJumpM: number; sourceHash: string; geometryHash: string; points: Array<{ distanceM: number; x: number; y: number; z: number; observations: number; spreadM: number; confidence: number }> }
 interface ApexAnalysisLapPayload { schemaVersion: 1; session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] | null; payloadHash?: string; trackModel?: ApexTrackModel | null; personalBest?: { session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] } | null }

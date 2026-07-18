@@ -22,34 +22,18 @@ import { FuelCalculatorView } from './views/FuelCalculatorView'
 import { SetupsView } from './views/SetupsView'
 import { OverlaysView } from './views/OverlaysView'
 import { SettingsView } from './views/SettingsView'
-import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, updateFuelTracker, type LiveFuelEstimate, type TelemetryFrame } from './core'
+import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, type LiveFuelEstimate, type TelemetryFrame } from './core'
+import { advanceDurableFuelCalibration } from './fuel-profile'
 import { appMessages } from './i18n/appMessages'
 import { formatMessage, useMessages } from './i18n'
 import { pendingReleaseNotes, type ReleaseNote } from './release-notes'
 import { buildMeasuredTrackSnapshot, type MeasuredLapRecord, type MeasuredTrackSnapshot } from './engine'
 import { FeedbackProvider } from './feedback/FeedbackProvider'
 import { FeedbackView } from './feedback/FeedbackView'
+import { lapPlaybackAvailable } from './features/analysis/lap-availability'
 
 type Toast = { id: number; title: string; body: string }
 const LMU_PATH_KEY = 'apex:lmu-installation-path'
-const FUEL_PROFILE_PREFIX = 'apex:fuel-profile:'
-
-function fuelProfileKey(track: string, car: string) {
-  return `${FUEL_PROFILE_PREFIX}${encodeURIComponent(`${track}\0${car}`)}`
-}
-
-function loadFuelProfile(track: string, car: string) {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(fuelProfileKey(track, car)) || '{}') as { fuel?: unknown; laps?: unknown }
-    const fuel = Array.isArray(value.fuel) ? value.fuel.filter((item): item is number => typeof item === 'number' && Number.isFinite(item) && item > 0).slice(-20) : []
-    const laps = Array.isArray(value.laps) ? value.laps.filter((item): item is number => typeof item === 'number' && Number.isFinite(item) && item >= 10).slice(-20) : []
-    return { fuel, laps }
-  } catch { return { fuel: [], laps: [] } }
-}
-
-function saveFuelProfile(track: string, car: string, fuel: readonly number[], laps: readonly number[]) {
-  try { window.localStorage.setItem(fuelProfileKey(track, car), JSON.stringify({ fuel, laps })) } catch { /* Live calculation still works for this run. */ }
-}
 
 type DetectionNotice =
   | { kind: 'searchCommon' | 'desktopOnly' | 'confirmedManually' | 'invalid' | 'inaccessible' }
@@ -195,6 +179,7 @@ export default function App() {
   const analysisLapCache = useRef(new Map<string, ApexAnalysisLapPayload>())
   const demoRunningRef = useRef(false)
   const viewRef = useRef<ViewId>('home')
+  const connectionCopyRef = useRef({ offline: m.connection.offline, waiting: m.connection.waiting })
   const lastUpdateNotice = useRef('')
   const [realConnected, setRealConnected] = useState(false)
   const [liveConnectionMessage, setLiveConnectionMessage] = useState(m.connection.starting)
@@ -204,6 +189,7 @@ export default function App() {
   const [analysisSessions, setAnalysisSessions] = useState<readonly ApexAnalysisSessionSummary[]>([])
   demoRunningRef.current = demoRunning
   viewRef.current = view
+  connectionCopyRef.current = { offline: m.connection.offline, waiting: m.connection.waiting }
 
   const addToast = (title: string, body: string) => {
     const id = Date.now()
@@ -336,9 +322,12 @@ export default function App() {
       const session = sessions.find((candidate) => candidate.state !== 'finished') ?? sessions[0]
       if (!session) { setMeasuredTrack(null); return }
       if (session.currentLapId) analysisLapCache.current.delete(`${session.id}:${session.currentLapId}`)
-      const clean = session.laps.filter((lap) => lap.state === 'complete' && lap.quality === 'clean' && lap.samplesAvailable).slice(-3)
-      const fallback = [...session.laps].reverse().find((lap) => lap.state === 'complete' && lap.quality !== 'ineligible' && lap.samplesAvailable)
-        ?? session.laps.find((lap) => lap.id === session.currentLapId && lap.samplesAvailable)
+      for (const lap of session.laps) {
+        if (!lapPlaybackAvailable(lap)) analysisLapCache.current.delete(`${session.id}:${lap.id}`)
+      }
+      const clean = session.laps.filter((lap) => lap.state === 'complete' && lap.quality === 'clean' && lapPlaybackAvailable(lap)).slice(-3)
+      const fallback = [...session.laps].reverse().find((lap) => lap.state === 'complete' && lap.quality !== 'ineligible' && lapPlaybackAvailable(lap))
+        ?? session.laps.find((lap) => lap.id === session.currentLapId && lapPlaybackAvailable(lap))
       const selected = clean.at(-1) ?? fallback
       if (!selected) { setMeasuredTrack(null); return }
       const requested = clean.length > 0 ? clean : [selected]
@@ -379,25 +368,26 @@ export default function App() {
       if (cancelled || environment.platform !== 'win32') return
       unsubscribeFrame = adapter.subscribe((frame) => {
         const previousFuel = fuelTracker.current
-        let nextFuel = updateFuelTracker(previousFuel, frame)
-        if (nextFuel.sessionId && nextFuel.sessionId !== previousFuel.sessionId) {
-          const saved = loadFuelProfile(nextFuel.trackName, nextFuel.carName)
-          nextFuel = { ...nextFuel, fuelSamplesLiters: saved.fuel, lapTimeSamplesSeconds: saved.laps }
+        const nextFuel = advanceDurableFuelCalibration(previousFuel, frame)
+        if (nextFuel !== previousFuel) {
+          fuelTracker.current = nextFuel
+          if (nextFuel.sessionId) setLiveFuel(nextFuel)
         }
-        if ((nextFuel.fuelSamplesLiters.length !== previousFuel.fuelSamplesLiters.length || nextFuel.lapTimeSamplesSeconds.length !== previousFuel.lapTimeSamplesSeconds.length) && nextFuel.sessionId) {
-          saveFuelProfile(nextFuel.trackName, nextFuel.carName, nextFuel.fuelSamplesLiters, nextFuel.lapTimeSamplesSeconds)
-        }
-        fuelTracker.current = nextFuel
-        if (fuelTracker.current.sessionId) setLiveFuel(fuelTracker.current)
         if (!demoRunningRef.current && (viewRef.current === 'home' || viewRef.current === 'live' || viewRef.current === 'fuel')) { setLiveFrame(frame); setTick(frame.sequence) }
       })
       unsubscribeStatus = adapter.subscribeStatus((status) => {
         setRealConnected(status.state === 'connected' && status.framesReceived > 0)
-        setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? m.connection.waiting : m.connection.offline))
+        const connectionCopy = connectionCopyRef.current
+        setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? connectionCopy.waiting : connectionCopy.offline))
       })
       void adapter.connect()
     })
     return () => { cancelled = true; unsubscribeFrame(); unsubscribeStatus(); void adapter.disconnect() }
+  }, [])
+
+  useEffect(() => {
+    const status = desktopAdapter.current.getStatus()
+    if (!status.error && !status.detail) setLiveConnectionMessage(status.state === 'connecting' ? m.connection.waiting : m.connection.offline)
   }, [m.connection.offline, m.connection.waiting])
 
   useEffect(() => {

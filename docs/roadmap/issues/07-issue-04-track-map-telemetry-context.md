@@ -18,7 +18,7 @@ blocks: [3]
 parallel_with: []
 source_updated_at: "2026-07-12T12:28:17Z"
 source_commit: "9660be5"
-last_verified: "2026-07-13"
+last_verified: "2026-07-17"
 ---
 
 # Issue #4 — measured track map and braking context
@@ -32,7 +32,7 @@ insight by lap distance. Live mode learns the route locally and places cars only
 from measured coordinates. Until enough geometry exists, Apex shows a partial
 route or honest distance strip—never a generic/demo circuit presented as real.
 
-## Implementation evidence — 2026-07-13
+## Implementation evidence — 2026-07-17
 
 The local implementation branch now carries a measured live and analysis path:
 
@@ -43,8 +43,10 @@ The local implementation branch now carries a measured live and analysis path:
   displacement divided by speed integrated over game time is 0.99988 / 1.00001
   / 1.00007 at the 5th/median/95th percentiles. This independently proves the
   coordinate/time interpretation rather than accepting merely plausible axes.
-- That recording reconstructs two clean laps, 354 robust 12 m route bins,
-  99.16% coverage, geometry fingerprint `34f2b542`, and 11 stable braking zones.
+- Under `lap-quality-v2`, that recording reconstructs two clean/reference laps.
+  Its `telemetry-centerline-v2` model contains 267 occupied 16 m distance bins
+  out of 268 (99.627% coverage) and retains 11 stable braking zones. The
+  separate 32 m circular-gap guard prevents wider bins from hiding a real hole.
 - Electron main owns a bounded live-session store with stable logical session
   and lap IDs. Bridge waiting/disconnect/run changes cannot erase compatible
   completed laps; genuine track/car/time/lap-counter resets archive a session.
@@ -59,71 +61,64 @@ The local implementation branch now carries a measured live and analysis path:
 - Measured Live renders the locally reconstructed driven line, exact measured
   player/opponent positions, coverage state, heat segments, and a textual brake
   list. No opponent coordinate means no marker.
-- Measured Analysis lists the current runtime's sessions and every completed,
-  incomplete, and current lap. It defaults to the latest loaded clean completed
-  lap instead of the final partial lap, loads the selected trace on demand, and
-  exposes stable quality/reason labels. Selected brake evidence, map segment,
-  distance cursor, speed trace, and brake trace remain synchronized; zone rows
-  are keyboard buttons with complete textual evidence.
+- Measured Analysis lists durable finalized live sessions and explicitly
+  imported recording sessions across restarts, then overlays the active
+  in-memory session and its current lap. Completed and incomplete evidence
+  remains available under bounded retention. The view defaults to the latest
+  loaded clean completed lap instead of the final partial lap, loads the
+  selected trace on demand, and exposes stable quality/reason labels.
+  Selected brake evidence, map segment, distance cursor, speed trace, and brake
+  trace remain synchronized; zone rows are keyboard buttons with complete
+  textual evidence.
 - `CircuitTrackMap` no longer silently substitutes its generated demo path when
   an explicit measured point set is empty. Measured marker and segment lookup
   preserve LMU lap distance rather than SVG arc-length percentage.
 
-The normal product keeps this high-rate analysis in bounded Electron-main
-memory so a renderer reload does not clear it, and reconstructs it
-from an explicitly chosen private `.apexrec` when replayed. It does not silently
-persist or upload high-rate position/pedal history. Durable automatic history
-would require a separate user-facing privacy/retention decision; the raw
-recorder remains the lossless opt-in path.
+The product keeps active high-rate analysis in bounded Electron-main memory and
+stores finalized normalized lap evidence in a versioned local database under
+session and byte retention. Normal Replay remains transient. A separate,
+explicit **Import into Analysis** reconstructs a private `.apexrec` through the
+current decoder in isolated staging and commits only after strict completion.
+Neither path uploads telemetry; imported frames do not reach Live, the overlay,
+fuel calibration, or lifetime statistics. The raw recorder remains the lossless
+opt-in authority.
 
-Focused and full local gates pass: packed offset/rejection tests, geometry and
-brake engine tests, renderer safety/interaction tests, all 18,039 real frames,
-110 renderer tests, 54 desktop tests, scripts, Go, Electron SQLite, production
-build, EN/DE, TypeScript, and Windows cross-compile. The native source/package
-Windows E2E now requires 99% route coverage and all 11 zones in both views; the
-hosted run and an installed-header diff remain release gates.
+The focused cross-platform recording regression currently passes all 18,039
+real frames through the current decoder, the explicit atomic import, database
+restart, and idempotent re-import. The native source/package Windows E2E
+requires at least 99% route coverage and all 11 zones in both views. The full
+release gates, hosted native run, current installed-header diff, and fresh
+current-game validation remain pending.
 
 ## Current implementation truth
 
-Apex visually contains circuit shapes, but none answers this issue for measured
-data:
-
-- The real measured branch of `LiveView.tsx` has no map.
-- `LiveCircuit` is a hard-coded generated SVG used only by the demo branch.
-- Home's Spa/Le Mans outlines are also hard-coded demo content.
-- `CircuitTrackMap.tsx` is reusable but currently unused. If given too few
-  points, it silently substitutes `defaultTrackPoints`, which is unsafe for a
-  measured screen.
-- That component places progress along rendered 2D polyline length rather than
-  the LMU lap-distance coordinate, so markers can drift on irregular or
-  elevated routes.
-- `AnalyzeView.tsx` explicitly uses `demoSessions`, `lapTrace`,
-  `referenceTrace`, and generated insights; DuckDB/live samples are not wired.
-- `src/engine/telemetry.ts` can identify brake start/release and compare laps by
-  distance, but no live/import adapter creates a real `TelemetryLap`.
-- No authoritative corner catalog/names exist in the repository.
-
-The bridge already exposes scoring `lapDistanceM`, but leaves potentially
-required official fields undecoded:
-
-- player telemetry game elapsed time and lap-start time;
-- player world `mPos`—the candidate packed vector immediately before the local
-  velocity currently decoded at player base `+184`;
-- scoring control owner and scoring world position for opponents.
-
-`desktop-adapter.ts` currently fills lap elapsed, axes, acceleration,
-orientation, and other unavailable motion fields with zero. Those placeholders
-cannot be used for geometry or analysis.
-
-Historical analysis also needs durable session/lap samples. Issue #6 supplies
-the single writer, source/session identity, migrations, and storage substrate.
-The official-offset feasibility spike can run in parallel, but the completed
-feature should not create a second persistence system.
+- The bridge decodes the required elapsed/lap-start times, player and scoring
+  world positions, and control owner from explicit packed offsets with finite
+  and bounds checks. Unavailable values remain absent rather than becoming
+  credible-looking zeroes.
+- Measured Live and Analysis use `CircuitTrackMap` with measured points that
+  retain LMU lap distance. The generated circuit assets remain explicitly demo
+  content and cannot substitute for missing measured geometry.
+- The main-process session assembler creates normalized measured laps, preserves
+  incomplete/ineligible evidence, and versions its coverage decision as
+  `lap-quality-v2`. Route completeness requires both 97% occupied 16 m bins and
+  no circular gap above 32 m. Clean quality additionally requires a complete lap
+  without disqualifying evidence; reference eligibility additionally requires
+  an official LMU time, and learned-track eligibility requires usable
+  path-lateral evidence.
+- Finalized live laps and explicit `.apexrec` imports share one durable
+  normalized SQLite model. Import has its own correlated accumulator and staging
+  database; normal Replay cannot mutate durable Analysis history.
+- The selected measured lap supplies the driven route, speed/control traces and
+  stable brake zones. Demo comparisons remain visibly separate.
+- No authoritative corner catalog, surveyed track limits, or evidence of an
+  optimal racing line exists in the repository, so Apex makes none of those
+  claims.
 
 ## First-principles feasibility
 
-If the installed official LMU header confirms the candidate fields, each local
-player sample can provide:
+The pinned official LMU contract and the approved raw fixture establish that an
+eligible local-player sample can provide:
 
 ```text
 (world_x_m, world_z_m, lap_distance_m, brake_0_to_1,
@@ -140,12 +135,13 @@ corner name/boundary. Product copy should say “locally reconstructed route” 
 corners until an appropriately licensed and versioned source exists.
 
 The installed `Support/SharedMemoryInterface` header and a current real
-`.apexrec` are the release authority. A remembered rFactor layout or public copy
-may guide the spike but cannot approve packed offsets.
+`.apexrec` remain the release authority after LMU changes. A remembered rFactor
+layout or public copy cannot approve packed offsets.
 
 ## Domain contract changes
 
-Add optional measured fields rather than default zeroes:
+The normalized contract uses optional measured fields rather than default
+zeroes:
 
 ```ts
 interface WorldPositionM { x: number; y: number; z: number }

@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getAnalysisSessions: () => ipcRenderer.invoke('apex:get-analysis-sessions'),
   getAnalysisLap: (sessionId, lapId) => ipcRenderer.invoke('apex:get-analysis-lap', sessionId, lapId),
   getAnalysisHealth: () => ipcRenderer.invoke('apex:get-analysis-health'),
+  getAnalysisImportState: () => ipcRenderer.invoke('apex:get-analysis-import-state'),
   getFeedbackState: () => ipcRenderer.invoke('apex:get-feedback-state'),
   listFeedback: () => ipcRenderer.invoke('apex:list-feedback'),
   getFeedback: (feedbackId) => ipcRenderer.invoke('apex:get-feedback', feedbackId),
@@ -48,6 +49,9 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   startReplay: () => ipcRenderer.invoke('apex:start-replay'),
   startReplayForTest: () => ipcRenderer.invoke('apex:start-e2e-replay'),
   stopReplay: () => ipcRenderer.invoke('apex:stop-replay'),
+  startAnalysisImport: () => ipcRenderer.invoke('apex:start-analysis-import'),
+  startAnalysisImportForTest: () => ipcRenderer.invoke('apex:start-e2e-analysis-import'),
+  stopAnalysisImport: () => ipcRenderer.invoke('apex:stop-analysis-import'),
   inspectTelemetry: (filePath) => ipcRenderer.invoke('apex:inspect-telemetry', filePath),
   installSetup: (input) => ipcRenderer.invoke('apex:install-setup', input),
   openOverlay: () => ipcRenderer.invoke('apex:open-overlay'),
@@ -71,6 +75,11 @@ contextBridge.exposeInMainWorld('apexDesktop', {
     const listener = (_event, state) => callback(state)
     ipcRenderer.on('apex:analysis-sessions-changed', listener)
     return () => ipcRenderer.removeListener('apex:analysis-sessions-changed', listener)
+  },
+  onAnalysisImportState: (callback) => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('apex:analysis-import-state', listener)
+    return () => ipcRenderer.removeListener('apex:analysis-import-state', listener)
   },
   onFeedbackChanged: (callback) => {
     const listener = (_event, state) => callback(state)

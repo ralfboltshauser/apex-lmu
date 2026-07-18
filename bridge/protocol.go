@@ -22,6 +22,7 @@ type message struct {
 	Frames                   int        `json:"frames,omitempty"`
 	Bytes                    int64      `json:"bytes,omitempty"`
 	DurationSeconds          float64    `json:"durationSeconds,omitempty"`
+	RecordingSHA256          string     `json:"recordingSha256,omitempty"`
 	GameVersion              int32      `json:"gameVersion,omitempty"`
 	CapturedAt               string     `json:"capturedAt,omitempty"`
 	Sequence                 uint64     `json:"sequence,omitempty"`

@@ -15,6 +15,7 @@ const { StatsDatabase } = require('./stats-database.cjs')
 const { LiveSessionStore } = require('./live-session-store.cjs')
 const { FeedbackService } = require('./feedback-service.cjs')
 const { TelemetryDatabase } = require('./telemetry-database.cjs')
+const { RecordingImportService } = require('./recording-import-service.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 const e2eConfig = readE2EConfig()
@@ -32,6 +33,7 @@ let feedbackService
 let pendingFeedbackThreadId = null
 let telemetryDatabase
 let telemetryDatabaseError = null
+let analysisImportService
 let quitFlushStarted = false
 let quitFlushComplete = false
 const selfTestWaiters = new Map()
@@ -165,7 +167,8 @@ ipcMain.handle('apex:get-analysis-lap', async (_event, sessionId, lapId) => {
   await telemetryDatabase?.flush()
   return telemetryDatabase?.getLap(sessionId, lapId) ?? liveSessionStore?.getLap(sessionId, lapId) ?? null
 })
-ipcMain.handle('apex:get-analysis-health', () => ({ ...(liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v1', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }), storage: telemetryDatabase?.getHealth() ?? { status: 'error', message: telemetryDatabaseError || 'unavailable' } }))
+ipcMain.handle('apex:get-analysis-health', () => ({ ...(liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v2', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }), storage: telemetryDatabase?.getHealth() ?? { status: 'error', message: telemetryDatabaseError || 'unavailable' } }))
+ipcMain.handle('apex:get-analysis-import-state', () => analysisImportService?.getState() ?? { schemaVersion: 1, status: 'error', fileName: null, bytesProcessed: 0, bytesTotal: 0, frames: 0, sessions: 0, laps: 0, importedSessions: 0, importedLaps: 0, duplicate: false, sessionIds: [], reason: 'storage-unavailable' })
 ipcMain.handle('apex:get-feedback-state', () => feedbackService?.getState() ?? { status: 'ready', pending: 0, unread: 0, needsAnswer: 0, items: [] })
 ipcMain.handle('apex:list-feedback', () => feedbackService?.list() ?? [])
 ipcMain.handle('apex:get-feedback', (_event, feedbackId) => typeof feedbackId === 'string' && feedbackId.length <= 96 ? feedbackService?.load(feedbackId) ?? null : null)
@@ -251,7 +254,7 @@ ipcMain.handle('apex:export-support-bundle', async () => {
 })
 
 ipcMain.handle('apex:start-telemetry', () => bridgeManager.start())
-ipcMain.handle('apex:stop-telemetry', () => bridgeManager.stop())
+ipcMain.handle('apex:stop-telemetry', () => bridgeManager.stopLive())
 ipcMain.handle('apex:run-telemetry-self-test', () => bridgeManager.runSelfTest())
 ipcMain.handle('apex:get-recording-state', () => bridgeManager.getRecordingState())
 ipcMain.handle('apex:start-recording', async () => {
@@ -272,6 +275,13 @@ ipcMain.handle('apex:start-replay', async () => {
 })
 ipcMain.handle('apex:start-e2e-replay', () => e2eConfig ? bridgeManager.startReplay(e2eConfig.replayPath, e2eConfig) : { ok: false, reason: 'e2e-disabled' })
 ipcMain.handle('apex:stop-replay', () => bridgeManager.stopReplay())
+ipcMain.handle('apex:start-analysis-import', async () => {
+  const selected = await dialog.showOpenDialog({ title: 'Import an Apex recording into Analysis', properties: ['openFile'], filters: [{ name: 'Apex LMU recording', extensions: ['apexrec'] }] })
+  if (selected.canceled || !selected.filePaths[0]) return { ok: false, canceled: true }
+  return analysisImportService?.start(selected.filePaths[0]) ?? { ok: false, reason: 'storage-unavailable' }
+})
+ipcMain.handle('apex:start-e2e-analysis-import', () => e2eConfig ? analysisImportService?.start(e2eConfig.replayPath) ?? { ok: false, reason: 'storage-unavailable' } : { ok: false, reason: 'e2e-disabled' })
+ipcMain.handle('apex:stop-analysis-import', () => analysisImportService?.stop() ?? { ok: false, reason: 'not-importing' })
 ipcMain.handle('apex:inspect-telemetry', (_event, filePath) => inspectTelemetryDatabase(filePath))
 ipcMain.handle('apex:install-setup', (_event, input) => safeInstallSetup({ ...input, backupRoot: app.getPath('userData') }))
 ipcMain.handle('apex:get-displays', () => overlayManager.getDisplays())
@@ -292,7 +302,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   diagnostics = new DiagnosticsService({ app })
-  try { telemetryDatabase = await TelemetryDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics, persistReplay: Boolean(e2eConfig) }) }
+  try { telemetryDatabase = await TelemetryDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics }) }
   catch (error) { telemetryDatabaseError = error.message; void diagnostics.record('error', 'telemetry-history', 'open-failed', 'Local lap history was preserved but could not be opened.', { error: error.message }) }
   liveSessionStore = new LiveSessionStore({
     logger: diagnostics,
@@ -302,6 +312,7 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:analysis-sessions-changed', { schemaVersion: 1, revision: liveSessionStore?.revision ?? 0, kind: 'lap' })
       return result
     },
+    onSessionFinalized: (summary) => telemetryDatabase?.enqueueSessionFinalized(summary),
   })
   whatsNewService = new WhatsNewService({ userDataPath: app.getPath('userData'), currentVersion: app.getVersion(), logger: diagnostics })
   try { statsDatabase = await StatsDatabase.open({ userDataPath: app.getPath('userData'), appVersion: app.getVersion(), logger: diagnostics }) }
@@ -311,6 +322,10 @@ app.whenReady().then(async () => {
     app,
     logger: diagnostics,
     broadcast: (message) => {
+      if (analysisImportService?.owns(message)) {
+        analysisImportService.ingest(message)
+        return
+      }
       try { statsDatabase?.ingest(message) } catch (error) { void diagnostics.record('error', 'lifetime-stats', 'ingest-failed', 'A lifetime distance chunk could not be committed.', { error: error.message }) }
       let analysisResult = { changed: false, notify: false }
       try { analysisResult = liveSessionStore.ingest(message) } catch (error) { void diagnostics.record('error', 'analysis-session', 'ingest-failed', 'The in-memory analysis session rejected a bridge message.', { error: error.message }) }
@@ -326,14 +341,27 @@ app.whenReady().then(async () => {
     broadcastRecording: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:recording-state', state)
     },
+    onReplayFinished: (result) => analysisImportService?.handleReplayFinished(result),
   })
+  if (telemetryDatabase) {
+    analysisImportService = new RecordingImportService({
+      userDataPath: app.getPath('userData'),
+      appVersion: app.getVersion(),
+      database: telemetryDatabase,
+      bridgeManager,
+      logger: diagnostics,
+      broadcast: (state) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:analysis-import-state', state) },
+      onCommitted: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:analysis-sessions-changed', { schemaVersion: 1, revision: liveSessionStore?.revision ?? 0, kind: 'import' }) },
+    })
+    await analysisImportService.initialize().catch((error) => void diagnostics.record('error', 'recording-import', 'initialize-failed', 'Private recording import staging could not be initialized.', { error: error.message }))
+  }
   updateManager = new UpdateManager({
     app,
     logger: diagnostics,
     broadcast: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('apex:update-state', state)
     },
-    beforeInstall: async () => { await telemetryDatabase?.close({ requireDurable: true }); statsDatabase?.close({ requireDurable: true }) },
+    beforeInstall: async () => { bridgeManager?.stop(); await analysisImportService?.dispose(); await telemetryDatabase?.close({ requireDurable: true }); statsDatabase?.close({ requireDurable: true }) },
   })
   session.defaultSession.setPermissionCheckHandler(() => false)
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -397,6 +425,8 @@ app.on('before-quit', (event) => {
   bridgeManager?.stop()
   feedbackService?.stop()
   void (async () => {
+    try { await analysisImportService?.dispose() }
+    catch (error) { void diagnostics?.record('error', 'recording-import', 'close-failed', 'Private recording import cleanup failed during app shutdown.', { error: error.message }) }
     try { await telemetryDatabase?.close() }
     catch (error) { void diagnostics?.record('error', 'telemetry-history', 'close-failed', 'Local lap history close failed during app shutdown.', { error: error.message }) }
     try { statsDatabase?.close() }

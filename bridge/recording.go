@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -26,7 +28,20 @@ const (
 	maxRecordingBytes      = int64(8 << 30)
 )
 
-var errRecordingTruncated = errors.New("recording ends with an incomplete record")
+var (
+	errRecordingTruncated = errors.New("recording ends with an incomplete record")
+	errRecordingDecode    = errors.New("recording snapshot rejected by the current decoder")
+	errRecordingTooLarge  = errors.New("recording exceeds the 8 GiB safety limit")
+)
+
+var replayableRecordingLifecycleStates = map[string]string{
+	"waiting":      "Captured LMU source is waiting.",
+	"mapping-open": "Captured LMU shared memory opened.",
+	"connected":    "Captured LMU source connected.",
+	"disconnected": "Captured LMU source disconnected.",
+	"missing":      "Captured LMU source became unavailable.",
+	"stopped":      "Captured LMU source stopped.",
+}
 
 type recordingMetadata struct {
 	Format        string `json:"format"`
@@ -174,16 +189,74 @@ func (writer *recordingWriter) Close() error {
 type recordingReader struct {
 	reader      io.Reader
 	Metadata    recordingMetadata
+	header      [recordingRecordHeader]byte
+	payload     []byte
+	compressed  bytes.Reader
+	zipper      io.ReadCloser
 	previous    []byte
+	current     []byte
 	lastElapsed time.Duration
 }
 
-func openRecording(path string) (*recordingReader, *os.File, error) {
+type recordingSizeGuard struct {
+	reader    io.Reader
+	remaining int64
+}
+
+func (guard *recordingSizeGuard) Read(target []byte) (int, error) {
+	if len(target) == 0 {
+		return 0, nil
+	}
+	if guard.remaining <= 0 {
+		// Probe once beyond the accepted boundary. Returning EOF here without a
+		// probe would make a recording that grew past the initial stat look like a
+		// cleanly completed stream at exactly maxRecordingBytes.
+		var extra [1]byte
+		read, err := guard.reader.Read(extra[:])
+		if read > 0 {
+			return 0, errRecordingTooLarge
+		}
+		return 0, err
+	}
+	if int64(len(target)) > guard.remaining {
+		target = target[:guard.remaining]
+	}
+	read, err := guard.reader.Read(target)
+	guard.remaining -= int64(read)
+	return read, err
+}
+
+func openRecordingFile(path string) (*os.File, error) {
+	return openRecordingFileWithLimit(path, maxRecordingBytes)
+}
+
+func openRecordingFileWithLimit(path string, maximumBytes int64) (*os.File, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open recording: %w", err)
+		return nil, fmt.Errorf("open recording: %w", err)
 	}
-	reader, err := newRecordingReader(file)
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("stat recording: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, fmt.Errorf("recording is not a regular file")
+	}
+	if info.Size() > maximumBytes {
+		_ = file.Close()
+		return nil, errRecordingTooLarge
+	}
+	return file, nil
+}
+
+func openRecording(path string) (*recordingReader, *os.File, error) {
+	file, err := openRecordingFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	reader, err := newRecordingReader(&recordingSizeGuard{reader: file, remaining: maxRecordingBytes})
 	if err != nil {
 		_ = file.Close()
 		return nil, nil, err
@@ -193,11 +266,20 @@ func openRecording(path string) (*recordingReader, *os.File, error) {
 
 func newRecordingReader(source io.Reader) (*recordingReader, error) {
 	magic := make([]byte, len(recordingMagic))
-	if _, err := io.ReadFull(source, magic); err != nil || string(magic) != recordingMagic {
+	if _, err := io.ReadFull(source, magic); err != nil {
+		if errors.Is(err, errRecordingTooLarge) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("not an Apex LMU recording")
+	}
+	if string(magic) != recordingMagic {
 		return nil, fmt.Errorf("not an Apex LMU recording")
 	}
 	var size [4]byte
 	if _, err := io.ReadFull(source, size[:]); err != nil {
+		if errors.Is(err, errRecordingTooLarge) {
+			return nil, err
+		}
 		return nil, errRecordingTruncated
 	}
 	headerSize := binary.LittleEndian.Uint32(size[:])
@@ -206,6 +288,9 @@ func newRecordingReader(source io.Reader) (*recordingReader, error) {
 	}
 	header := make([]byte, headerSize)
 	if _, err := io.ReadFull(source, header); err != nil {
+		if errors.Is(err, errRecordingTooLarge) {
+			return nil, err
+		}
 		return nil, errRecordingTruncated
 	}
 	result := &recordingReader{reader: source}
@@ -222,16 +307,18 @@ func newRecordingReader(source io.Reader) (*recordingReader, error) {
 }
 
 func (reader *recordingReader) Next() (recordingRecord, error) {
-	header := make([]byte, recordingRecordHeader)
-	read, err := io.ReadFull(reader.reader, header)
+	read, err := io.ReadFull(reader.reader, reader.header[:])
 	if err == io.EOF && read == 0 {
 		return recordingRecord{}, io.EOF
 	}
 	if err != nil {
+		if errors.Is(err, errRecordingTooLarge) {
+			return recordingRecord{}, err
+		}
 		return recordingRecord{}, errRecordingTruncated
 	}
-	kind := header[0]
-	elapsedValue := binary.LittleEndian.Uint64(header[1:9])
+	kind := reader.header[0]
+	elapsedValue := binary.LittleEndian.Uint64(reader.header[1:9])
 	if elapsedValue > uint64(1<<63-1) {
 		return recordingRecord{}, fmt.Errorf("recording timestamp exceeds limit")
 	}
@@ -240,14 +327,21 @@ func (reader *recordingReader) Next() (recordingRecord, error) {
 		return recordingRecord{}, fmt.Errorf("recording timestamps are not monotonic")
 	}
 	reader.lastElapsed = elapsed
-	rawSize := binary.LittleEndian.Uint32(header[9:13])
-	payloadSize := binary.LittleEndian.Uint32(header[13:17])
-	checksum := binary.LittleEndian.Uint32(header[17:21])
+	rawSize := binary.LittleEndian.Uint32(reader.header[9:13])
+	payloadSize := binary.LittleEndian.Uint32(reader.header[13:17])
+	checksum := binary.LittleEndian.Uint32(reader.header[17:21])
 	if payloadSize > maxRecordingPayload {
 		return recordingRecord{}, fmt.Errorf("recording payload size %d exceeds limit", payloadSize)
 	}
-	payload := make([]byte, payloadSize)
-	if _, err := io.ReadFull(reader.reader, payload); err != nil {
+	if cap(reader.payload) < int(payloadSize) {
+		reader.payload = make([]byte, payloadSize)
+	} else {
+		reader.payload = reader.payload[:payloadSize]
+	}
+	if _, err := io.ReadFull(reader.reader, reader.payload); err != nil {
+		if errors.Is(err, errRecordingTooLarge) {
+			return recordingRecord{}, err
+		}
 		return recordingRecord{}, errRecordingTruncated
 	}
 	result := recordingRecord{Kind: kind, Elapsed: elapsed}
@@ -255,10 +349,10 @@ func (reader *recordingReader) Next() (recordingRecord, error) {
 		if rawSize != 0 {
 			return recordingRecord{}, fmt.Errorf("recording event declares raw bytes")
 		}
-		if crc32.ChecksumIEEE(payload) != checksum {
+		if crc32.ChecksumIEEE(reader.payload) != checksum {
 			return recordingRecord{}, fmt.Errorf("recording event checksum mismatch")
 		}
-		if err := json.Unmarshal(payload, &result.Event); err != nil {
+		if err := json.Unmarshal(reader.payload, &result.Event); err != nil {
 			return recordingRecord{}, fmt.Errorf("decode recording event: %w", err)
 		}
 		return result, nil
@@ -266,37 +360,60 @@ func (reader *recordingReader) Next() (recordingRecord, error) {
 	if (kind != recordingFullSnapshot && kind != recordingDeltaSnapshot) || rawSize != lmuSharedMemoryPayloadSize {
 		return recordingRecord{}, fmt.Errorf("invalid recording snapshot header")
 	}
-	zipper, err := zlib.NewReader(bytes.NewReader(payload))
+	if len(reader.current) != int(rawSize) {
+		reader.current = make([]byte, rawSize)
+	}
+	reader.compressed.Reset(reader.payload)
+	if reader.zipper == nil {
+		reader.zipper, err = zlib.NewReader(&reader.compressed)
+	} else {
+		resetter, ok := reader.zipper.(zlib.Resetter)
+		if !ok {
+			return recordingRecord{}, fmt.Errorf("compressed snapshot reader cannot be reset")
+		}
+		err = resetter.Reset(&reader.compressed, nil)
+	}
 	if err != nil {
 		return recordingRecord{}, fmt.Errorf("open compressed snapshot: %w", err)
 	}
-	decoded, err := io.ReadAll(io.LimitReader(zipper, int64(rawSize)+1))
-	closeErr := zipper.Close()
-	if err != nil || closeErr != nil || len(decoded) != int(rawSize) {
+	decoded := reader.current
+	_, readErr := io.ReadFull(reader.zipper, decoded)
+	var extra [1]byte
+	extraBytes, extraErr := io.ReadFull(reader.zipper, extra[:])
+	closeErr := reader.zipper.Close()
+	if readErr != nil || extraBytes != 0 || extraErr != io.EOF || closeErr != nil {
 		return recordingRecord{}, fmt.Errorf("invalid compressed snapshot")
 	}
 	if kind == recordingDeltaSnapshot {
 		if len(reader.previous) != len(decoded) {
 			return recordingRecord{}, fmt.Errorf("delta snapshot has no keyframe")
 		}
-		for index := range decoded {
-			decoded[index] ^= reader.previous[index]
-		}
+		subtle.XORBytes(decoded, decoded, reader.previous)
 	}
 	if crc32.ChecksumIEEE(decoded) != checksum {
 		return recordingRecord{}, fmt.Errorf("recording snapshot checksum mismatch")
 	}
-	reader.previous = append(reader.previous[:0], decoded...)
+	// Raw is backed by two alternating reader-owned buffers. The caller may use
+	// it until the next call to Next; code that retains it longer must clone it.
+	// Replay decodes and emits each snapshot synchronously before advancing.
+	reader.current = reader.previous
+	reader.previous = decoded
 	result.Raw = decoded
 	return result, nil
 }
 
 func runReplay(output io.Writer, options cliOptions) error {
-	reader, file, err := openRecording(options.replayPath)
+	file, err := openRecordingFile(options.replayPath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
+	recordingHash := sha256.New()
+	guardedFile := &recordingSizeGuard{reader: file, remaining: maxRecordingBytes}
+	reader, err := newRecordingReader(io.TeeReader(guardedFile, recordingHash))
+	if err != nil {
+		return err
+	}
 	encoder := json.NewEncoder(output)
 	startTime, _ := time.Parse(time.RFC3339Nano, reader.Metadata.CreatedAt)
 	_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-starting", Message: "Replaying raw LMU shared-memory recording"})
@@ -304,9 +421,11 @@ func runReplay(output io.Writer, options cliOptions) error {
 	var sequence uint64
 	lastIssue := ""
 	var decodeIssues decodeIssueTracker
+	completeStream := false
 	for {
 		record, readErr := reader.Next()
 		if readErr == io.EOF {
+			completeStream = true
 			break
 		}
 		if errors.Is(readErr, errRecordingTruncated) {
@@ -326,6 +445,17 @@ func runReplay(output io.Writer, options cliOptions) error {
 			}
 		}
 		if record.Raw == nil {
+			// Reproduce only source-lifecycle truth from the capture. Historical
+			// decoder errors and their free-text messages are deliberately ignored:
+			// the current decoder derives those states again from the raw snapshot,
+			// and the recorded message may contain private scoring identity data.
+			if detail, ok := replayableRecordingLifecycleStates[record.Event.State]; ok {
+				capturedAt := startTime.Add(record.Elapsed)
+				_ = emit(encoder, message{
+					Source: recordingReplaySource, RunID: options.runID, Type: "status", State: record.Event.State,
+					Message: detail, CapturedAt: capturedAt.Format(time.RFC3339Nano),
+				})
+			}
 			continue
 		}
 		decoded, decodeErr := decodeSnapshot(record.Raw)
@@ -334,6 +464,14 @@ func runReplay(output io.Writer, options cliOptions) error {
 			if state != lastIssue {
 				_ = emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: state, Message: decodeErr.Error()})
 				lastIssue = state
+			}
+			// A missing player vehicle is an expected LMU lifecycle state: scoring
+			// can exist before a uniquely selected car does. Every other decoder
+			// rejection means strict import did not pass every reconstructed raw
+			// snapshot through the current contract, so fail without completion.
+			// Do not wrap decodeErr here because it may contain private driver data.
+			if options.replayStrict && !errors.Is(decodeErr, errLMUPlayerHasNoVehicle) {
+				return fmt.Errorf("%w (%s at %s)", errRecordingDecode, state, record.Elapsed)
 			}
 			continue
 		}
@@ -347,5 +485,12 @@ func runReplay(output io.Writer, options cliOptions) error {
 			PlayerTelemetryAvailable: decoded.PlayerTelemetryAvailable,
 		})
 	}
-	return emit(encoder, message{Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-complete", Message: "Recording replay complete", Frames: int(sequence)})
+	completion := message{
+		Source: recordingReplaySource, RunID: options.runID, Type: "status", State: "replay-complete",
+		Message: "Recording replay complete", Frames: int(sequence),
+	}
+	if completeStream {
+		completion.RecordingSHA256 = fmt.Sprintf("%x", recordingHash.Sum(nil))
+	}
+	return emit(encoder, completion)
 }

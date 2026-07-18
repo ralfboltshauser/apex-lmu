@@ -1,0 +1,43 @@
+.recording-import-card { margin-bottom: 11px; overflow: hidden; background: radial-gradient(circle at 100% 0, rgba(185,243,74,.07), transparent 28%), var(--surface); }
+.recording-import-card .card-header { align-items: center; }
+.recording-import-card__actions { display: flex; align-items: center; gap: 7px; }
+.recording-import-card__detail { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; color: var(--positive); }
+.recording-import-card__detail > span { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.recording-import-card__detail strong { color: var(--text-secondary); font-size: 8px; font-weight: 560; line-height: 1.45; }
+.recording-import-card__detail small { overflow: hidden; color: var(--text-tertiary); font: 7px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.recording-import-card > .progress { margin-top: 9px; }
+.recording-import-card.is-error .recording-import-card__detail { color: var(--warning); }
+
+.session-debrief { margin-bottom: 11px; }
+.session-debrief__provenance { margin: 9px 0 0; color: var(--text-tertiary); font: 7px var(--mono); }
+.session-debrief__metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 14px; }
+.session-debrief__metrics > div { min-width: 0; display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 4px 6px; border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: var(--surface-2); }
+.session-debrief__metrics svg { grid-row: 1 / 4; align-self: start; margin-top: 1px; color: var(--text-tertiary); }
+.session-debrief__metrics span { overflow: hidden; color: var(--text-tertiary); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.session-debrief__metrics strong { overflow: hidden; font: 13px var(--mono); font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
+.session-debrief__metrics small { overflow: hidden; color: var(--text-tertiary); font-size: 6px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.session-debrief__quality { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; }
+.session-debrief__quality > span:not(.badge) { display: inline-flex; align-items: center; gap: 5px; color: var(--text-tertiary); font-size: 7px; line-height: 1.4; }
+.session-debrief__quality > span:nth-last-child(1) { min-width: 240px; flex: 1; justify-content: flex-end; text-align: right; }
+.session-debrief__quality .is-ready { color: var(--positive) !important; }
+.session-debrief__quality .is-limited { color: var(--warning) !important; }
+.session-debrief__ledger-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; border-top: 1px solid var(--line); padding-top: 12px; }
+.session-debrief__ledger-heading > div { display: flex; flex-direction: column; gap: 4px; }
+.session-debrief__ledger-heading strong { font-size: 9px; }
+.session-debrief__ledger-heading span { color: var(--text-tertiary); font-size: 7px; }
+.session-debrief__ledger { max-height: 310px; margin-top: 9px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: #0c0e0f; }
+.session-debrief__ledger-header, .session-debrief__ledger > button { min-width: 800px; display: grid; grid-template-columns: 55px 115px 115px 140px 115px minmax(210px, 1fr); align-items: center; gap: 7px; padding: 8px 10px; text-align: left; }
+.session-debrief__ledger-header { position: sticky; z-index: 1; top: 0; border-bottom: 1px solid var(--line); background: #111314; color: var(--text-tertiary); font-size: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.session-debrief__ledger > button { width: 100%; border: 0; border-bottom: 1px solid rgba(255,255,255,.045); background: transparent; color: var(--text-secondary); cursor: pointer; font: 8px var(--mono); }
+.session-debrief__ledger > button:last-child { border-bottom: 0; }
+.session-debrief__ledger > button:hover { background: rgba(255,255,255,.025); }
+.session-debrief__ledger > button.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.session-debrief__ledger > button > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.session-debrief__ledger > button > span:first-child { flex-direction: row; align-items: center; gap: 5px; }
+.session-debrief__ledger > button small { overflow: hidden; color: var(--text-tertiary); font: 6px/1.35 var(--sans); text-overflow: ellipsis; white-space: nowrap; }
+.session-debrief__ledger > button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 1240px) {
+  .session-debrief__metrics { grid-template-columns: repeat(2, 1fr); }
+  .session-debrief__quality > span:nth-last-child(1) { min-width: 100%; justify-content: flex-start; text-align: left; }
+}

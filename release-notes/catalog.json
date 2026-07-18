@@ -2,27 +2,61 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.0",
+      "releasedAt": "2026-07-18",
+      "en": {
+        "title": "Private race memory from raw recordings",
+        "summary": "Apex can now rebuild an explicitly selected .apexrec recording through the installed decoder into durable local Analysis, then describe only the pace and quality that LMU's measured evidence supports.",
+        "highlights": [
+          { "id": "private-race-memory", "title": "Import a complete recording into Analysis", "body": "Import reconstructs every raw snapshot through the current decoder, writes into an isolated staging database, verifies the exact decoded byte stream and staged payloads, then commits the complete batch atomically. Cancellation, corruption, protocol faults and storage failures expose no partial history." },
+          { "id": "official-session-debrief", "title": "Debrief authoritative lap evidence", "body": "Best lap, median pace, consistency, second-half change and the lap ledger use only positive lap times published by LMU. Untimed laps can retain their measured trace, but cannot silently become pace, a personal best or a comparison reference." },
+          { "id": "recording-calibrated-quality", "title": "Judge route quality at LMU's measured cadence", "body": "The versioned quality policy now uses 16 m circular coverage bins plus a separate 32 m maximum-gap guard, correcting false rejections caused by roughly 14–15.5 m scoring-distance updates while still rejecting real holes and incomplete laps." },
+          { "id": "isolated-private-import", "title": "Keep recording history private and separate", "body": "The absolute source path never enters renderer state, diagnostics or durable history. Imported frames cannot feed the live overlay, lifetime distance or fuel calibration; ordinary Replay remains transient, and a complete matching import is deduplicated locally by recording hash and processing version." }
+        ],
+        "knownLimitations": [
+          { "id": "legacy-timing-provenance", "title": "Unproven legacy times are not pace", "body": "Previously retained laps without durable proof that LMU published their time keep their trace but expose no pace, PB or learned-track eligibility. Re-importing the raw recording with this version can rebuild authoritative provenance." },
+          { "id": "session-mode", "title": "The raw mapping does not identify race mode", "body": "Online and offline sessions use the same supported decoder path, but the current LMU shared-memory contract has no authoritative online/offline field. Apex therefore never infers mode from opponent count or other circumstantial data." },
+          { "id": "whole-file-verification", "title": "A first import verifies the whole file", "body": "Apex reads the selected recording completely for preflight hashing, strict decoding and commit-boundary verification. Work is accelerated without captured-time waits, but large recordings can still take time. Analysis retains at most 40 sessions and 2 GiB of compressed lap traces, so a successful import can replace older retained sessions." }
+        ]
+      },
+      "de": {
+        "title": "Privates Renngedächtnis aus Rohaufzeichnungen",
+        "summary": "Apex kann eine ausdrücklich gewählte .apexrec-Aufzeichnung jetzt mit dem installierten Decoder in die dauerhafte lokale Analyse übertragen und beschreibt danach nur Tempo und Qualität, die durch gemessene LMU-Daten belegt sind.",
+        "highlights": [
+          { "id": "private-race-memory", "title": "Importiere eine vollständige Aufzeichnung in die Analyse", "body": "Der Import rekonstruiert jeden Rohdaten-Snapshot mit dem aktuellen Decoder, schreibt in eine isolierte Staging-Datenbank, prüft den exakt decodierten Bytestrom und alle zwischengespeicherten Nutzdaten und überträgt danach den vollständigen Satz atomar. Abbruch, Beschädigung, Protokollfehler und Speicherfehler machen keinen Teilverlauf sichtbar." },
+          { "id": "official-session-debrief", "title": "Werte verbindliche Rundenbelege aus", "body": "Beste Runde, Mediandauer, Konstanz, Veränderung in der zweiten Hälfte und das Rundenprotokoll verwenden ausschließlich positive, von LMU veröffentlichte Rundenzeiten. Runden ohne Zeit können ihre gemessene Spur behalten, werden aber nicht unbemerkt zu Tempo, persönlicher Bestzeit oder Vergleichsreferenz." },
+          { "id": "recording-calibrated-quality", "title": "Bewerte die Streckenqualität im gemessenen LMU-Takt", "body": "Die versionierte Qualitätsregel nutzt jetzt umlaufende 16-m-Abdeckungssegmente und zusätzlich einen maximalen Abstand von 32 m. Dadurch verschwinden falsche Ablehnungen bei ungefähr 14–15,5 m großen Wertungsdistanz-Schritten, während echte Lücken und unvollständige Runden weiterhin abgelehnt werden." },
+          { "id": "isolated-private-import", "title": "Halte Aufzeichnungsverlauf privat und getrennt", "body": "Der absolute Quellpfad gelangt weder in den Renderer-Zustand noch in Diagnosen oder den dauerhaften Verlauf. Importierte Frames können weder Live-Overlay, Gesamtdistanz noch Kraftstoffkalibrierung speisen; die normale Wiedergabe bleibt flüchtig, und ein vollständig vorhandener Import wird lokal anhand von Aufzeichnungshash und Verarbeitungsversion dedupliziert." }
+        ],
+        "knownLimitations": [
+          { "id": "legacy-timing-provenance", "title": "Unbelegte ältere Zeiten gelten nicht als Tempo", "body": "Früher gespeicherte Runden ohne dauerhaften Nachweis einer von LMU veröffentlichten Zeit behalten ihre Spur, zeigen aber weder Tempo noch PB- oder Streckenmodell-Eignung. Ein erneuter Import der Rohaufzeichnung mit dieser Version kann die verbindliche Herkunft wiederherstellen." },
+          { "id": "session-mode", "title": "Die Rohdatenabbildung kennzeichnet den Rennmodus nicht", "body": "Online- und Offline-Sessions verwenden denselben unterstützten Decoderpfad, doch der aktuelle LMU-Shared-Memory-Vertrag enthält kein verbindliches Online-/Offline-Feld. Apex leitet den Modus deshalb weder aus der Gegnerzahl noch aus anderen Indizien ab." },
+          { "id": "whole-file-verification", "title": "Ein erster Import prüft die gesamte Datei", "body": "Apex liest die gewählte Aufzeichnung vollständig für Vorab-Hash, strikte Decodierung und Prüfung an der Commit-Grenze. Die Verarbeitung läuft ohne aufgezeichnete Zeitpausen, doch große Aufzeichnungen können weiterhin Zeit benötigen. Die Analyse behält höchstens 40 Sessions und 2 GiB komprimierte Rundendaten, daher kann ein erfolgreicher Import ältere gespeicherte Sessions ersetzen." }
+        ]
+      }
+    },
+    {
       "version": "0.2.6",
       "releasedAt": "2026-07-17",
       "en": {
-        "title": "Reliable online LMU telemetry",
-        "summary": "Online races now stay live when LMU publishes transitional scoring values, while unavailable distances and gaps remain explicit instead of becoming invented timing.",
+        "title": "Reliable LMU scoring transitions",
+        "summary": "Sessions now stay live when LMU publishes transitional scoring values, while unavailable distances and gaps remain explicit instead of becoming invented timing.",
         "highlights": [
           { "id": "online-scoring", "title": "Keep multi-car races connected", "body": "The bridge now recognizes bounded signed lap-distance and timing transitions plus LMU's unavailable session-end sentinel. One opponent's transitional scoring no longer discards an otherwise coherent player snapshot." },
           { "id": "truthful-unavailable", "title": "Show absence instead of a false number", "body": "Protocol v2 carries unavailable normalized lap distances, session timing and relative gaps as null. Apex keeps the bounded signed lap coordinate separately for start/finish detection, but never presents it as lap progress or opponent timing." },
-          { "id": "recording-proof", "title": "Verified across online and offline races", "body": "A private raw recording replayed 422,467 usable frames through the current decoder, Electron, Live view and analysis store: 358,720 multi-car frames across two online races plus the complete solo session, with no invalid-data rejection." }
+          { "id": "recording-proof", "title": "Verified across populated and solo-car sessions", "body": "A private raw recording replayed 422,467 usable frames through the current decoder, including 358,720 frames with opponents and 63,747 without. Those population regimes do not by themselves identify online or offline mode, which the current LMU contract does not expose authoritatively." }
         ],
         "knownLimitations": [
           { "id": "unavailable-gaps", "title": "Transitional gaps remain unavailable", "body": "When LMU publishes a negative or unavailable relative-timing value, Apex shows no gap until a non-negative value arrives rather than guessing what the producer meant." }
         ]
       },
       "de": {
-        "title": "Zuverlässige Online-LMU-Telemetrie",
-        "summary": "Online-Rennen bleiben jetzt live, wenn LMU vorübergehende Wertungswerte veröffentlicht. Nicht verfügbare Distanzen und Abstände bleiben ausdrücklich unbekannt, statt erfundene Zeiten zu erzeugen.",
+        "title": "Zuverlässige LMU-Wertungsübergänge",
+        "summary": "Sessions bleiben jetzt live, wenn LMU vorübergehende Wertungswerte veröffentlicht. Nicht verfügbare Distanzen und Abstände bleiben ausdrücklich unbekannt, statt erfundene Zeiten zu erzeugen.",
         "highlights": [
           { "id": "online-scoring", "title": "Rennen mit mehreren Fahrzeugen bleiben verbunden", "body": "Die Bridge erkennt jetzt begrenzte vorzeichenbehaftete Übergänge bei Rundendistanz und Zeit sowie den LMU-Platzhalter für eine nicht verfügbare Session-Endzeit. Ein vorübergehender Wert eines Gegners verwirft dadurch keinen ansonsten stimmigen Spieler-Snapshot mehr." },
           { "id": "truthful-unavailable", "title": "Zeige Abwesenheit statt einer falschen Zahl", "body": "Protokoll v2 überträgt nicht verfügbare normalisierte Rundendistanzen, Sessionzeiten und relative Abstände als null. Apex behält die begrenzte vorzeichenbehaftete Rundenkoordinate separat für die Erkennung von Start und Ziel, zeigt sie aber nie als Rundenfortschritt oder Gegnerabstand an." },
-          { "id": "recording-proof", "title": "Mit Online- und Offline-Rennen geprüft", "body": "Eine private Rohdatenaufzeichnung spielte 422.467 nutzbare Frames durch den aktuellen Decoder, Electron, die Live-Ansicht und den Analysespeicher: 358.720 Mehrfahrzeug-Frames aus zwei Online-Rennen sowie die vollständige Solo-Session – ohne Zurückweisung wegen ungültiger Daten." }
+          { "id": "recording-proof", "title": "Mit belegten Mehr- und Einzelfahrzeug-Sessions geprüft", "body": "Eine private Rohdatenaufzeichnung spielte 422.467 nutzbare Frames durch den aktuellen Decoder, darunter 358.720 Frames mit Gegnern und 63.747 ohne. Diese Belegung beweist allein weder Online- noch Offline-Modus; der aktuelle LMU-Vertrag stellt diesen Modus nicht verbindlich bereit." }
         ],
         "knownLimitations": [
           { "id": "unavailable-gaps", "title": "Vorübergehende Abstände bleiben nicht verfügbar", "body": "Wenn LMU einen negativen oder nicht verfügbaren relativen Zeitwert veröffentlicht, zeigt Apex keinen Abstand, bis ein nicht negativer Wert eintrifft, statt die Bedeutung des Produzenten zu erraten." }

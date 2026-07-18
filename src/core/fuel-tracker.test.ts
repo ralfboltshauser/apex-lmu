@@ -33,4 +33,16 @@ describe('live fuel tracker', () => {
     const preRace = { ...frame(1, 1, 0), sourceState: 'session-only' as const }
     expect(updateFuelTracker(emptyFuelTracker(), preRace)).toEqual(emptyFuelTracker())
   })
+
+  it('cannot replace live calibration with recording replay frames', () => {
+    let live = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 60))
+    live = updateFuelTracker(live, frame(2, 2, 56.5))
+    const replay = {
+      ...frame(3, 7, 12),
+      source: 'recording-replay' as const,
+      session: { ...frame(3, 7, 12).session, id: 'replay-session' },
+    }
+
+    expect(updateFuelTracker(live, replay)).toBe(live)
+  })
 })
