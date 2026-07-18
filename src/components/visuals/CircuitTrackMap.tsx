@@ -331,7 +331,8 @@ export function CircuitTrackMap({
                 style={style}
                 role={onCarSelect ? "button" : undefined}
                 tabIndex={onCarSelect ? 0 : undefined}
-                aria-label={formatMessage(m.carPosition, { car: car.label ?? formatMessage(m.car, { number: car.number }), percent: Math.round(wrapProgress(progress) * 100) })}
+                aria-hidden={onCarSelect ? undefined : true}
+                aria-label={onCarSelect ? formatMessage(m.carPosition, { car: car.label ?? formatMessage(m.car, { number: car.number }), percent: Math.round(wrapProgress(progress) * 100) }) : undefined}
                 onClick={onCarSelect ? () => onCarSelect(car) : undefined}
                 onKeyDown={(event) => onKeyDown(event, car)}
                 filter={`url(#${uid}-car-shadow)`}

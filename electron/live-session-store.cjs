@@ -1,4 +1,5 @@
 const crypto = require('node:crypto')
+const { playbackSamples } = require('./lap-sample-sanitizer.cjs')
 
 const SCHEMA_VERSION = 1
 const QUALITY_POLICY_VERSION = 'lap-quality-v2'
@@ -13,6 +14,7 @@ const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024
 const OFFICIAL_LAP_TIME_GRACE_SECONDS = 1
 const OFFICIAL_LAP_TIME_GRACE_FRAMES = 100
 const REPLAY_IDENTITY_VERSION = 'recording-replay-identity-v1'
+const DRIVER_REVIEW_MAX_EVIDENCE_LAPS = 16
 
 function finite(value) { return typeof value === 'number' && Number.isFinite(value) }
 function normalize(value) { return String(value || '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ') }
@@ -100,6 +102,100 @@ function classifyLap(lap, trackLengthM) {
       ? 'limited'
       : 'ineligible'
   return { quality, reasons: [...reasons].sort(), coverage, maximumGapM }
+}
+
+const DRIVER_REVIEW_EXCLUSION_KEYS = [
+  'not-complete',
+  'not-official',
+  'not-clean',
+  'not-reference-eligible',
+  'not-replayable',
+  'payload-unavailable',
+  'payload-evicted',
+  'cohort-limit',
+]
+
+/** Return every directly observed reason for withholding a lap. */
+function driverReviewLapExclusions(lap, payloadUnavailableReason) {
+  const reasons = []
+  if (lap?.state !== 'complete') reasons.push('not-complete')
+  if (lap?.timingSource !== 'official' || !finite(lap?.lapTimeMs) || lap.lapTimeMs <= 0) reasons.push('not-official')
+  if (lap?.quality !== 'clean') reasons.push('not-clean')
+  if (lap?.referenceEligible !== true) reasons.push('not-reference-eligible')
+  if (lap?.replayable !== true) reasons.push('not-replayable')
+  if (lap?.samplesAvailable !== true) reasons.push(lap?.driverReviewPayloadState === 'evicted' ? 'payload-evicted' : payloadUnavailableReason)
+  return reasons
+}
+
+function compareDriverReviewIds(left, right) {
+  const a = String(left)
+  const b = String(right)
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+function chronologicalDriverReviewLaps(laps) {
+  return laps.map((lap, index) => ({ lap, index })).sort((left, right) => (
+    Number(left.lap.number) - Number(right.lap.number)
+    || compareDriverReviewIds(left.lap.id, right.lap.id)
+    || left.index - right.index
+  )).map(({ lap }) => lap)
+}
+
+function deterministicChronologicalSample(laps, maximum) {
+  if (maximum <= 0 || laps.length === 0) return []
+  if (laps.length <= maximum) return [...laps]
+  if (maximum === 1) return [laps[Math.floor((laps.length - 1) / 2)]]
+  const selected = []
+  for (let index = 0; index < maximum; index += 1) {
+    selected.push(laps[Math.round(index * (laps.length - 1) / (maximum - 1))])
+  }
+  return selected
+}
+
+/**
+ * Select a bounded, representative same-session cohort. The fastest eligible
+ * reference and an explicitly selected eligible lap are pinned; remaining
+ * slots are sampled evenly across chronological lap order.
+ */
+function selectDriverReviewEvidence(laps, selectedLapId = null, maximum = DRIVER_REVIEW_MAX_EVIDENCE_LAPS, payloadUnavailableReason = 'payload-unavailable') {
+  const safeLaps = Array.isArray(laps) ? laps : []
+  const limit = Math.max(1, Math.min(DRIVER_REVIEW_MAX_EVIDENCE_LAPS, Number.isSafeInteger(maximum) ? maximum : DRIVER_REVIEW_MAX_EVIDENCE_LAPS))
+  const exclusions = Object.fromEntries(DRIVER_REVIEW_EXCLUSION_KEYS.map((key) => [key, 0]))
+  const eligible = []
+  for (const lap of safeLaps) {
+    const reasons = driverReviewLapExclusions(lap, payloadUnavailableReason === 'payload-evicted' ? 'payload-evicted' : 'payload-unavailable')
+    for (const reason of reasons) exclusions[reason] += 1
+    if (reasons.length > 0) continue
+    eligible.push(lap)
+  }
+  const chronological = chronologicalDriverReviewLaps(eligible)
+  const reference = [...eligible].sort((left, right) => (
+    left.lapTimeMs - right.lapTimeMs
+    || Number(left.number) - Number(right.number)
+    || compareDriverReviewIds(left.id, right.id)
+  ))[0] ?? null
+  const selected = selectedLapId ? eligible.find((lap) => lap.id === selectedLapId) ?? null : null
+  const pinnedIds = new Set([reference?.id, selected?.id].filter(Boolean))
+  const pinned = chronological.filter((lap) => pinnedIds.has(lap.id))
+  const unpinned = chronological.filter((lap) => !pinnedIds.has(lap.id))
+  const sampled = chronologicalDriverReviewLaps([
+    ...pinned,
+    ...deterministicChronologicalSample(unpinned, Math.max(0, limit - pinned.length)),
+  ])
+  exclusions['cohort-limit'] = Math.max(0, eligible.length - sampled.length)
+  return {
+    laps: sampled,
+    referenceLapId: reference?.id ?? null,
+    selectedLapEligible: selectedLapId ? Boolean(selected) : null,
+    accounting: {
+      totalLapCount: safeLaps.length,
+      strictEligibleTotal: eligible.length,
+      sampledLapCount: sampled.length,
+      strictExcludedTotal: safeLaps.length - eligible.length,
+      notDecodedDueToLimit: Math.max(0, eligible.length - sampled.length),
+      exclusions,
+    },
+  }
 }
 
 class LiveSessionStore {
@@ -500,7 +596,13 @@ class LiveSessionStore {
       },
       samples: fullSamples,
     }
-    lap.samples = compactSamples(fullSamples)
+    // Retain the checksum-bearing finalized event exactly as captured, but do
+    // not let LMU's bounded finish-line producer transition break in-memory
+    // playback. Near misses remain untouched and therefore fail visibly.
+    lap.samples = compactSamples(playbackSamples(fullSamples, {
+      trackLengthM: this.active.track.lengthM,
+      officialLapTimeMs: lap.lapTimeMs,
+    }))
     if (!this.active.laps.includes(lap)) this.active.laps.push(lap)
     if (this.active.currentLap === lap) this.active.currentLap = null
     if (state === 'complete') this.health.completedLaps += 1
@@ -581,7 +683,55 @@ class LiveSessionStore {
     if (!session) return null
     const lap = session.currentLap?.id === lapId ? session.currentLap : session.laps.find((candidate) => candidate.id === lapId)
     if (!lap) return null
-    return { schemaVersion: SCHEMA_VERSION, session: this.sessionSummary(session), lap: this.lapSummary(lap, session.track.lengthM), samples: lap.samples?.map((sample) => ({ ...sample })) ?? null }
+    const summary = this.lapSummary(lap, session.track.lengthM)
+    const samples = lap.samples?.map((sample) => ({ ...sample })) ?? null
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      session: this.sessionSummary(session),
+      lap: summary,
+      samples: samples ? playbackSamples(samples, { trackLengthM: session.track.lengthM, officialLapTimeMs: summary.lapTimeMs }) : null,
+    }
+  }
+
+  getDriverReviewEvidence(sessionId, selectedLapId = null) {
+    const session = this.sessions.find((candidate) => candidate.id === sessionId)
+    if (!session) return null
+    const summary = this.sessionSummary(session)
+    if (selectedLapId && !summary.laps.some((lap) => lap.id === selectedLapId)) return { status: 'selected-lap-not-found' }
+    const storedLaps = new Map([...session.laps, ...(session.currentLap ? [session.currentLap] : [])].map((lap) => [lap.id, lap]))
+    const reviewSummaries = summary.laps.map((lap) => {
+      const stored = storedLaps.get(lap.id)
+      const evicted = !lap.samplesAvailable && Number(stored?.sampleCount) > 0 && stored?.samples === null
+      return { ...lap, driverReviewPayloadState: evicted ? 'evicted' : 'unavailable' }
+    })
+    const selection = selectDriverReviewEvidence(reviewSummaries, selectedLapId)
+    const laps = []
+    for (const lap of selection.laps) {
+      const payload = this.getLap(sessionId, lap.id)
+      // The authoritative summary can explicitly report an evicted payload.
+      // A payload disappearing after selection is also withheld rather than
+      // being promoted into inferred evidence.
+      if (!payload?.samples?.length) continue
+      laps.push(payload)
+    }
+    const unavailableAfterSelection = selection.laps.length - laps.length
+    if (unavailableAfterSelection > 0) {
+      selection.accounting.sampledLapCount = laps.length
+      selection.accounting.strictEligibleTotal -= unavailableAfterSelection
+      selection.accounting.strictExcludedTotal += unavailableAfterSelection
+      selection.accounting.exclusions['payload-evicted'] += unavailableAfterSelection
+    }
+    return {
+      status: 'ready',
+      input: {
+        sessionId,
+        trackLengthM: summary.track.lengthM,
+        selectedLapId,
+        laps,
+        referenceLapId: selection.referenceLapId,
+        evidence: selection.accounting,
+      },
+    }
   }
 
   /** Lightweight import progress that never reclassifies or sorts lap samples. */
@@ -596,4 +746,4 @@ class LiveSessionStore {
   record(level, event, message, details) { void this.logger?.record(level, 'analysis-session', event, message, details) }
 }
 
-module.exports = { LiveSessionStore, compactSamples, classifyLap, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_CLEAN_GAP_M, MAX_FINAL_SAMPLES, MAX_CURRENT_SAMPLES, ESTIMATED_SAMPLE_BYTES, DEFAULT_MEMORY_BUDGET, OFFICIAL_LAP_TIME_GRACE_SECONDS, OFFICIAL_LAP_TIME_GRACE_FRAMES, REPLAY_IDENTITY_VERSION } }
+module.exports = { LiveSessionStore, compactSamples, classifyLap, selectDriverReviewEvidence, constants: { SCHEMA_VERSION, QUALITY_POLICY_VERSION, COVERAGE_BIN_M, CLEAN_COVERAGE, LIMITED_COVERAGE, MAX_CLEAN_GAP_M, MAX_FINAL_SAMPLES, MAX_CURRENT_SAMPLES, ESTIMATED_SAMPLE_BYTES, DEFAULT_MEMORY_BUDGET, OFFICIAL_LAP_TIME_GRACE_SECONDS, OFFICIAL_LAP_TIME_GRACE_FRAMES, REPLAY_IDENTITY_VERSION, DRIVER_REVIEW_MAX_EVIDENCE_LAPS } }

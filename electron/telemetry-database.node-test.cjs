@@ -5,6 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { DatabaseSync } = require('node:sqlite')
 const { TelemetryDatabase } = require('./telemetry-database.cjs')
+const { buildDriverReview } = require('./driver-review.cjs')
 const { constants: { QUALITY_POLICY_VERSION } } = require('./live-session-store.cjs')
 
 function event({ sessionId = 'session-1', lapId = 'lap-1', lapNumber = 1, lapTimeMs = 90_000, timingSource = lapTimeMs === null ? 'unavailable' : 'official', source = 'live', lateral = 2, startedAt = '2026-07-13T10:00:00.000Z', trackKey = 'test||628', trackName = 'Test', layoutName = '', carId = 7, carName = 'Test Car', carClass = 'GT3', qualityPolicyVersion = QUALITY_POLICY_VERSION } = {}) {
@@ -21,6 +22,22 @@ function event({ sessionId = 'session-1', lapId = 'lap-1', lapNumber = 1, lapTim
     lap: { id: lapId, number: lapNumber, state: 'complete', startedAt, endedAt: startedAt, lapTimeMs, timingSource, quality: 'clean', reasons: [], coverage: 1, maximumGapM: 1, sampleCount: samples.length, replayable: true, referenceEligible: timingSource === 'official', trackModelEligible: timingSource === 'official' },
     samples,
   }
+}
+
+const CANONICAL_TERMINAL_SUFFIX_MS = [2.505, 22.505, 42.505, 62.505, 82.505, 102.505, 122.505, 142.505, 162.505]
+
+function terminalBoundaryEvent(resetElapsedMs = CANONICAL_TERMINAL_SUFFIX_MS) {
+  const finalized = event({ lapTimeMs: 15_700 })
+  const endpoint = finalized.samples.at(-1)
+  const suffix = Array.isArray(resetElapsedMs) ? resetElapsedMs : [resetElapsedMs]
+  suffix.forEach((lapElapsedMs, index) => {
+    finalized.samples.push({
+      ...endpoint,
+      elapsedSeconds: endpoint.elapsedSeconds + (index + 1) * 0.02,
+      lapElapsedSeconds: lapElapsedMs / 1000,
+    })
+  })
+  return finalized
 }
 
 async function temporary() { return fs.mkdtemp(path.join(os.tmpdir(), 'apex-telemetry-db-')) }
@@ -130,6 +147,146 @@ test('payload corruption is detected before samples reach the renderer', async (
   database = await TelemetryDatabase.open({ userDataPath: root, databasePath, appVersion: '1.0.0' })
   assert.throws(() => database.getLap('session-1', 'lap-1'))
   await database.close()
+})
+
+test('durable subject and PB playback withhold only the proven terminal timestamp suffix', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  const finalized = terminalBoundaryEvent()
+  await database.enqueueFinalized(finalized)
+
+  const canonical = database.getLap('session-1', 'lap-1', { sanitizeForPlayback: false })
+  const playback = database.getLap('session-1', 'lap-1')
+  assert.equal(canonical.samples.length, finalized.samples.length)
+  const resetIndex = canonical.samples.length - CANONICAL_TERMINAL_SUFFIX_MS.length
+  assert.ok(canonical.samples[resetIndex].lapElapsedSeconds < canonical.samples[resetIndex - 1].lapElapsedSeconds)
+  assert.equal(playback.samples.length, finalized.samples.length - CANONICAL_TERMINAL_SUFFIX_MS.length)
+  assert.equal(playback.personalBest.samples.length, finalized.samples.length - CANONICAL_TERMINAL_SUFFIX_MS.length)
+  assert.equal(playback.payloadHash, canonical.payloadHash, 'hash continues to identify the validated canonical bytes')
+  assert.ok(playback.samples.every((sample, index, samples) => index === 0 || sample.lapElapsedSeconds >= samples[index - 1].lapElapsedSeconds))
+
+  const evidence = database.getDriverReviewEvidence('session-1')
+  const review = buildDriverReview(evidence.input)
+  assert.equal(review.status.code, 'insufficient-evidence')
+  assert.equal(review.reference.lapId, 'lap-1')
+  await database.close()
+})
+
+test('a near-miss terminal reset is preserved for playback and rejected by review validation', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  const finalized = terminalBoundaryEvent(251)
+  await database.enqueueFinalized(finalized)
+
+  const playback = database.getLap('session-1', 'lap-1')
+  assert.equal(playback.samples.length, finalized.samples.length)
+  const evidence = database.getDriverReviewEvidence('session-1')
+  const review = buildDriverReview(evidence.input)
+  assert.equal(review.status.code, 'invalid-input')
+  assert.equal(review.status.reasonCode, 'lap-samples-decreasing')
+  await database.close()
+})
+
+test('driver review decodes only a bounded same-session cohort and pins its fastest reference and selected lap', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  for (let index = 1; index <= 24; index += 1) {
+    await database.enqueueFinalized(event({
+      lapId: `lap-${String(index).padStart(2, '0')}`,
+      lapNumber: index,
+      lapTimeMs: index === 20 ? 88_000 : 90_000 + index,
+    }))
+  }
+  await database.enqueueFinalized(event({
+    sessionId: 'other-session',
+    lapId: 'other-faster-lap',
+    lapTimeMs: 70_000,
+    trackKey: 'other||628',
+    trackName: 'Other',
+    startedAt: '2026-07-13T11:00:00.000Z',
+  }))
+
+  const evidence = database.getDriverReviewEvidence('session-1', 'lap-12')
+  assert.equal(evidence.status, 'ready')
+  assert.equal(evidence.input.referenceLapId, 'lap-20')
+  assert.equal(evidence.input.laps.length, 16)
+  assert.ok(evidence.input.laps.some((payload) => payload.lap.id === 'lap-12'))
+  assert.ok(evidence.input.laps.some((payload) => payload.lap.id === 'lap-20'))
+  assert.ok(evidence.input.laps.every((payload) => payload.session.id === 'session-1'))
+  assert.ok(evidence.input.laps.every((payload) => !Object.hasOwn(payload, 'trackModel') && !Object.hasOwn(payload, 'personalBest')))
+  assert.deepEqual(evidence.input.evidence, {
+    totalLapCount: 24,
+    strictEligibleTotal: 24,
+    sampledLapCount: 16,
+    strictExcludedTotal: 0,
+    notDecodedDueToLimit: 8,
+    exclusions: {
+      'not-complete': 0,
+      'not-official': 0,
+      'not-clean': 0,
+      'not-reference-eligible': 0,
+      'not-replayable': 0,
+      'payload-unavailable': 0,
+      'payload-evicted': 0,
+      'cohort-limit': 8,
+    },
+  })
+  assert.equal(database.getDriverReviewEvidence('session-1', 'other-faster-lap').status, 'selected-lap-not-found')
+  await database.close()
+})
+
+test('driver review accounts for unavailable durable payloads without decoding them', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  await database.enqueueFinalized(event({ lapId: 'available-lap' }))
+  await database.enqueueFinalized(event({ lapId: 'missing-lap', lapNumber: 2, lapTimeMs: 91_000 }))
+  database.database.prepare("DELETE FROM lap_payloads WHERE lap_id='missing-lap'").run()
+
+  const evidence = database.getDriverReviewEvidence('session-1')
+  assert.equal(evidence.status, 'ready')
+  assert.deepEqual(evidence.input.laps.map((payload) => payload.lap.id), ['available-lap'])
+  assert.equal(evidence.input.evidence.strictEligibleTotal, 1)
+  assert.equal(evidence.input.evidence.strictExcludedTotal, 1)
+  assert.equal(evidence.input.evidence.exclusions['payload-unavailable'], 1)
+  await database.close()
+})
+
+test('a durable storage fault withholds review evidence without exposing fault details', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  await database.enqueueFinalized(event({ lapId: 'durable-prefix-lap' }))
+  database.fault = `write failed beside ${path.join(root, 'private-driver-name')}`
+
+  const evidence = database.getDriverReviewEvidence('session-1')
+  assert.deepEqual(evidence, { status: 'storage-error' })
+  assert.doesNotMatch(JSON.stringify(evidence), /private-driver-name|write failed/)
+  await database.close()
+})
+
+test('driver review validates decoded content against authoritative lap metadata', async () => {
+  const root = await temporary()
+  const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+  await database.enqueueFinalized(event())
+  database.database.prepare("UPDATE laps SET lap_number=9 WHERE id='lap-1'").run()
+  assert.throws(() => database.getDriverReviewEvidence('session-1'), /does not match its authoritative metadata/)
+  await database.close()
+})
+
+test('driver review rejects length, CRC, and SHA corruption before analysis', async (context) => {
+  for (const [name, mutation, expected] of [
+    ['length', "UPDATE lap_payloads SET uncompressed_bytes=uncompressed_bytes+1 WHERE lap_id='lap-1'", /checksum or length mismatch/],
+    ['CRC', "UPDATE lap_payloads SET crc32=crc32+1 WHERE lap_id='lap-1'", /checksum or length mismatch/],
+    ['SHA', `UPDATE laps SET payload_hash='${'b'.repeat(64)}' WHERE id='lap-1'`, /content hash mismatch/],
+  ]) {
+    await context.test(name, async () => {
+      const root = await temporary()
+      const database = await TelemetryDatabase.open({ userDataPath: root, appVersion: '1.0.0', deferPerLapTrackModels: true })
+      await database.enqueueFinalized(event())
+      database.database.exec(mutation)
+      assert.throws(() => database.getDriverReviewEvidence('session-1'), expected)
+      await database.close()
+    })
+  }
 })
 
 test('retention rebuilds derived models after deleting source laps', async () => {
@@ -270,6 +427,26 @@ test('a closed replay staging database imports atomically with durable provenanc
     id: 'import-test-v1', recordingSha256: 'a'.repeat(64), recordingFormat: 'apex-lmu-raw-v1', processingVersion: 'apexrec-analysis-v1', importedAt: '2026-07-17T12:00:00.000Z', appVersion: '1.0.0', sessionCount: 1, lapCount: 2, sessionIds: ['session-1'],
   })
   await database.close()
+})
+
+test('an imported terminal transition stays canonical on disk but is withheld from subject and PB playback after restart', async () => {
+  const root = await temporary()
+  const databasePath = path.join(root, 'telemetry.sqlite3')
+  const finalized = terminalBoundaryEvent()
+  finalized.session.source = 'recording-replay'
+  const stagingPath = await createStaging(root, [finalized])
+  let database = await TelemetryDatabase.open({ userDataPath: root, databasePath, appVersion: '1.0.0' })
+  await database.importStaged(stagingPath, importMetadata())
+  await database.close({ requireDurable: true })
+
+  database = await TelemetryDatabase.open({ userDataPath: root, databasePath, appVersion: '1.0.0' })
+  const canonical = database.getLap('session-1', 'lap-1', { sanitizeForPlayback: false })
+  const playback = database.getLap('session-1', 'lap-1')
+  assert.equal(canonical.samples.length, finalized.samples.length)
+  assert.equal(playback.samples.length, finalized.samples.length - CANONICAL_TERMINAL_SUFFIX_MS.length)
+  assert.equal(playback.personalBest.samples.length, finalized.samples.length - CANONICAL_TERMINAL_SUFFIX_MS.length)
+  assert.ok(playback.samples.every((sample, index, samples) => index === 0 || sample.lapElapsedSeconds >= samples[index - 1].lapElapsedSeconds))
+  await database.close({ requireDurable: true })
 })
 
 test('import staging can defer per-lap track models while the atomic merge builds the durable model once', async () => {

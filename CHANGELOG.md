@@ -2,6 +2,38 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.4.0 — 2026-07-18
+
+### English — Evidence-linked deterministic driver debrief
+
+Analysis now finds repeated same-session driving differences with a local deterministic engine, then opens the exact subject and reference laps at the measured distance range behind each finding.
+
+- **Find a pattern that actually repeats** — Apex compares only complete, clean, replayable laps with positive official LMU times from one session. The same laps must repeatedly lose time in the same 256 m zone and share a measured brake, throttle, coast or speed difference before Apex reports a hotspot.
+- **Open the laps behind the finding** — Analysis separates Driver debrief from Lap evidence. Show evidence opens the reported representative lap beside that session's fastest strict reference, seeks the exact distance range and highlights it on the measured map and synchronized traces.
+- **Keep raw evidence behind the local boundary** — The versioned review engine uses fixed distance, recurrence and measurement gates with at most 16 decoded laps. It runs in Electron's main process without AI or a network call; its review response contains bounded enum findings, counts and safe lap IDs, never raw samples, recording paths, payload hashes or driver identities. Show evidence requests only the named normalized lap pair through the existing local replay path.
+- **Audit the complete private recording path** — The release audit strictly rebuilds all 422,467 frames of the gathered 1.7 GB recording, reopens and validates every durable lap payload, runs each session through the shipped review service twice, and rejects privacy leaks, invalid contracts or nondeterministic output.
+
+**Known limitations**
+
+- **A repeated trace difference is not a diagnosis** — The canonical lap payload does not retain comparable fuel, tyres, weather, traffic, setup or damage context. Apex therefore presents measured associations and small experiments, not causal explanations, promised gains or universal targets.
+- **A review needs four strict laps** — One same-session reference plus at least three comparable laps are required. Larger cohorts are sampled deterministically to 16 while pinning the fastest reference; excluded and cohort-limited laps remain explicit rather than weakening the evidence gate.
+- **The raw mapping does not identify race mode** — The engine has no online/offline branch and works identically for live and imported canonical laps, but the current LMU shared-memory contract has no authoritative mode field. Current-game offline and EAC-protected online compatibility remain separate native checks.
+
+### Deutsch — Deterministische Fahrerauswertung mit Belegsprung
+
+Die Analyse findet jetzt wiederkehrende Fahrunterschiede innerhalb einer Session mit einer lokalen deterministischen Engine und öffnet danach die exakten Vergleichsrunden im gemessenen Distanzbereich jeder Erkenntnis.
+
+- **Finde ein Muster, das sich wirklich wiederholt** — Apex vergleicht ausschließlich vollständige, saubere und exakt abspielbare Runden mit positiven offiziellen LMU-Zeiten aus derselben Session. Dieselben Runden müssen im selben 256-m-Bereich wiederholt Zeit verlieren und einen gemeinsamen gemessenen Unterschied bei Bremse, Gas, Rollen oder Geschwindigkeit zeigen, bevor Apex einen Schwerpunkt meldet.
+- **Öffne die Runden hinter der Erkenntnis** — Die Analyse trennt Fahrerauswertung und Rundenbelege. Belege anzeigen öffnet die gemeldete repräsentative Runde neben der schnellsten strikten Referenz dieser Session, springt in den exakten Distanzbereich und hebt ihn auf der gemessenen Karte und den synchronisierten Kurven hervor.
+- **Halte Rohbelege hinter der lokalen Grenze** — Die versionierte Auswertungs-Engine verwendet feste Distanz-, Wiederholungs- und Messregeln mit höchstens 16 decodierten Runden. Sie läuft im Electron-Hauptprozess ohne KI oder Netzwerkaufruf; ihre Antwort enthält begrenzte Enum-Erkenntnisse, Anzahlen und sichere Runden-IDs, niemals Rohmesspunkte, Aufzeichnungspfade, Nutzdaten-Hashes oder Fahreridentitäten. Belege anzeigen fordert nur das benannte normalisierte Rundenpaar über den bestehenden lokalen Wiedergabepfad an.
+- **Prüfe den vollständigen Pfad der privaten Aufzeichnung** — Das Release-Audit baut alle 422.467 Frames der gesammelten 1,7-GB-Aufzeichnung strikt neu auf, öffnet und prüft jede dauerhafte Rundennutzlast und führt jede Session zweimal durch den ausgelieferten Auswertungsdienst. Datenschutzlecks, ungültige Verträge oder nicht deterministische Ergebnisse lassen das Audit fehlschlagen.
+
+**Bekannte Einschränkungen**
+
+- **Ein wiederkehrender Kurvenunterschied ist keine Diagnose** — Die kanonischen Rundendaten speichern keinen vergleichbaren Kontext zu Kraftstoff, Reifen, Wetter, Verkehr, Setup oder Schäden. Apex zeigt deshalb gemessene Zusammenhänge und kleine Versuche, keine Ursachenbehauptungen, versprochenen Gewinne oder universellen Zielwerte.
+- **Eine Auswertung benötigt vier strikte Runden** — Eine Referenz derselben Session und mindestens drei vergleichbare Runden sind erforderlich. Größere Gruppen werden deterministisch auf 16 Runden begrenzt, wobei die schnellste Referenz fest enthalten bleibt; ausgeschlossene und begrenzte Runden bleiben sichtbar, statt die Belegregel abzuschwächen.
+- **Die Rohdatenabbildung kennzeichnet den Rennmodus nicht** — Die Engine besitzt keinen Online-/Offline-Zweig und arbeitet für live erfasste und importierte kanonische Runden gleich. Der aktuelle LMU-Shared-Memory-Vertrag enthält jedoch kein verbindliches Modusfeld; aktuelle Offline- und EAC-geschützte Online-Kompatibilität bleiben getrennte native Prüfungen.
+
 ## 0.3.2 — 2026-07-18
 
 ### English — Private race memory from raw recordings

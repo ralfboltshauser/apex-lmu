@@ -19,7 +19,7 @@ describe('measured analysis view', () => {
     const root = createRoot(container)
     await act(async () => root.render(<I18nProvider><AnalyzeView measuredTrack={measured} /></I18nProvider>))
 
-    expect(container.textContent).toContain('Synchronized speed and brake trace')
+    expect(container.textContent).toContain('Synchronized speed, throttle and brake traces')
     expect(container.textContent).toContain('250–400 m')
     expect(container.textContent).toContain('Peak pressure 80%')
     expect(container.querySelector('.measured-zone-list button')?.getAttribute('aria-pressed')).toBe('true')
@@ -53,6 +53,11 @@ describe('measured analysis view', () => {
       await act(async () => { await Promise.resolve() })
       const lapSelect = container.querySelector('select[aria-label="Measured lap"]') as HTMLSelectElement
       expect(lapSelect.value).toBe('lap-3')
+      expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Driver debrief')
+      const evidenceTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        .find((tab) => tab.textContent === 'Lap evidence')
+      expect(evidenceTab).toBeDefined()
+      await act(async () => evidenceTab?.click())
       expect(container.querySelector('select[aria-label="Playback speed"]')).not.toBeNull()
       expect(container.textContent).toContain('Lap 4 · Current partial lap · Not eligible as reference')
       expect(container.textContent).toContain('Selected lap 3')

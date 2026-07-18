@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   backupLifetimeStats: () => ipcRenderer.invoke('apex:backup-lifetime-stats'),
   getAnalysisSessions: () => ipcRenderer.invoke('apex:get-analysis-sessions'),
   getAnalysisLap: (sessionId, lapId) => ipcRenderer.invoke('apex:get-analysis-lap', sessionId, lapId),
+  getDriverReview: (sessionId, selectedLapId) => ipcRenderer.invoke('apex:get-driver-review', sessionId, selectedLapId),
   getAnalysisHealth: () => ipcRenderer.invoke('apex:get-analysis-health'),
   getAnalysisImportState: () => ipcRenderer.invoke('apex:get-analysis-import-state'),
   getFeedbackState: () => ipcRenderer.invoke('apex:get-feedback-state'),

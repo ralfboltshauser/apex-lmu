@@ -8,6 +8,8 @@ const {
   AuditError,
   acceptAggregate,
   assertAggregateExpectations,
+  assertDriverReviewExpectations,
+  auditDriverReviews,
   assertNoRecordingIdentity,
   createAuditDiagnostics,
   encodedNeedles,
@@ -34,6 +36,8 @@ test('CLI accepts an absolute recording from flags or environment and validates 
     '--expect-replayable-laps=11',
     '--min-single-car-frames', '4',
     '--min-multi-car-frames=5',
+    '--min-driver-review-ready', '2',
+    '--min-driver-review-hotspots=3',
     '--timeout-ms', '5000',
   ], {})
   assert.deepEqual({
@@ -48,6 +52,8 @@ test('CLI accepts an absolute recording from flags or environment and validates 
     expectReplayableLaps: fromFlags.expectReplayableLaps,
     minimumSingleCarFrames: fromFlags.minimumSingleCarFrames,
     minimumMultiCarFrames: fromFlags.minimumMultiCarFrames,
+    minimumDriverReviewReady: fromFlags.minimumDriverReviewReady,
+    minimumDriverReviewHotspots: fromFlags.minimumDriverReviewHotspots,
     timeoutMs: fromFlags.timeoutMs,
   }, {
     recording,
@@ -61,6 +67,8 @@ test('CLI accepts an absolute recording from flags or environment and validates 
     expectReplayableLaps: 11,
     minimumSingleCarFrames: 4,
     minimumMultiCarFrames: 5,
+    minimumDriverReviewReady: 2,
+    minimumDriverReviewHotspots: 3,
     timeoutMs: 5000,
   })
   const fromEnvironment = parseCli([], {
@@ -71,6 +79,8 @@ test('CLI accepts an absolute recording from flags or environment and validates 
     APEX_RECORDING_EXPECT_OFFICIALLY_TIMED_LAPS: '7',
     APEX_RECORDING_EXPECT_REFERENCE_LAPS: '5',
     APEX_RECORDING_EXPECT_REPLAYABLE_LAPS: '8',
+    APEX_RECORDING_MIN_DRIVER_REVIEW_READY: '1',
+    APEX_RECORDING_MIN_DRIVER_REVIEW_HOTSPOTS: '2',
   })
   assert.equal(fromEnvironment.recording, recording)
   assert.equal(fromEnvironment.expectFrames, 42)
@@ -81,6 +91,8 @@ test('CLI accepts an absolute recording from flags or environment and validates 
   assert.equal(fromEnvironment.expectReplayableLaps, 8)
   assert.equal(fromEnvironment.minimumSingleCarFrames, 0)
   assert.equal(fromEnvironment.minimumMultiCarFrames, 0)
+  assert.equal(fromEnvironment.minimumDriverReviewReady, 1)
+  assert.equal(fromEnvironment.minimumDriverReviewHotspots, 2)
   assert.throws(() => parseCli(['relative.apexrec'], {}), (error) => error instanceof AuditError && error.code === 'invalid-recording')
   assert.equal(parseCli(['--recording', recording, '--min-single-car-frames', '0'], {}).minimumSingleCarFrames, 0)
   assert.throws(() => parseCli(['--recording', recording, '--expect-clean-laps', '-1'], {}), (error) => error instanceof AuditError && error.code === 'invalid-expected-clean-laps')
@@ -96,6 +108,142 @@ test('aggregate audit always requires opponent arrays while population expectati
   assert.doesNotThrow(() => assertAggregateExpectations({ ...aggregate, multiCarFrames: 0 }, { minimumSingleCarFrames: 0, minimumMultiCarFrames: 0 }))
   assert.throws(() => assertAggregateExpectations({ ...aggregate, multiCarFrames: 0 }, { minimumSingleCarFrames: 1, minimumMultiCarFrames: 1 }), /multi-car-frames-missing/)
   assert.throws(() => assertAggregateExpectations({ ...aggregate, invalidOpponentFrames: 1 }, { minimumSingleCarFrames: 1, minimumMultiCarFrames: 1 }), /opponent-array-missing/)
+})
+
+const REVIEW_TRACK_LENGTH_M = 1024
+
+function reviewControls(distanceM, comparison) {
+  if (distanceM < 256 || distanceM > 512) return { brake: 0, throttle: 1, speedKph: 200 }
+  const brakeStart = comparison ? 320 : 352
+  const brakeEnd = comparison ? 432 : 416
+  const throttleStart = comparison ? 304 : 336
+  const throttleEnd = comparison ? 496 : 448
+  const corner = distanceM >= throttleStart && distanceM < throttleEnd
+  const braking = distanceM >= brakeStart && distanceM < brakeEnd
+  const apexDistance = comparison ? 432 : 416
+  const minimumSpeedKph = comparison ? 70 : 80
+  return {
+    brake: braking ? 0.8 : 0,
+    throttle: corner ? 0 : 1,
+    speedKph: corner ? Math.min(200, minimumSpeedKph + Math.abs(distanceM - apexDistance) * 1.2) : 200,
+  }
+}
+
+function reviewElapsedMs(distanceM, segmentDurationsMs) {
+  const segment = Math.min(3, Math.floor(distanceM / 256))
+  const elapsedBefore = segmentDurationsMs.slice(0, segment).reduce((sum, value) => sum + value, 0)
+  return elapsedBefore + segmentDurationsMs[segment] * ((distanceM - segment * 256) / 256)
+}
+
+function reviewLap(sessionId, id, number, segmentDurationsMs, comparison = false) {
+  const samples = []
+  for (let distanceM = 0; distanceM < REVIEW_TRACK_LENGTH_M; distanceM += 16) {
+    samples.push({
+      distanceM,
+      distanceIndexM: distanceM,
+      lapElapsedSeconds: reviewElapsedMs(distanceM, segmentDurationsMs) / 1000,
+      ...reviewControls(distanceM, comparison),
+    })
+  }
+  return {
+    schemaVersion: 1,
+    payloadHash: `payload-${id}`,
+    privateDriverName: 'must-not-leave-the-review-boundary',
+    localPath: recording,
+    session: { id: sessionId, track: { lengthM: REVIEW_TRACK_LENGTH_M } },
+    lap: {
+      id,
+      number,
+      state: 'complete',
+      quality: 'clean',
+      replayable: true,
+      referenceEligible: true,
+      timingSource: 'official',
+      lapTimeMs: segmentDurationsMs.reduce((sum, value) => sum + value, 0),
+    },
+    samples,
+  }
+}
+
+function reviewInput(sessionId, { insufficient = false } = {}) {
+  const reference = reviewLap(sessionId, `${sessionId}-reference`, 1, [10_000, 10_000, 10_000, 10_000])
+  const comparisons = [
+    reviewLap(sessionId, `${sessionId}-subject-a`, 2, [10_000, 10_200, 9_900, 10_000], true),
+    reviewLap(sessionId, `${sessionId}-subject-b`, 3, [10_000, 10_220, 9_900, 10_000], true),
+    reviewLap(sessionId, `${sessionId}-subject-c`, 4, [10_000, 10_180, 9_950, 10_000], true),
+  ]
+  const laps = insufficient ? [reference, comparisons[0]] : [reference, ...comparisons]
+  return {
+    sessionId,
+    trackLengthM: REVIEW_TRACK_LENGTH_M,
+    selectedLapId: null,
+    referenceLapId: reference.lap.id,
+    laps,
+    evidence: {
+      totalLapCount: laps.length,
+      strictEligibleTotal: laps.length,
+      sampledLapCount: laps.length,
+      strictExcludedTotal: 0,
+      notDecodedDueToLimit: 0,
+      exclusions: {},
+    },
+  }
+}
+
+function reviewDatabase(inputs, resolveInput = (_sessionId, input) => input) {
+  let reads = 0
+  return {
+    get reads() { return reads },
+    listSessions: () => inputs.map((input) => ({ id: input.sessionId })),
+    flush: async () => {},
+    getDriverReviewEvidence: (sessionId) => {
+      reads += 1
+      const input = inputs.find((candidate) => candidate.sessionId === sessionId)
+      return input ? { status: 'ready', input: resolveInput(sessionId, input, reads) } : null
+    },
+  }
+}
+
+test('durable driver-review audit uses the shipped service and engine twice per session but returns counts only', async () => {
+  const database = reviewDatabase([
+    reviewInput('review-session-ready'),
+    reviewInput('review-session-insufficient', { insufficient: true }),
+  ])
+  const result = await auditDriverReviews(database, recording)
+  assert.deepEqual(result, {
+    sessions: 2,
+    statuses: { ready: 1, 'insufficient-evidence': 1, 'invalid-input': 0 },
+    sessionsWithHotspots: 1,
+    hotspots: 1,
+  })
+  assert.equal(database.reads, 4)
+  assert.doesNotMatch(JSON.stringify(result), /review-session|reference|subject|payload|samples|private-oracle/)
+  assert.doesNotThrow(() => assertDriverReviewExpectations(result, { minimumDriverReviewReady: 1, minimumDriverReviewHotspots: 1 }))
+  assert.throws(() => assertDriverReviewExpectations(result, { minimumDriverReviewReady: 2, minimumDriverReviewHotspots: 1 }), (error) => error instanceof AuditError && error.code === 'driver-review-ready-minimum-missing')
+  assert.throws(() => assertDriverReviewExpectations(result, { minimumDriverReviewReady: 1, minimumDriverReviewHotspots: 2 }), (error) => error instanceof AuditError && error.code === 'driver-review-hotspot-minimum-missing')
+})
+
+test('durable driver-review audit rejects non-repeatable output and recording identity leakage', async () => {
+  const stable = reviewInput('review-session-changing')
+  const changed = structuredClone(stable)
+  changed.laps[1].lap.lapTimeMs += 1
+  const changing = reviewDatabase([stable], (_sessionId, input, reads) => (reads % 2 ? input : changed))
+  await assert.rejects(auditDriverReviews(changing, recording), (error) => error instanceof AuditError && error.code === 'driver-review-nondeterministic')
+
+  const leakingRecording = path.resolve('/tmp/private-oracle')
+  const leaking = reviewInput('review-session-leaking')
+  leaking.laps[0].lap.id = path.basename(leakingRecording)
+  leaking.referenceLapId = leaking.laps[0].lap.id
+  await assert.rejects(auditDriverReviews(reviewDatabase([leaking]), leakingRecording), (error) => error instanceof AuditError && error.code === 'recording-identity-persisted')
+})
+
+test('durable driver-review audit reports the bounded reason from any invalid session', async () => {
+  const invalid = reviewInput('review-session-invalid')
+  invalid.laps[1].lap.replayable = false
+  const valid = reviewInput('review-session-valid', { insufficient: true })
+  await assert.rejects(auditDriverReviews(reviewDatabase([valid, invalid]), recording), (error) => (
+    error instanceof AuditError && error.code === 'driver-review-invalid-input' && error.detail === 'lap-not-strict-eligible'
+  ))
 })
 
 function fakeHistory({ leak = false } = {}) {
@@ -183,6 +331,7 @@ test('CLI-facing failures never echo arbitrary error messages', () => {
   assert.equal(safeErrorCode(new AuditError('unexpected-lap-count')), 'unexpected-lap-count')
   assert.equal(safeErrorCode(new Error(`failed near ${recording}`)), 'audit-failed')
   assert.equal(safeErrorDetail(new AuditError('ingest-failed', 'empty-session-finalization')), 'empty-session-finalization')
+  assert.equal(safeErrorDetail(new AuditError('driver-review-invalid-input', 'lap-samples-decreasing')), 'lap-samples-decreasing')
   assert.equal(safeErrorDetail(new AuditError('ingest-failed', recording)), null)
   assert.equal(importReplayFailureCode(null, { reason: 'import-limit' }), 'import-limit')
   assert.equal(importReplayFailureCode(null, { reason: recording }), 'strict-replay-failed')

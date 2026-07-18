@@ -191,6 +191,42 @@ Existing selected-lap functionality remains the evidence drill-down: exact
 recorded driven line, speed and controls, brake zones, personal-best comparison,
 and locally learned track geometry.
 
+## Deterministic driver debrief
+
+Release 0.4.0 adds a second, deliberately stricter analysis layer. The factual
+session summary above can use complete limited laps for authoritative pace, but
+the Driver debrief accepts a lap only when it is complete, clean, officially
+timed, reference-eligible, replayable and backed by a validated canonical
+sample payload. The fastest qualifying lap from the selected session is the
+reference. A historical or cross-session personal best cannot replace it.
+
+The main process decodes at most 16 qualifying laps, aligns them on a 16 m
+distance grid and evaluates disjoint 256 m zones. A zone is reported only when
+at least three non-reference laps are comparable, at least 75% show the same
+positive time-loss direction and median loss is at least 80 ms. At least one
+concrete brake, throttle, speed or coast difference must also cross its
+measurement gate on 75% of comparable laps that are jointly slower in that
+zone. The result is deterministic structured data: evidence counts, the
+same-session reference, bounded hotspots, observed trace differences, a
+measured relative-strength zone, robust pace variability and explicit
+limitation codes.
+
+This is not causal coaching and it does not predict recoverable lap time. The
+retained lap payload does not contain the fuel phase, tyre state, weather,
+traffic, setup or damage context needed to distinguish why two control traces
+differ. The interface therefore presents each result as an association to
+inspect and a next experiment, with a **Show evidence** path back to the exact
+subject/reference traces and reported distance range.
+
+The Driver debrief response contains no sample or world-coordinate arrays,
+payload hashes, source paths, driver identity or free-form generated prose.
+Choosing **Show evidence** separately requests the named lap traces through the
+existing Analysis evidence path. The calculation calls no AI model, has no
+cloud dependency and uses the same canonical payload contract for finalized
+live laps and strictly imported `.apexrec` laps. Its complete algorithm and
+product flow are specified in
+[Deterministic driver debrief](DRIVER_DEBRIEF.md).
+
 ## Recording-calibrated lap quality
 
 The private recording exposed a measurement error in Apex rather than a decoder
@@ -253,6 +289,13 @@ cross-platform regression fixture. Neither proves all future LMU versions,
 cars, tracks, conditions, or both network modes; current-game native Windows
 checks remain required.
 
+The Driver debrief inherits this mode boundary. Neither the cohort resolver nor
+the deterministic engine receives opponent population, server identity or an
+online/offline flag, so finalized live and imported laps follow the same rules
+in either user-described mode. That mode-independent implementation is not
+proof of current-game offline or EAC-protected online compatibility; fresh
+native drives remain release checks whenever they can be gathered.
+
 ## Acceptance criteria
 
 ### Transaction and privacy
@@ -280,6 +323,16 @@ checks remain required.
   official LMU times, and exclude incomplete, untimed, and ineligible laps.
 - PB, comparison-reference, and learned-track eligibility remain limited to
   the stricter clean/reference-eligible set.
+- Driver debrief comparisons use only complete, clean, official,
+  reference-eligible and replayable laps from one session, with a maximum of 16
+  decoded laps and the fastest strict same-session lap as reference.
+- Identical canonical input produces the same review fingerprint, hotspot
+  order and structured result regardless of input lap order.
+- A reported hotspot has at least three comparable non-reference laps, 75%
+  joint positive loss/trace agreement, at least 80 ms median measured loss and
+  a concrete trace observation; a missing pattern remains a valid empty result.
+- Review output contains no raw sample/coordinate arrays, payload hashes,
+  recording paths, identity fields, non-finite values or unrestricted prose.
 - Every lap remains inspectable with its quality and reasons.
 
 ### Recording evidence
@@ -293,7 +346,11 @@ checks remain required.
   player, atomically committed nine lap-bearing sessions and 56 lap payloads,
   decoded every payload after restart, retained 47 complete/34 clean/28
   officially timed/24 reference-eligible/53 replayable laps, and performed an
-  idempotent re-import without starting a second replay.
+  idempotent re-import without starting a second replay. The shipped review
+  service then ran twice for every session against the reopened payloads: three
+  sessions produced ready reviews with nine bounded hotspots in total, six
+  returned explicit insufficient-evidence results, and none returned invalid
+  input or a nondeterministic/privacy-invalid result.
 - The private file stays untracked and is never uploaded as a release asset.
 - Native Windows CI still builds and exercises the real mapping/locking/liveness
   fixture. A fresh current-LMU offline and EAC-protected online drive remains

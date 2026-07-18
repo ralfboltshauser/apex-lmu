@@ -69,6 +69,7 @@ interface ApexDesktopApi {
   backupLifetimeStats(): Promise<{ ok: boolean; reason?: string; backup?: { file: string; bytes: number; sha256: string; createdAt: string } }>
   getAnalysisSessions(): Promise<ApexAnalysisSessionSummary[]>
   getAnalysisLap(sessionId: string, lapId: string): Promise<ApexAnalysisLapPayload | null>
+  getDriverReview(sessionId: string, selectedLapId?: string): Promise<ApexDriverReview | null>
   getAnalysisHealth(): Promise<ApexAnalysisHealth>
   getAnalysisImportState(): Promise<ApexAnalysisImportState>
   getFeedbackState(): Promise<ApexFeedbackState>
@@ -151,6 +152,23 @@ interface ApexAnalysisSample { distanceM: number; rawDistanceM?: number; distanc
 interface ApexTrackModel { schemaVersion: 1; algorithmVersion: string; trackKey: string; trackLengthM: number; binSizeM: number; coverage: number; published: boolean; lateralSign: number; seamGapM: number; maximumJumpM: number; sourceHash: string; geometryHash: string; points: Array<{ distanceM: number; x: number; y: number; z: number; observations: number; spreadM: number; confidence: number }> }
 interface ApexAnalysisLapPayload { schemaVersion: 1; session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] | null; payloadHash?: string; trackModel?: ApexTrackModel | null; personalBest?: { session: ApexAnalysisSessionSummary; lap: ApexAnalysisLapSummary; samples: ApexAnalysisSample[] } | null }
 interface ApexAnalysisHealth { schemaVersion: 1; qualityPolicyVersion: string; revision: number; memoryBudgetBytes: number; telemetryFrames: number; statuses: number; sessions: number; completedLaps: number; incompleteLaps: number; evictedLapPayloads: number; storage?: { status: string; path?: string; message?: string } }
+
+type ApexDriverReviewStatusCode = 'ready' | 'insufficient-evidence' | 'invalid-input'
+type ApexDriverReviewLimitationCode = 'cohort-capped' | 'fewer-than-three-comparisons' | 'no-recurring-hotspots' | 'selected-lap-not-supplied' | 'selected-lap-not-analyzed' | 'selected-lap-is-reference'
+type ApexDriverReviewEvidenceExclusionCode = 'not-complete' | 'not-official' | 'not-clean' | 'not-reference-eligible' | 'not-replayable' | 'payload-unavailable' | 'payload-evicted' | 'cohort-limit'
+type ApexDriverReviewObservationCode = 'brake-onset-earlier' | 'brake-onset-later' | 'brake-release-earlier' | 'brake-release-later' | 'throttle-pickup-earlier' | 'throttle-pickup-later' | 'coast-distance-more' | 'coast-distance-less' | 'minimum-speed-lower' | 'minimum-speed-higher' | 'exit-speed-lower' | 'exit-speed-higher'
+type ApexDriverReviewExperimentCode = 'brake-onset-later-small-step' | 'brake-release-earlier-small-step' | 'throttle-pickup-earlier-small-step' | 'coast-distance-shorter-small-step' | 'minimum-speed-higher-small-step' | 'exit-speed-higher-small-step'
+type ApexDriverReviewStrengthCode = 'recurring-relative-gain' | 'smallest-median-relative-loss'
+type ApexDriverReviewVariabilityCode = 'pace-stable' | 'pace-moderate' | 'pace-variable'
+interface ApexDriverReviewEvidenceAccounting { totalLapCount: number; strictEligibleTotal: number; sampledLapCount: number; strictExcludedTotal: number; notDecodedDueToLimit: number; exclusions: Partial<Record<ApexDriverReviewEvidenceExclusionCode, number>> }
+interface ApexDriverReviewReference { lapId: string; lapNumber: number; lapTimeMs: number }
+interface ApexDriverReviewSegment { id: string; startDistanceM: number; endDistanceM: number; lossMs: number }
+interface ApexDriverReviewSelectedComparison { lapId: string; lapNumber: number; lapTimeMs: number; deltaToReferenceMs: number; segmentLossTotalMs: number; segments: ApexDriverReviewSegment[] }
+interface ApexDriverReviewObservation { code: ApexDriverReviewObservationCode; medianDelta: number; unit: 'm' | 'kph'; directionalAgreement: number; comparedLapCount: number }
+interface ApexDriverReviewHotspot { id: string; startDistanceM: number; endDistanceM: number; representativeLapId: string; representativeLapNumber: number; medianLossMs: number; minimumLossMs: number; maximumLossMs: number; madLossMs: number; directionalAgreement: number; comparedLapCount: number; observations: ApexDriverReviewObservation[]; experiments: ApexDriverReviewExperimentCode[] }
+interface ApexDriverReviewStrength { code: ApexDriverReviewStrengthCode; segmentId: string; startDistanceM: number; endDistanceM: number; representativeLapId: string; representativeLapNumber: number; medianLossMs: number; minimumLossMs: number; maximumLossMs: number; madLossMs: number; comparedLapCount: number }
+interface ApexDriverReviewVariability { code: ApexDriverReviewVariabilityCode; medianLapTimeMs: number; madLapTimeMs: number; minimumLapTimeMs: number; maximumLapTimeMs: number; comparedLapCount: number }
+interface ApexDriverReview { schemaVersion: 1; algorithmVersion: string; inputFingerprint: string; status: { code: ApexDriverReviewStatusCode; reasonCode?: string }; cohort: { decodedLapCount: number; analyzedLapCount: number; nonReferenceLapCount: number; accounting: ApexDriverReviewEvidenceAccounting }; reference: ApexDriverReviewReference | null; selectedComparison: ApexDriverReviewSelectedComparison | null; hotspots: ApexDriverReviewHotspot[]; strength: ApexDriverReviewStrength | null; variability: ApexDriverReviewVariability | null; limitations: ApexDriverReviewLimitationCode[] }
 
 interface ApexLmuCheck { label: string; expected: string; ok: boolean; optional?: boolean }
 interface ApexLmuAttempt { source: string; candidate: string; status: 'found' | 'not-found' | 'invalid'; checks: ApexLmuCheck[]; fixes: string[]; technical: string; executable?: string | null; sharedMemoryPath?: string | null }

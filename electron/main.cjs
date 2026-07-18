@@ -16,6 +16,8 @@ const { LiveSessionStore } = require('./live-session-store.cjs')
 const { FeedbackService } = require('./feedback-service.cjs')
 const { TelemetryDatabase } = require('./telemetry-database.cjs')
 const { RecordingImportService } = require('./recording-import-service.cjs')
+const { buildDriverReview } = require('./driver-review.cjs')
+const { getDriverReview } = require('./driver-review-service.cjs')
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 const e2eConfig = readE2EConfig()
@@ -166,6 +168,14 @@ ipcMain.handle('apex:get-analysis-lap', async (_event, sessionId, lapId) => {
   if (typeof sessionId !== 'string' || typeof lapId !== 'string' || !/^[a-z0-9-]{1,96}$/i.test(sessionId) || !/^[a-z0-9-]{1,96}$/i.test(lapId)) return null
   await telemetryDatabase?.flush()
   return telemetryDatabase?.getLap(sessionId, lapId) ?? liveSessionStore?.getLap(sessionId, lapId) ?? null
+})
+ipcMain.handle('apex:get-driver-review', async (_event, sessionId, selectedLapId) => {
+  try {
+    return await getDriverReview({ telemetryDatabase, liveSessionStore, buildDriverReview, sessionId, selectedLapId })
+  } catch (error) {
+    void diagnostics?.record('error', 'driver-review', 'build-failed', 'A driver review was withheld because its measured evidence could not be validated.', { error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
 })
 ipcMain.handle('apex:get-analysis-health', () => ({ ...(liveSessionStore?.getHealth() ?? { schemaVersion: 1, qualityPolicyVersion: 'lap-quality-v2', revision: 0, memoryBudgetBytes: 64 * 1024 * 1024, telemetryFrames: 0, statuses: 0, sessions: 0, completedLaps: 0, incompleteLaps: 0, evictedLapPayloads: 0 }), storage: telemetryDatabase?.getHealth() ?? { status: 'error', message: telemetryDatabaseError || 'unavailable' } }))
 ipcMain.handle('apex:get-analysis-import-state', () => analysisImportService?.getState() ?? { schemaVersion: 1, status: 'error', fileName: null, bytesProcessed: 0, bytesTotal: 0, frames: 0, sessions: 0, laps: 0, importedSessions: 0, importedLaps: 0, duplicate: false, sessionIds: [], reason: 'storage-unavailable' })

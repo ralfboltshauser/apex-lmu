@@ -24,6 +24,8 @@ describe('measured circuit map safety', () => {
 
     expect(container.querySelector('.circuit-track-line')?.getAttribute('d')).not.toContain('Z')
     expect(container.querySelector('.circuit-car')?.getAttribute('transform')).toMatch(/^translate\([\d.]+ [\d.]+\)$/)
+    expect(container.querySelector('.circuit-car')?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('.circuit-car')?.hasAttribute('aria-label')).toBe(false)
 
     await act(async () => root.unmount())
     container.remove()

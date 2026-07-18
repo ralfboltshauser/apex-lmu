@@ -6,7 +6,8 @@ const zlib = require('node:zlib')
 const { promisify } = require('node:util')
 const { DatabaseSync } = require('node:sqlite')
 const { buildTrackModel, TRACK_MODEL_ALGORITHM } = require('./track-model.cjs')
-const { constants: { QUALITY_POLICY_VERSION } } = require('./live-session-store.cjs')
+const { selectDriverReviewEvidence, constants: { QUALITY_POLICY_VERSION } } = require('./live-session-store.cjs')
+const { playbackSamples } = require('./lap-sample-sanitizer.cjs')
 
 const deflateRaw = promisify(zlib.deflateRaw)
 const SCHEMA_VERSION = 4
@@ -78,6 +79,10 @@ function normalize(value) { return String(value || '').normalize('NFKC').trim().
 function carKey(car) { return `car-v1|${normalize(car?.class)}|${normalize(car?.name)}` }
 function trackKey(track) { return `${normalize(track?.name)}|${normalize(track?.layout)}|${Math.round(Number(track?.lengthM) || 0)}` }
 function crc32(buffer) {
+  // Node/Electron's native implementation is materially faster for the
+  // multi-megabyte canonical lap payloads decoded by Driver debrief. Keep the
+  // exact portable fallback for runtimes that do not expose zlib.crc32.
+  if (typeof zlib.crc32 === 'function') return zlib.crc32(buffer) >>> 0
   let crc = 0xffffffff
   for (const byte of buffer) {
     crc ^= byte
@@ -709,11 +714,11 @@ class TelemetryDatabase {
 
   lapRow(sessionId, lapId) {
     return this.database.prepare(`SELECT l.*,l.lap_number AS lapNumber,l.reasons_json AS reasonsJson,l.lap_time_ms AS lapTimeMs,l.timing_source AS timingSource,l.maximum_gap_m AS maximumGapM,l.sample_count AS sampleCount,l.reference_eligible AS referenceEligible,l.track_model_eligible AS trackModelEligible,l.payload_hash AS payloadHash,1 AS samplesAvailable,
-      s.track_key AS trackKey,s.car_key AS carKey,p.format,p.compressed,p.uncompressed_bytes AS uncompressedBytes,p.crc32
+      s.track_key AS trackKey,s.car_key AS carKey,s.track_name AS trackName,s.layout_name AS layoutName,s.track_length_m AS trackLengthM,s.car_name AS carName,s.car_class AS carClass,p.format,p.compressed,p.uncompressed_bytes AS uncompressedBytes,p.crc32
       FROM laps l JOIN sessions s ON s.id=l.session_id JOIN lap_payloads p ON p.lap_id=l.id WHERE l.session_id=? AND l.id=?`).get(sessionId, lapId)
   }
 
-  getLap(sessionId, lapId) {
+  getLap(sessionId, lapId, { sanitizeForPlayback = true } = {}) {
     if (this.closed || this.futureSchema) return null
     const row = this.lapRow(sessionId, lapId)
     if (!row) return null
@@ -722,13 +727,57 @@ class TelemetryDatabase {
     const lap = this.rowLapSummary(row)
     const modelRow = this.database.prepare('SELECT model_json AS modelJson FROM track_models WHERE track_key=?').get(row.trackKey)
     const pb = this.database.prepare(`SELECT l.id,l.session_id AS sessionId FROM laps l JOIN sessions s ON s.id=l.session_id WHERE s.track_key=? AND s.car_key=? AND l.timing_source='official' AND l.reference_eligible=1 AND l.lap_time_ms IS NOT NULL ORDER BY l.lap_time_ms,l.created_at,l.id LIMIT 1`).get(row.trackKey, row.carKey)
+    const samples = sanitizeForPlayback
+      ? playbackSamples(decoded.value.samples, { trackLengthM: Number(row.trackLengthM), officialLapTimeMs: lap.lapTimeMs })
+      : decoded.value.samples
     let personalBest = null
     if (pb) {
       const pbRow = this.lapRow(pb.sessionId, pb.id)
       const pbSession = this.listSessions().find((candidate) => candidate.id === pb.sessionId)
-      if (pbRow && pbSession) personalBest = { session: pbSession, lap: this.rowLapSummary(pbRow), samples: this.decodePayloadRow(pbRow).value.samples }
+      if (pbRow && pbSession) {
+        const pbLap = this.rowLapSummary(pbRow)
+        const pbSamples = this.decodePayloadRow(pbRow).value.samples
+        personalBest = {
+          session: pbSession,
+          lap: pbLap,
+          samples: sanitizeForPlayback
+            ? playbackSamples(pbSamples, { trackLengthM: Number(pbRow.trackLengthM), officialLapTimeMs: pbLap.lapTimeMs })
+            : pbSamples,
+        }
+      }
     }
-    return { schemaVersion: 1, session, lap, samples: decoded.value.samples, payloadHash: decoded.payloadHash, trackModel: modelRow ? JSON.parse(modelRow.modelJson) : null, personalBest }
+    return { schemaVersion: 1, session, lap, samples, payloadHash: decoded.payloadHash, trackModel: modelRow ? JSON.parse(modelRow.modelJson) : null, personalBest }
+  }
+
+  getDriverReviewEvidence(sessionId, selectedLapId = null) {
+    if (this.closed || this.futureSchema) return null
+    // A failed queued write means durable history may be only a prefix of the
+    // still-live session. Preserve DB authority without letting that stale
+    // prefix silently replace fuller memory evidence; no fault details cross
+    // the review boundary.
+    if (this.fault) return { status: 'storage-error' }
+    const session = this.listSessions().find((candidate) => candidate.id === sessionId)
+    if (!session) return null
+    if (selectedLapId && !session.laps.some((lap) => lap.id === selectedLapId)) return { status: 'selected-lap-not-found' }
+    const selection = selectDriverReviewEvidence(session.laps, selectedLapId)
+    const laps = selection.laps.map((lap) => {
+      const row = this.lapRow(sessionId, lap.id)
+      if (!row) throw new Error('driver review lap payload became unavailable after authoritative selection')
+      const decoded = this.decodePayloadRow(row)
+      if (!decodedPayloadMatchesRow(decoded.value, row)) throw new Error('driver review lap payload does not match its authoritative metadata')
+      return { schemaVersion: 1, session, lap: this.rowLapSummary(row), samples: decoded.value.samples, payloadHash: decoded.payloadHash }
+    })
+    return {
+      status: 'ready',
+      input: {
+        sessionId,
+        trackLengthM: session.track.lengthM,
+        selectedLapId,
+        laps,
+        referenceLapId: selection.referenceLapId,
+        evidence: selection.accounting,
+      },
+    }
   }
 
   getHealth() { return { status: this.closed ? 'closed' : this.futureSchema ? 'future-schema' : this.fault ? 'error' : this.writable ? 'ready' : 'read-only', schemaVersion: this.futureSchema || SCHEMA_VERSION, payloadFormat: PAYLOAD_FORMAT, algorithmVersion: TRACK_MODEL_ALGORITHM, path: this.filePath, writes: this.writes, message: this.fault || undefined } }

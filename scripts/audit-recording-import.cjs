@@ -4,6 +4,8 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 const { LmuBridgeManager } = require('../electron/lmu-bridge.cjs')
+const { getDriverReview } = require('../electron/driver-review-service.cjs')
+const { buildDriverReview, STATUS_CODES } = require('../electron/driver-review.cjs')
 const { constants: { QUALITY_POLICY_VERSION } } = require('../electron/live-session-store.cjs')
 const { RecordingImportService, PROCESSING_VERSION, RECORDING_FORMAT, MAX_RECORDING_BYTES } = require('../electron/recording-import-service.cjs')
 const { TelemetryDatabase } = require('../electron/telemetry-database.cjs')
@@ -28,6 +30,8 @@ Options:
   --expect-replayable-laps N        Require an exact replayable-payload/lap count
   --min-single-car-frames N         Optional minimum frames with no opponents (default: 0)
   --min-multi-car-frames N          Optional minimum frames with opponents (default: 0)
+  --min-driver-review-ready N       Optional minimum sessions with a ready review (default: 0)
+  --min-driver-review-hotspots N    Optional minimum recurring hotspots across reviews (default: 0)
   --timeout-ms N                    Replay-completion timeout (default: 1800000)
   --bridge /absolute/bridge         Use a compiled current bridge instead of go run
   --runner COMMAND                  Run the compiled bridge through a runner such as wine
@@ -38,7 +42,8 @@ Environment equivalents:
   APEX_RECORDING_EXPECT_CLEAN_LAPS, APEX_RECORDING_EXPECT_OFFICIALLY_TIMED_LAPS,
   APEX_RECORDING_EXPECT_REFERENCE_LAPS,
   APEX_RECORDING_EXPECT_REPLAYABLE_LAPS, APEX_RECORDING_MIN_SINGLE_CAR_FRAMES,
-  APEX_RECORDING_MIN_MULTI_CAR_FRAMES, APEX_RECORDING_AUDIT_TIMEOUT_MS,
+  APEX_RECORDING_MIN_MULTI_CAR_FRAMES, APEX_RECORDING_MIN_DRIVER_REVIEW_READY,
+  APEX_RECORDING_MIN_DRIVER_REVIEW_HOTSPOTS, APEX_RECORDING_AUDIT_TIMEOUT_MS,
   APEX_LMU_BRIDGE_EXE, APEX_LMU_BRIDGE_RUNNER
 `
 
@@ -109,6 +114,8 @@ function parseCli(argv, env = process.env) {
     expectReplayableLaps: integer(env.APEX_RECORDING_EXPECT_REPLAYABLE_LAPS, 'invalid-expected-replayable-laps'),
     minimumSingleCarFrames: integer(env.APEX_RECORDING_MIN_SINGLE_CAR_FRAMES, 'invalid-single-car-minimum') ?? 0,
     minimumMultiCarFrames: integer(env.APEX_RECORDING_MIN_MULTI_CAR_FRAMES, 'invalid-multi-car-minimum') ?? 0,
+    minimumDriverReviewReady: integer(env.APEX_RECORDING_MIN_DRIVER_REVIEW_READY, 'invalid-driver-review-ready-minimum') ?? 0,
+    minimumDriverReviewHotspots: integer(env.APEX_RECORDING_MIN_DRIVER_REVIEW_HOTSPOTS, 'invalid-driver-review-hotspot-minimum') ?? 0,
     timeoutMs: integer(env.APEX_RECORDING_AUDIT_TIMEOUT_MS, 'invalid-timeout', { minimum: 1000 }) ?? DEFAULT_TIMEOUT_MS,
     bridge: env.APEX_LMU_BRIDGE_EXE,
     runner: env.APEX_LMU_BRIDGE_RUNNER,
@@ -125,6 +132,8 @@ function parseCli(argv, env = process.env) {
     ['--expect-replayable-laps', 'expectReplayableLaps', (value) => integer(value, 'invalid-expected-replayable-laps')],
     ['--min-single-car-frames', 'minimumSingleCarFrames', (value) => integer(value, 'invalid-single-car-minimum')],
     ['--min-multi-car-frames', 'minimumMultiCarFrames', (value) => integer(value, 'invalid-multi-car-minimum')],
+    ['--min-driver-review-ready', 'minimumDriverReviewReady', (value) => integer(value, 'invalid-driver-review-ready-minimum')],
+    ['--min-driver-review-hotspots', 'minimumDriverReviewHotspots', (value) => integer(value, 'invalid-driver-review-hotspot-minimum')],
     ['--timeout-ms', 'timeoutMs', (value) => integer(value, 'invalid-timeout', { minimum: 1000 })],
     ['--bridge', 'bridge', (value) => value],
     ['--runner', 'runner', (value) => value],
@@ -241,7 +250,9 @@ function validateDurableHistory(database, recording, expected = {}) {
       if (lap.replayable === true) replayableLaps += 1
       if (lapIds.has(lap.id)) fail('duplicate-durable-lap')
       lapIds.add(lap.id)
-      const payload = database.getLap(session.id, lap.id)
+      // Durable validation checks the checksum-bearing canonical payload, not
+      // the playback view that may withhold a proven LMU terminal transition.
+      const payload = database.getLap(session.id, lap.id, { sanitizeForPlayback: false })
       const sampleOverflow = Array.isArray(lap.reasons) && lap.reasons.includes('sample-overflow')
       if (!payload || payload.session?.id !== session.id || payload.lap?.id !== lap.id || payload.payloadHash !== lap.payloadHash
         || !Array.isArray(payload.samples) || payload.samples.length !== lap.sampleCount
@@ -266,6 +277,61 @@ function validateDurableHistory(database, recording, expected = {}) {
   if (expected.referenceLaps !== undefined && referenceLaps !== expected.referenceLaps) fail('unexpected-reference-lap-count')
   if (expected.replayableLaps !== undefined && replayableLaps !== expected.replayableLaps) fail('unexpected-replayable-lap-count')
   return { sessions: sessions.length, laps, completeLaps, cleanLaps, officiallyTimedLaps, referenceLaps, replayableLaps, payloads, fingerprint: durableFingerprint(sessions) }
+}
+
+function initialDriverReviewAggregate() {
+  return {
+    sessions: 0,
+    statuses: { ready: 0, 'insufficient-evidence': 0, 'invalid-input': 0 },
+    sessionsWithHotspots: 0,
+    hotspots: 0,
+  }
+}
+
+/**
+ * Exercise the shipped review service and algorithm against reopened durable
+ * payloads. Only bounded counts leave this function: lap/session identifiers,
+ * fingerprints, evidence payloads, and recording identity remain private.
+ */
+async function auditDriverReviews(database, recording) {
+  const sessions = database.listSessions()
+  const needles = encodedNeedles(recording)
+  const aggregate = initialDriverReviewAggregate()
+  for (const session of sessions) {
+    let first
+    let second
+    try {
+      first = await getDriverReview({ telemetryDatabase: database, buildDriverReview, sessionId: session.id })
+      second = await getDriverReview({ telemetryDatabase: database, buildDriverReview, sessionId: session.id })
+    } catch {
+      fail('driver-review-generation-failed')
+    }
+    if (!first || !second) fail('driver-review-unavailable')
+    assertNoRecordingIdentity(first, needles)
+    assertNoRecordingIdentity(second, needles)
+    if (JSON.stringify(first) !== JSON.stringify(second)) fail('driver-review-nondeterministic')
+
+    const status = first.status?.code
+    if (!STATUS_CODES.includes(status) || !Object.hasOwn(aggregate.statuses, status)
+      || !Array.isArray(first.hotspots) || !first.hotspots.every((hotspot) => hotspot && typeof hotspot === 'object')) {
+      fail('driver-review-output-invalid')
+    }
+    // A durable strict cohort may legitimately be too small, but it must never
+    // be structurally invalid. Reaching invalid-input here means the selector,
+    // persisted canonical payload, and shipped engine disagree about their
+    // shared contract, so release evidence must fail rather than count it.
+    if (status === 'invalid-input') fail('driver-review-invalid-input', first.status.reasonCode)
+    aggregate.sessions += 1
+    aggregate.statuses[status] += 1
+    aggregate.hotspots += first.hotspots.length
+    if (first.hotspots.length > 0) aggregate.sessionsWithHotspots += 1
+  }
+  return aggregate
+}
+
+function assertDriverReviewExpectations(aggregate, options) {
+  if (aggregate.statuses.ready < options.minimumDriverReviewReady) fail('driver-review-ready-minimum-missing')
+  if (aggregate.hotspots < options.minimumDriverReviewHotspots) fail('driver-review-hotspot-minimum-missing')
 }
 
 async function fileContainsNeedle(filePath, needles) {
@@ -411,6 +477,9 @@ async function runAudit(options) {
     }
     const durable = validateDurableHistory(database, options.recording, expectedHistory)
     if (state.sessions !== durable.sessions || state.laps !== durable.laps || state.importedSessions !== durable.sessions || state.importedLaps !== durable.laps) fail('import-count-mismatch')
+    const driverReviews = await auditDriverReviews(database, options.recording)
+    if (driverReviews.sessions !== durable.sessions) fail('driver-review-session-count-mismatch')
+    assertDriverReviewExpectations(driverReviews, options)
 
     service = new RecordingImportService({ userDataPath: temporary, appVersion, database, bridgeManager: bridge, logger: diagnostics })
     await service.initialize()
@@ -435,6 +504,7 @@ async function runAudit(options) {
       referenceLaps: durable.referenceLaps,
       replayableLaps: durable.replayableLaps,
       payloads: durable.payloads,
+      driverReviews,
       replayStarts,
       deduplicatedImports: 1,
     }
@@ -470,6 +540,8 @@ module.exports = {
   AuditError,
   acceptAggregate,
   assertAggregateExpectations,
+  assertDriverReviewExpectations,
+  auditDriverReviews,
   assertNoRecordingIdentity,
   createAuditDiagnostics,
   durableFingerprint,

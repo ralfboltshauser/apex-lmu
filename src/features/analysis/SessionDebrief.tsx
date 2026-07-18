@@ -121,7 +121,7 @@ export function SessionDebrief({ session, selectedLapId, onSelectLap }: { sessio
         const reasons = lap.reasons.map((reason) => quality.reasons[reason as keyof typeof quality.reasons]).filter(Boolean).join('; ');
         const selected = lap.id === selectedLapId;
         const evidence = lap.referenceEligible ? m.pbReady : lap.paceComparison.paceEligible ? m.paceOnly : m.notPace;
-        return <button key={lap.id} type="button" role="row" className={selected ? 'is-selected' : ''} aria-pressed={selected} onClick={() => onSelectLap?.(lap.id)}>
+        return <button key={lap.id} type="button" role="row" className={selected ? 'is-selected' : ''} aria-selected={selected} onClick={() => onSelectLap?.(lap.id)}>
           <span role="cell"><b>{lap.number ?? '—'}</b>{selected && <small>{m.selected}</small>}</span>
           <span role="cell"><strong>{formatLapTime(language, lap.officialLapTimeMs) ?? '—'}</strong></span>
           <span role="cell" className={lap.paceComparison.paceEligible && lap.paceComparison.deltaToBestMs === 0 ? 'positive' : ''}>{lap.paceComparison.paceEligible ? formatSignedSeconds(language, lap.paceComparison.deltaToBestMs) : '—'}</span>

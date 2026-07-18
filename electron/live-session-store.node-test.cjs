@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { LiveSessionStore, classifyLap, compactSamples, constants } = require('./live-session-store.cjs')
+const { LiveSessionStore, classifyLap, compactSamples, selectDriverReviewEvidence, constants } = require('./live-session-store.cjs')
 
 function fixture(options = {}) {
   let sequence = 0
@@ -170,6 +170,33 @@ test('an early LMU lap-number change does not cut off the measured end of the la
   assert.equal(lap.lapTimeMs, 19_876)
   assert.equal(lap.timingSource, 'official')
   assert.equal(finalized[0].samples.at(-1).distanceM, 990)
+})
+
+test('finish-line new-lap timestamps stay in the finalized source event but not playback output', () => {
+  const finalized = []
+  const store = new LiveSessionStore({ makeId: () => 'stable', onLapFinalized: (event) => finalized.push(event) })
+  const source = fixture()
+  for (let distanceM = 0; distanceM < 1000; distanceM += 10) {
+    store.ingest(source.frame(1, distanceM, { player: { lastLapSeconds: 18, countLapFlag: 2 } }))
+  }
+  // LMU has advanced lapStartSeconds and the scoring lap number, while its
+  // distance channel still reports the old lap's finish line for one frame.
+  store.ingest(source.frame(2, 990, {
+    deltaSeconds: 0.02,
+    player: { lapStartSeconds: 20, lastLapSeconds: 19.876, countLapFlag: 2 },
+  }))
+  store.ingest(source.frame(2, 0, {
+    deltaSeconds: 0.02,
+    player: { lapStartSeconds: 20, lastLapSeconds: 19.876, countLapFlag: 2 },
+  }))
+
+  assert.equal(finalized.length, 1)
+  assert.equal(finalized[0].samples.length, 101, 'durable checksum source remains exact')
+  assert.ok(finalized[0].samples.at(-1).lapElapsedSeconds < finalized[0].samples.at(-2).lapElapsedSeconds)
+  const session = store.listSessions()[0]
+  const playback = store.getLap(session.id, session.laps[0].id)
+  assert.equal(playback.samples.length, 100)
+  assert.ok(playback.samples.every((sample, index, samples) => index === 0 || sample.lapElapsedSeconds >= samples[index - 1].lapElapsedSeconds))
 })
 
 test('a distance wrap advances the analysis lap even when the scoring counter catches up one frame later', () => {
@@ -604,6 +631,55 @@ test('memory pressure evicts old payloads transparently while retaining every la
   assert.ok(session.laps.filter((lap) => lap.state === 'complete' && !lap.samplesAvailable).length >= 4)
   assert.equal(session.laps[4].samplesAvailable, true)
   assert.ok(store.getHealth().evictedLapPayloads >= 4)
+  const review = store.getDriverReviewEvidence(session.id)
+  assert.equal(review.status, 'ready')
+  assert.equal(review.input.evidence.exclusions['payload-evicted'], session.laps.filter((lap) => lap.state === 'complete' && !lap.samplesAvailable).length)
+  assert.equal(review.input.evidence.sampledLapCount, review.input.laps.length)
+})
+
+test('driver review evidence pins the same-session reference and selection within a deterministic 16-lap cohort', () => {
+  const eligible = Array.from({ length: 24 }, (_, index) => ({
+    id: `lap-${String(index + 1).padStart(2, '0')}`,
+    number: index + 1,
+    state: 'complete',
+    timingSource: 'official',
+    lapTimeMs: index === 19 ? 88_000 : 90_000 + index,
+    quality: 'clean',
+    referenceEligible: true,
+    replayable: true,
+    samplesAvailable: true,
+  }))
+  const excluded = [
+    { ...eligible[0], id: 'incomplete', state: 'incomplete' },
+    { ...eligible[0], id: 'untimed', timingSource: 'unavailable', lapTimeMs: null },
+    { ...eligible[0], id: 'limited', quality: 'limited' },
+    { ...eligible[0], id: 'evicted', samplesAvailable: false },
+  ]
+  const first = selectDriverReviewEvidence([...eligible].reverse().concat(excluded), 'lap-12')
+  const second = selectDriverReviewEvidence([...eligible].reverse().concat(excluded), 'lap-12')
+
+  assert.deepEqual(second, first)
+  assert.equal(first.laps.length, constants.DRIVER_REVIEW_MAX_EVIDENCE_LAPS)
+  assert.ok(first.laps.some((lap) => lap.id === 'lap-20'), 'fastest reference is always decoded')
+  assert.ok(first.laps.some((lap) => lap.id === 'lap-12'), 'explicit eligible selection is always decoded')
+  assert.equal(first.referenceLapId, 'lap-20')
+  assert.deepEqual(first.accounting, {
+    totalLapCount: 28,
+    strictEligibleTotal: 24,
+    sampledLapCount: 16,
+    strictExcludedTotal: 4,
+    notDecodedDueToLimit: 8,
+    exclusions: {
+      'not-complete': 1,
+      'not-official': 1,
+      'not-clean': 1,
+      'not-reference-eligible': 0,
+      'not-replayable': 0,
+      'payload-unavailable': 1,
+      'payload-evicted': 0,
+      'cohort-limit': 8,
+    },
+  })
 })
 
 test('diagnostic events contain quality aggregates but no raw positions or controls', async () => {

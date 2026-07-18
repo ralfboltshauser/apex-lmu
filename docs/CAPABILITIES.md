@@ -2,7 +2,7 @@
 title: "Apex capability and provenance matrix"
 type: "product-capability-matrix"
 status: "release-candidate"
-baseline_date: "2026-07-17"
+baseline_date: "2026-07-18"
 product_model: "GPL local-first account-free"
 owner_issue: 3
 review_trigger: "LMU header/game update, new approved fixture, or explicit product-scope change"
@@ -40,7 +40,8 @@ Status meanings:
 | Manual setup reasoning engine | Partial | Explicit symptom/phase/speed report; deterministic small reversible recommendations | It cannot write concrete values without a real versioned `.svm` schema fixture |
 | LMU DuckDB inspection | Partial | Read-only capability discovery, metadata, tables, channels, events and lap indexes | No real DuckDB recording exists in the approved fixture set, so channel ingestion/comparison is not approved |
 | Durable private session history | Release gate pending | Finalized live laps and explicit `.apexrec` Analyze imports use local SQLite with bounded retention, migrations and payload checks | Raw Replay never writes history; imported frames never enter live UI, overlay, fuel calibration or lifetime stats |
-| Session debrief and measured lap comparison | Release gate pending | Official times, lap-quality policy, route coverage, distance-aligned controls/braking and local PB evidence | Complete clean and limited laps contribute official pace; only the stricter reference-eligible clean set can become PB/comparison-reference or learned-track sources; no causal coaching claim |
+| Factual session summary and measured lap evidence | Release gate pending | Official LMU times, lap-quality policy, route coverage, distance-aligned controls/braking and local PB evidence | Complete clean and limited laps can contribute factual pace; only the stricter reference-eligible clean set can become PB/comparison-reference or learned-track sources |
+| Deterministic same-session driver debrief | Release gate pending | Local `driver-review-v1` compares at most 16 complete, clean, officially timed, reference-eligible and replayable laps on a 16 m distance grid, with repeated 256 m trace-difference gates | Observed gaps and associations are not causes or promised gains; no AI, cloud reference, cross-session PB, fuel/tyre/weather/traffic/setup context or online/offline inference |
 | Native DuckDB session/stint ingestion | Rejected for current scope | No approved normalized channel trace exists | Reopen with a licensed anonymized DuckDB fixture and bounded retention contract |
 | Car-specific tyre/setup advice | Rejected for current scope | No licensed versioned target corpus or supported setup-schema fixture | Reopen with rights, car/compound/condition/version provenance and failure tests |
 | Derived CSV/JSON evidence export | Rejected for current scope | No approved portable schema or privacy UX | Raw `.apexrec` remains the lossless explicit export; define redaction and schema first |
@@ -78,6 +79,9 @@ hybrid power, or damage with credible-looking zero/100 defaults.
 - measured route/braking reconstruction with physical position/speed proof,
   stable main-process session identity, lap-quality reasons and selectable
   completed/current laps;
+- bounded deterministic driver-review logic with strict same-session evidence
+  accounting, stable fingerprints/tie-breaks and structured main-process output
+  that excludes raw samples, coordinates, payload hashes and recording paths;
 - full renderer, Electron, SQLite, scripts, Go, i18n, build, audit, Windows
   cross-compile, native E2E, packaging and release checks defined in the shared
   release workflow.

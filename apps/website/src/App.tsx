@@ -212,7 +212,7 @@ function Hero() {
               <p>Windows 11 x64 · public prerelease<br />No admin required · unsigned alpha</p>
             </div>
             <p className="hero-intro">
-              Live telemetry, evidence-led analysis, transparent strategy, safer setup handling and a focused race HUD—fully local and open source.
+              Live telemetry, deterministic driver debriefs, transparent strategy, safer setup handling and a focused race HUD—fully local and open source.
             </p>
           </div>
           <div className="hero-metrics" role="group" aria-label="Apex principles">
@@ -320,7 +320,7 @@ function LocalSection() {
       <div className="local-layout container">
         <ArchitectureStage />
         <div className="local-copy" data-reveal>
-          <p>Apex runs beside the game, never inside it. Native access lives behind a narrow boundary; recorded databases open read-only; setup writes are explicit, backed up and reversible.</p>
+          <p>Apex runs beside the game, never inside it. Native access lives behind a narrow boundary; raw recordings and analysis stay local; setup writes are explicit, backed up and reversible.</p>
           <ul>
             <li><span><Check size={14} /></span><div><strong>No injection</strong><small>Separate, unprivileged reader process</small></div></li>
             <li><span><Check size={14} /></span><div><strong>No account</strong><small>Start locally, even without a network</small></div></li>
@@ -381,10 +381,10 @@ function TrustSection() {
 const alphaItems = [
   { status: "validated", title: "Deterministic demo", copy: "Explore the live pit wall without the game or a network." },
   { status: "validated", title: "Windows package lifecycle", copy: "Installer and portable builds exercised in a Windows 11 VM." },
+  { status: "validated", title: "Raw recording + private import", copy: "Capture 50 Hz .apexrec files and rebuild durable Analysis history locally through the current decoder." },
+  { status: "validated", title: "Deterministic driver debrief", copy: "Compare a strict same-session lap cohort locally and inspect recurring measured differences—without AI or a causal claim." },
   { status: "open", title: "Current LMU compatibility", copy: "Still needs validation against a current real-game installation." },
-  { status: "open", title: "EAC + fullscreen", copy: "Not yet tested together in a live race environment." },
-  { status: "open", title: "Continuous recording", copy: "Not enabled in this release; DuckDB import is inspection-first." },
-  { status: "open", title: "Analysis ingestion", copy: "The analysis workspace still uses clearly labelled generated fixtures." },
+  { status: "open", title: "EAC + online race", copy: "A fresh EAC-protected native drive remains open; shared memory has no authoritative online/offline field." },
 ];
 
 function RoadmapSection() {
@@ -456,6 +456,7 @@ function InstallSection() {
 const faqs = [
   ["Is Apex free?", "Yes. Apex is free software under GPL-3.0-or-later. There is no subscription, account tier or paid unlock."],
   ["Does it upload telemetry?", "No. Apex has no telemetry upload, analytics, advertising, remote fonts or runtime cloud service. Your data stays on your PC."],
+  ["Does the driver debrief use AI?", "No. Deterministic local code compares complete, clean, officially timed, reference-eligible and exactly replayable laps from the same session. It reports measured associations to inspect, never a cause or promised gain."],
   ["Does it inject into Le Mans Ultimate?", "No. The integration is designed as a separate unprivileged reader targeting LMU’s official shared-memory surface."],
   ["Can I explore it without LMU?", "Yes. A deterministic multiclass demo makes the live pit wall and core workflows explorable locally, with no game or network required."],
   ["Is it production-ready?", `No. ${RELEASE.tag} is a public alpha. Current real-game compatibility, EAC, fullscreen and multi-hour race behavior still need validation.`],
