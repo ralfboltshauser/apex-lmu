@@ -2,6 +2,36 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.4.3 — 2026-07-20
+
+### English — A local Garage built from measured lifetime history
+
+Garage now shows the cars and tracks Apex has actually measured, groups reviewed team and livery variants under one model, and keeps unknown LMU labels explicit without changing the existing lifetime database.
+
+- **See measured distance by car and track** — The new Garage destination reads the existing local lifetime ledger and shows total kilometres, tracked drives, first and last activity, and exact per-track distance for each car model. Settings keeps database health and verified backups, then links to the richer Garage view.
+- **Group liveries without guessing the car** — A versioned local catalog recognizes model-specific names from LMU's official roster. Team, season, livery and number text may wrap a reviewed model sequence; different models and evolutions remain separate, and unmatched raw labels carry an Unrecognized LMU label badge.
+- **Reconcile every kilometre with the immutable ledger** — Model totals include measured chunks, the durable live accumulator and explicit corrections exactly once. Per-track totals use only run-linked measured distance; a correction without a source track remains visibly unattributed instead of being distributed across tracks. SQLite stays at schema version 1.
+- **Prove upgrades and replay isolation** — A v0.4.2 ledger reopens in v0.4.3 with the same migration record, chunk count and exact integer-millimetre total. English and German ready, empty, unknown and newer-schema states were visually inspected through 200% scaling. Strict replay of the private 1.741 GB recording processed 422,467 frames while creating zero Garage distance, models, drives or chunks.
+
+**Known limitations**
+
+- **Garage starts when Apex tracking starts** — Garage is not a reconstruction of the player's complete LMU history. It includes only eligible official live shared-memory intervals recorded after the local lifetime ledger was enabled; replay, imports, demo, self-test, AI and remote control remain excluded.
+- **Unknown models stay separate** — The first catalog groups only reviewed model-specific labels and does not offer manual aliases. Unrecognized or future labels remain truthful separate entries until a later catalog release can identify them; track layouts also remain combined while LMU does not expose an authoritative layout field.
+
+### Deutsch — Eine lokale Garage aus gemessenem Gesamtverlauf
+
+Die Garage zeigt jetzt Autos und Strecken, die Apex tatsächlich gemessen hat, gruppiert geprüfte Team- und Lackierungsvarianten unter einem Modell und lässt unbekannte LMU-Bezeichnungen ausdrücklich unbekannt – ohne die bestehende Gesamtdatenbank zu verändern.
+
+- **Sieh gemessene Distanz nach Auto und Strecke** — Das neue Ziel Garage liest den bestehenden lokalen Gesamtverlauf und zeigt Gesamtkilometer, erfasste Fahrten, erste und letzte Aktivität sowie die exakte Streckendistanz je Automodell. Die Einstellungen behalten Datenbankzustand und geprüfte Sicherungen und verlinken auf die ausführlichere Garage.
+- **Gruppiere Lackierungen, ohne das Auto zu erraten** — Ein versionierter lokaler Katalog erkennt modellspezifische Namen aus dem offiziellen LMU-Fahrzeugangebot. Team-, Saison-, Lackierungs- und Startnummerntext darf eine geprüfte Modellfolge umgeben; unterschiedliche Modelle und Evolutionsstufen bleiben getrennt, und nicht zugeordnete Rohbezeichnungen tragen das Badge Unbekannte LMU-Bezeichnung.
+- **Gleiche jeden Kilometer mit dem unveränderlichen Verlauf ab** — Modellsummen enthalten gemessene Blöcke, den dauerhaften Live-Akkumulator und ausdrückliche Korrekturen jeweils genau einmal. Streckensummen verwenden nur fahrtenbezogene Messdistanz; eine Korrektur ohne Ursprungsstrecke bleibt sichtbar nicht zugeordnet, statt auf Strecken verteilt zu werden. SQLite bleibt bei Schemaversion 1.
+- **Belege Upgrade und Wiedergabe-Isolation** — Ein v0.4.2-Verlauf öffnet sich in v0.4.3 mit demselben Migrationseintrag, derselben Blockanzahl und exakt derselben Ganzzahl-Millimetersumme. Englische und deutsche Bereit-, Leer-, Unbekannt- und Neueres-Schema-Zustände wurden bis 200 % visuell geprüft. Die strikte Wiedergabe der privaten 1,741-GB-Aufzeichnung verarbeitete 422.467 Frames und erzeugte dabei null Garage-Distanz, Modelle, Fahrten oder Blöcke.
+
+**Bekannte Einschränkungen**
+
+- **Die Garage beginnt mit der Apex-Erfassung** — Die Garage rekonstruiert nicht den vollständigen LMU-Verlauf des Spielers. Sie enthält nur geeignete offizielle Live-Intervalle aus dem Shared Memory nach Aktivierung des lokalen Gesamtverlaufs; Wiedergabe, Importe, Demo, Selbsttest, KI und Fernsteuerung bleiben ausgeschlossen.
+- **Unbekannte Modelle bleiben getrennt** — Der erste Katalog gruppiert nur geprüfte modellspezifische Bezeichnungen und bietet keine manuellen Aliase. Unbekannte oder zukünftige Bezeichnungen bleiben wahrheitsgetreu getrennte Einträge, bis ein späteres Katalog-Release sie zuordnen kann; Streckenlayouts bleiben ebenfalls zusammengefasst, solange LMU kein verbindliches Layoutfeld bereitstellt.
+
 ## 0.4.2 — 2026-07-20
 
 ### English — Truthful, readable race-engineering surfaces

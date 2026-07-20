@@ -227,3 +227,85 @@ test('vehicle identity groups normalized class and raw LMU name rather than part
   assert.equal(vehicleKey('  Lexus   RC F  ', 'GT3'), vehicleKey('Lexus RC F', 'gt3'))
   assert.notEqual(vehicleKey('Lexus RC F', 'GT3'), vehicleKey('Lexus RC F Evo', 'GT3'))
 })
+
+test('Garage groups reviewed model variants while exact totals reconcile by track', async (t) => {
+  const service = await StatsDatabase.open({ userDataPath: await directory(t), appVersion: '0.4.3', makeId: ids(), now: () => new Date('2026-07-01T00:00:00Z') })
+  const db = service.database
+  const insertVehicle = db.prepare('INSERT INTO vehicle_models(id,source_key,raw_name,raw_class,first_seen_at,last_seen_at) VALUES(?,?,?,?,?,?)')
+  insertVehicle.run('v1', 'one', 'Penske Porsche 963 2024 #6', 'Hypercar', '2026-07-01T10:00:00Z', '2026-07-04T10:00:00Z')
+  insertVehicle.run('v2', 'two', 'Proton Competition Porsche 963 #99', 'HYP', '2026-07-02T10:00:00Z', '2026-07-03T10:00:00Z')
+  insertVehicle.run('v3', 'three', 'Future Private Prototype', 'Hypercar', '2026-07-05T10:00:00Z', '2026-07-05T10:00:00Z')
+  const insertRun = db.prepare('INSERT INTO drive_runs(id,source_run_id,session_key,game_version,track,vehicle_id,started_at,ended_at,accepted_intervals,last_sequence) VALUES(?,?,?,?,?,?,?,?,?,?)')
+  insertRun.run('r1', 'source-1', 'session-1', 130, 'Track A', 'v1', '2026-07-01T10:00:00Z', '2026-07-01T11:00:00Z', 1, 2)
+  insertRun.run('r2', 'source-2', 'session-2', 130, 'Track A', 'v2', '2026-07-02T10:00:00Z', '2026-07-02T11:00:00Z', 2, 3)
+  insertRun.run('r3', 'source-3', 'session-3', 130, 'Track B', 'v1', '2026-07-04T10:00:00Z', '2026-07-04T11:00:00Z', 1, 2)
+  const insertChunk = db.prepare('INSERT INTO distance_chunks(id,vehicle_id,drive_run_id,source_run_id,sequence_start,sequence_end,distance_mm,accepted_intervals,rejected_intervals,algorithm_version,committed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+  insertChunk.run('c1', 'v1', 'r1', 'source-1', 1, 2, 1_000_000, 1, 0, 'proof', '2026-07-01T11:00:00Z')
+  insertChunk.run('c2', 'v2', 'r2', 'source-2', 1, 2, 2_000_000, 1, 0, 'proof', '2026-07-02T11:00:00Z')
+  insertChunk.run('c3', 'v1', 'r3', 'source-3', 1, 2, 4_000_000, 1, 0, 'proof', '2026-07-04T11:00:00Z')
+  db.prepare('INSERT INTO distance_accumulators(drive_run_id,vehicle_id,source_run_id,sequence_start,sequence_end,distance_mm,accepted_intervals,rejected_intervals,algorithm_version,checkpointed_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run('r2', 'v2', 'source-2', 2, 3, 500_000, 1, 0, 'proof', '2026-07-02T11:01:00Z')
+  db.prepare('INSERT INTO distance_corrections(id,vehicle_id,distance_mm,reason,created_at) VALUES(?,?,?,?,?)').run('fix1', 'v1', 500_000, 'proof adjustment', '2026-07-04T12:00:00Z')
+
+  const garage = service.getGarageStats()
+  assert.equal(garage.status, 'ready')
+  assert.equal(garage.schemaVersion, 1)
+  assert.equal(garage.catalogVersion, 1)
+  assert.equal(garage.totalDistanceMm, 8_000_000)
+  assert.equal(garage.totalDrives, 3)
+  assert.equal(service.getStats().totalDistanceMm, garage.totalDistanceMm)
+  assert.equal(garage.models.length, 2)
+  assert.deepEqual(garage.models[0], {
+    id: 'hypercar-porsche-963', recognized: true, name: 'Porsche 963', manufacturer: 'Porsche', className: 'Hypercar',
+    distanceMm: 8_000_000, unattributedDistanceMm: 500_000, drives: 3,
+    firstDrivenAt: '2026-07-01T10:00:00Z', lastDrivenAt: '2026-07-04T10:00:00Z', variantCount: 2,
+    trackCount: 2, omittedTracks: 0,
+    tracks: [
+      { name: 'Track B', distanceMm: 4_000_000, drives: 1, firstDrivenAt: '2026-07-04T10:00:00Z', lastDrivenAt: '2026-07-04T11:00:00Z' },
+      { name: 'Track A', distanceMm: 3_500_000, drives: 2, firstDrivenAt: '2026-07-01T10:00:00Z', lastDrivenAt: '2026-07-02T11:00:00Z' },
+    ],
+  })
+  assert.equal(garage.models[1].recognized, false)
+  assert.equal(garage.models[1].name, 'Future Private Prototype')
+  assert.equal(garage.models[1].variantCount, 1)
+  service.close()
+})
+
+test('Garage preserves closed and future-schema truth without querying unknown tables', async (t) => {
+  const root = await directory(t)
+  const file = path.join(root, 'future-garage.sqlite3')
+  const raw = new DatabaseSync(file); raw.exec('PRAGMA user_version=99'); raw.close()
+  const future = await StatsDatabase.open({ userDataPath: root, databasePath: file, appVersion: '0.4.3', makeId: ids() })
+  assert.deepEqual(future.getGarageStats(), { status: 'future-schema', schemaVersion: 99, catalogVersion: 1, trackedSince: null, totalDistanceMm: 0, totalDrives: 0, omittedModels: 0, models: [] })
+  future.close()
+  assert.equal(future.getGarageStats().status, 'closed')
+})
+
+test('a v0.4.2 lifetime ledger opens in v0.4.3 without migration or distance drift', async (t) => {
+  const root = await directory(t)
+  let service = await StatsDatabase.open({ userDataPath: root, appVersion: '0.4.2', makeId: ids(), now: () => new Date('2026-07-01T00:00:00Z') })
+  for (let index = 0; index <= 1800; index += 1) service.ingest(frame(index + 1, index * 0.02, 100, { player: { ...frame(0, 0).player, name: 'Penske Porsche 963 #6', class: 'Hypercar' } }))
+  service.close()
+  const file = path.join(root, 'data', 'apex.sqlite3')
+  const before = new DatabaseSync(file)
+  const beforeProof = {
+    schema: before.prepare('PRAGMA user_version').get().user_version,
+    migrations: before.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count,
+    migrationApp: before.prepare('SELECT app_version AS appVersion FROM schema_migrations WHERE version=1').get().appVersion,
+    distanceMm: before.prepare('SELECT SUM(distance_mm) AS distanceMm FROM distance_chunks').get().distanceMm,
+    chunks: before.prepare('SELECT COUNT(*) AS count FROM distance_chunks').get().count,
+  }
+  before.close()
+  service = await StatsDatabase.open({ userDataPath: root, appVersion: '0.4.3', makeId: ids(), now: () => new Date('2026-07-20T00:00:00Z') })
+  const garage = service.getGarageStats()
+  const afterProof = {
+    schema: service.database.prepare('PRAGMA user_version').get().user_version,
+    migrations: service.database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count,
+    migrationApp: service.database.prepare('SELECT app_version AS appVersion FROM schema_migrations WHERE version=1').get().appVersion,
+    distanceMm: garage.totalDistanceMm,
+    chunks: service.database.prepare('SELECT COUNT(*) AS count FROM distance_chunks').get().count,
+  }
+  assert.deepEqual(beforeProof, { schema: 1, migrations: 1, migrationApp: '0.4.2', distanceMm: 1_000_000, chunks: 1 })
+  assert.deepEqual(afterProof, beforeProof)
+  assert.equal(garage.models[0].id, 'hypercar-porsche-963')
+  service.close()
+})

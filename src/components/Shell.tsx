@@ -8,6 +8,7 @@ import {
   CircleDot,
   Fuel,
   Gauge,
+  Warehouse,
   Layers3,
   LifeBuoy,
   HelpCircle,
@@ -26,13 +27,14 @@ import { LanguageToggle } from '../i18n/LanguageToggle'
 import { feedbackMessages } from '../feedback/messages'
 import { useFeedback } from '../feedback/FeedbackProvider'
 
-export type ViewId = 'home' | 'live' | 'fuel' | 'analyze' | 'strategy' | 'setups' | 'overlays' | 'feedback' | 'settings'
+export type ViewId = 'home' | 'live' | 'fuel' | 'analyze' | 'garage' | 'strategy' | 'setups' | 'overlays' | 'feedback' | 'settings'
 
 const primaryNavigation: Array<{ id: Exclude<ViewId, 'settings' | 'feedback'>; icon: typeof Gauge; shortcut?: string }> = [
   { id: 'home', icon: Gauge },
   { id: 'live', icon: Radio, shortcut: 'L' },
   { id: 'fuel', icon: Fuel, shortcut: 'F' },
   { id: 'analyze', icon: BarChart3, shortcut: 'A' },
+  { id: 'garage', icon: Warehouse },
   { id: 'strategy', icon: Activity, shortcut: 'S' },
   { id: 'setups', icon: SlidersHorizontal },
   { id: 'overlays', icon: Layers3 },

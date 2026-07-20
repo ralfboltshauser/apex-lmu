@@ -147,6 +147,7 @@
 .fuel-auto-card__stats strong,
 .lifetime-vehicles strong,
 .lifetime-vehicles b,
+.lifetime-garage-link strong,
 .fuel-model-facts strong,
 .fuel-stint-bars strong,
 .fuel-confidence b { font-size: var(--type-body); }
@@ -185,6 +186,10 @@
   .car-state-card,
   .live-events-card { grid-column: 1; }
 }
+
+.lifetime-garage-link { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); }
+.lifetime-garage-link > span { display: grid; gap: 4px; }
+.lifetime-garage-link small { color: var(--text-secondary); font-size: var(--type-support); line-height: 1.45; }
 
 @media (max-width: 43.75rem) {
   .view { padding-inline: .875rem; }

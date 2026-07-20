@@ -4,7 +4,7 @@ import { I18nProvider } from '../i18n'
 import { SettingsView } from './SettingsView'
 
 describe('lifetime statistics settings', () => {
-  it('shows truthful tracked-since totals, per-model sessions, coverage, and verified backup feedback', async () => {
+  it('shows truthful tracked-since totals, Garage handoff, coverage, and verified backup feedback', async () => {
     const values = new Map<string, string>([['apex:language', 'en'], ['apex:settings-section', 'data']])
     Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key), key: (index: number) => [...values.keys()][index] ?? null, get length() { return values.size } } })
     const backup = vi.fn(async () => ({ ok: true, backup: { file: 'apex-manual.sqlite3', bytes: 4096, sha256: 'abc', createdAt: '2026-07-12T20:00:00Z' } }))
@@ -26,12 +26,14 @@ describe('lifetime statistics settings', () => {
     } as unknown as ApexDesktopApi
     const container = document.createElement('div'); document.body.append(container)
     const root = createRoot(container)
-    await act(async () => root.render(<I18nProvider><SettingsView /></I18nProvider>))
+    const openGarage = vi.fn()
+    await act(async () => root.render(<I18nProvider><SettingsView onOpenGarage={openGarage} /></I18nProvider>))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(container.textContent).toContain('12.35 km')
-    expect(container.textContent).toContain('Lexus RC F GT3')
-    expect(container.textContent).toContain('3 local sessions')
-    expect(container.textContent).toContain('Last driven')
+    expect(container.textContent).not.toContain('Lexus RC F GT3')
+    const garageButton = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Open Garage'))!
+    await act(async () => garageButton.click())
+    expect(openGarage).toHaveBeenCalledOnce()
     expect(container.textContent).toContain('C:\\Apex\\data\\apex.sqlite3')
     expect(container.textContent).toContain('apex-schema.sqlite3')
     expect(container.textContent).toContain('0123456789ab…')

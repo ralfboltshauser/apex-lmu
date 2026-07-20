@@ -65,6 +65,7 @@ interface ApexDesktopApi {
   getWhatsNewState(): Promise<ApexWhatsNewState>
   acknowledgeWhatsNew(version: string): Promise<{ ok: boolean; reason?: string; alreadyAcknowledged?: boolean; state?: ApexWhatsNewState }>
   getLifetimeStats(): Promise<ApexLifetimeStats>
+  getGarageStats(): Promise<ApexGarageStats>
   getLifetimeStatsHealth(): Promise<ApexLifetimeStatsHealth>
   backupLifetimeStats(): Promise<{ ok: boolean; reason?: string; backup?: { file: string; bytes: number; sha256: string; createdAt: string } }>
   getAnalysisSessions(): Promise<ApexAnalysisSessionSummary[]>
@@ -135,6 +136,9 @@ interface ApexUpdateState { status: 'development' | 'unsupported' | 'idle' | 'ch
 interface ApexWhatsNewState { schemaVersion: 1; currentVersion: string; firstSeenVersion: string; lastAcknowledgedVersion: string | null }
 interface ApexLifetimeVehicleStats { id: string; name: string; className: string; distanceMm: number; sessions: number; firstSeenAt: string; lastSeenAt: string }
 interface ApexLifetimeStats { status: 'ready' | 'future-schema' | 'error' | 'closed'; schemaVersion?: number; algorithmVersion?: string; message?: string; trackedSince: string | null; totalDistanceMm: number; vehicles: ApexLifetimeVehicleStats[] }
+interface ApexGarageTrackStats { name: string; distanceMm: number; drives: number; firstDrivenAt: string; lastDrivenAt: string }
+interface ApexGarageModelStats { id: string; recognized: boolean; name: string; manufacturer: string | null; className: string; distanceMm: number; unattributedDistanceMm: number; drives: number; firstDrivenAt: string; lastDrivenAt: string; variantCount: number; trackCount: number; omittedTracks: number; tracks: ApexGarageTrackStats[] }
+interface ApexGarageStats { status: 'ready' | 'future-schema' | 'error' | 'closed'; schemaVersion: number; catalogVersion: number; message?: string; trackedSince: string | null; totalDistanceMm: number; totalDrives: number; omittedModels: number; models: ApexGarageModelStats[] }
 interface ApexLifetimeStatsHealth { status: 'ready' | 'future-schema' | 'error' | 'closed' | 'read-only'; schemaVersion?: number; algorithmVersion?: string; message?: string; path?: string; lastBackup?: { file: string; bytes: number; sha256: string; createdAt: string } | null }
 interface ApexRecordingState { status: 'idle' | 'starting' | 'recording' | 'stopping' | 'replaying' | 'complete' | 'error'; path: string | null; frames: number; bytes: number; durationSeconds: number; message: string }
 interface ApexAnalysisImportState { schemaVersion: 1; status: 'idle' | 'hashing' | 'importing' | 'cancelling' | 'committing' | 'complete' | 'cancelled' | 'error'; fileName: string | null; bytesProcessed: number; bytesTotal: number; frames: number; sessions: number; laps: number; importedSessions: number; importedLaps: number; duplicate: boolean; sessionIds: string[]; reason: string | null }

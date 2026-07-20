@@ -3,6 +3,7 @@ const fsSync = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { DatabaseSync, backup } = require('node:sqlite')
+const { catalogVersion, resolveVehicleModel } = require('./vehicle-catalog.cjs')
 
 const schemaVersion = 1
 const algorithmVersion = 'distance-trapezoid-game-time-v1'
@@ -244,6 +245,71 @@ class StatsDatabase {
       v.first_seen_at AS firstSeenAt, v.last_seen_at AS lastSeenAt FROM vehicle_models v ORDER BY distanceMm DESC, name`).all()
     const vehicles = rows.map((row) => ({ id: row.id, name: row.name, className: row.className, distanceMm: Number(row.distanceMm), sessions: Number(row.sessions), firstSeenAt: row.firstSeenAt, lastSeenAt: row.lastSeenAt }))
     return { status: this.fault ? 'error' : 'ready', message: this.fault || undefined, schemaVersion, algorithmVersion, trackedSince, totalDistanceMm: vehicles.reduce((sum, row) => sum + row.distanceMm, 0), vehicles }
+  }
+
+  getGarageStats() {
+    const empty = { schemaVersion, catalogVersion, trackedSince: null, totalDistanceMm: 0, totalDrives: 0, omittedModels: 0, models: [] }
+    if (this.closed) return { ...empty, status: 'closed' }
+    if (this.futureSchema) return { ...empty, status: 'future-schema', schemaVersion: this.futureSchema }
+    const trackedSince = this.database.prepare("SELECT value FROM app_metadata WHERE key='tracked_since'").get()?.value ?? null
+    const vehicles = this.database.prepare(`SELECT v.id, v.raw_name AS rawName, v.raw_class AS rawClass,
+      COALESCE((SELECT SUM(distance_mm) FROM distance_chunks c WHERE c.vehicle_id=v.id),0)+
+      COALESCE((SELECT SUM(distance_mm) FROM distance_accumulators a WHERE a.vehicle_id=v.id),0) AS measuredDistanceMm,
+      COALESCE((SELECT SUM(distance_mm) FROM distance_corrections d WHERE d.vehicle_id=v.id),0) AS correctionDistanceMm,
+      COALESCE((SELECT COUNT(*) FROM drive_runs r WHERE r.vehicle_id=v.id AND r.accepted_intervals>0),0) AS drives,
+      v.first_seen_at AS firstDrivenAt, v.last_seen_at AS lastDrivenAt FROM vehicle_models v`).all()
+    const tracks = this.database.prepare(`SELECT r.vehicle_id AS vehicleId, r.track,
+      COALESCE(SUM((SELECT COALESCE(SUM(distance_mm),0) FROM distance_chunks c WHERE c.drive_run_id=r.id)+
+        (SELECT COALESCE(SUM(distance_mm),0) FROM distance_accumulators a WHERE a.drive_run_id=r.id)),0) AS distanceMm,
+      COUNT(*) AS drives, MIN(r.started_at) AS firstDrivenAt, MAX(COALESCE(r.ended_at,r.started_at)) AS lastDrivenAt
+      FROM drive_runs r WHERE r.accepted_intervals>0 GROUP BY r.vehicle_id,r.track`).all()
+    const tracksByVehicle = new Map()
+    for (const row of tracks) {
+      const values = tracksByVehicle.get(row.vehicleId) ?? []
+      values.push({ name: String(row.track).slice(0, 160), distanceMm: Number(row.distanceMm), drives: Number(row.drives), firstDrivenAt: row.firstDrivenAt, lastDrivenAt: row.lastDrivenAt })
+      tracksByVehicle.set(row.vehicleId, values)
+    }
+    const grouped = new Map()
+    for (const row of vehicles) {
+      const resolved = resolveVehicleModel(row.rawName, row.rawClass)
+      const id = resolved.recognized ? resolved.id : `raw:${row.id}`
+      const current = grouped.get(id) ?? {
+        id, recognized: resolved.recognized, name: resolved.displayName.slice(0, 160), manufacturer: resolved.manufacturer,
+        className: resolved.className.slice(0, 80), distanceMm: 0, unattributedDistanceMm: 0, drives: 0,
+        firstDrivenAt: row.firstDrivenAt, lastDrivenAt: row.lastDrivenAt, variantCount: 0, tracks: new Map(),
+      }
+      current.distanceMm += Number(row.measuredDistanceMm) + Number(row.correctionDistanceMm)
+      current.unattributedDistanceMm += Number(row.correctionDistanceMm)
+      current.drives += Number(row.drives)
+      current.variantCount += 1
+      if (row.firstDrivenAt < current.firstDrivenAt) current.firstDrivenAt = row.firstDrivenAt
+      if (row.lastDrivenAt > current.lastDrivenAt) current.lastDrivenAt = row.lastDrivenAt
+      for (const track of tracksByVehicle.get(row.id) ?? []) {
+        const previous = current.tracks.get(track.name)
+        current.tracks.set(track.name, previous ? {
+          ...previous,
+          distanceMm: previous.distanceMm + track.distanceMm,
+          drives: previous.drives + track.drives,
+          firstDrivenAt: track.firstDrivenAt < previous.firstDrivenAt ? track.firstDrivenAt : previous.firstDrivenAt,
+          lastDrivenAt: track.lastDrivenAt > previous.lastDrivenAt ? track.lastDrivenAt : previous.lastDrivenAt,
+        } : track)
+      }
+      grouped.set(id, current)
+    }
+    const stableSort = (left, right) => right.distanceMm - left.distanceMm
+      || (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
+      || (String(left.id || '') < String(right.id || '') ? -1 : String(left.id || '') > String(right.id || '') ? 1 : 0)
+    const allModels = [...grouped.values()].map((model) => {
+      const allTracks = [...model.tracks.values()].sort(stableSort)
+      return { ...model, trackCount: allTracks.length, omittedTracks: Math.max(0, allTracks.length - 64), tracks: allTracks.slice(0, 64) }
+    }).sort(stableSort)
+    const totalDistanceMm = allModels.reduce((sum, model) => sum + model.distanceMm, 0)
+    const totalDrives = allModels.reduce((sum, model) => sum + model.drives, 0)
+    return {
+      status: this.fault ? 'error' : 'ready', message: this.fault || undefined, schemaVersion, catalogVersion, trackedSince,
+      totalDistanceMm, totalDrives, omittedModels: Math.max(0, allModels.length - 256),
+      models: allModels.slice(0, 256),
+    }
   }
 
   getHealth() { return { status: this.closed ? 'closed' : this.futureSchema ? 'future-schema' : this.fault ? 'error' : this.writable ? 'ready' : 'read-only', message: this.fault || undefined, schemaVersion: this.futureSchema || schemaVersion, algorithmVersion, lastBackup: this.lastBackup, path: this.filePath } }

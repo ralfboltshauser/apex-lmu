@@ -3,7 +3,7 @@ import { viewGuides } from './GuideDrawer'
 
 describe('progressive discovery guides', () => {
   it('covers every workspace with a useful flow and glossary', () => {
-    expect(Object.keys(viewGuides).sort()).toEqual(['analyze', 'feedback', 'fuel', 'home', 'live', 'overlays', 'settings', 'setups', 'strategy'])
+    expect(Object.keys(viewGuides).sort()).toEqual(['analyze', 'feedback', 'fuel', 'garage', 'home', 'live', 'overlays', 'settings', 'setups', 'strategy'])
     for (const guide of Object.values(viewGuides)) {
       expect(guide.summary.length).toBeGreaterThan(40)
       expect(guide.steps).toHaveLength(3)

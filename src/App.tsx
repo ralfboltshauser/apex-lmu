@@ -22,6 +22,7 @@ import { FuelCalculatorView } from './views/FuelCalculatorView'
 import { SetupsView } from './views/SetupsView'
 import { OverlaysView } from './views/OverlaysView'
 import { SettingsView } from './views/SettingsView'
+import { GarageView } from './views/GarageView'
 import { DesktopTelemetryAdapter, emptyFuelTracker, MockTelemetryAdapter, type LiveFuelEstimate, type TelemetryFrame } from './core'
 import { advanceDurableFuelCalibration } from './fuel-profile'
 import { appMessages } from './i18n/appMessages'
@@ -414,11 +415,12 @@ export default function App() {
       case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} measuredTrack={measuredTrack} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
       case 'fuel': return <FuelCalculatorView live={liveFuel} />
       case 'analyze': return <AnalyzeView measuredTrack={measuredTrack} analysisSessions={analysisSessions} />
+      case 'garage': return <GarageView onOpenSettings={() => { window.localStorage.setItem('apex:settings-section', 'data'); setView('settings') }} />
       case 'strategy': return <StrategyView />
       case 'setups': return <SetupsView onImport={importSetup} />
       case 'overlays': return <OverlaysView onOpenOverlay={openOverlay} />
       case 'feedback': return <FeedbackView />
-      case 'settings': return <SettingsView />
+      case 'settings': return <SettingsView onOpenGarage={() => setView('garage')} />
       default: return <HomeView source={source} frame={liveFrame} onNavigate={setView} onImport={importTelemetry} />
     }
   }

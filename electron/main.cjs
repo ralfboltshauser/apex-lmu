@@ -157,6 +157,7 @@ ipcMain.handle('apex:get-update-state', () => updateManager?.getState())
 ipcMain.handle('apex:get-whats-new-state', () => whatsNewService.getState())
 ipcMain.handle('apex:acknowledge-whats-new', (_event, version) => whatsNewService.acknowledge(version))
 ipcMain.handle('apex:get-lifetime-stats', () => statsDatabase ? statsDatabase.getStats() : { status: 'error', message: statsError || 'Lifetime database is unavailable.', totalDistanceMm: 0, trackedSince: null, vehicles: [] })
+ipcMain.handle('apex:get-garage-stats', () => statsDatabase ? statsDatabase.getGarageStats() : { status: 'error', message: statsError || 'Lifetime database is unavailable.', schemaVersion: 1, catalogVersion: 1, trackedSince: null, totalDistanceMm: 0, totalDrives: 0, omittedModels: 0, models: [] })
 ipcMain.handle('apex:get-lifetime-stats-health', () => statsDatabase ? statsDatabase.getHealth() : { status: 'error', message: statsError || 'Lifetime database is unavailable.' })
 ipcMain.handle('apex:backup-lifetime-stats', () => statsDatabase ? statsDatabase.createBackup().then((backup) => ({ ok: true, backup })).catch((error) => ({ ok: false, reason: error.message })) : { ok: false, reason: statsError || 'unavailable' })
 ipcMain.handle('apex:get-analysis-sessions', () => {

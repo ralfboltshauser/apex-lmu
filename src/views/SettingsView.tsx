@@ -61,7 +61,7 @@ function StatusIcon({ value }: { value: boolean | null }) {
   return <i className={value === null ? 'is-neutral' : value ? '' : 'is-warning'}>{value === null ? <Info size={13} /> : value ? <Check size={13} /> : <X size={13} />}</i>
 }
 
-export function SettingsView() {
+export function SettingsView({ onOpenGarage = () => {} }: { onOpenGarage?: () => void }) {
   const m = useMessages(settingsMessages)
   const { language, setLanguage } = useI18n()
   const [environment, setEnvironment] = useState<ApexEnvironment | null>(null)
@@ -382,7 +382,7 @@ export function SettingsView() {
           <Card className="lifetime-card" data-feedback-redact="measured-lifetime-stats">
             <CardHeader eyebrow={m.data.lifetime.eyebrow} title={m.data.lifetime.title} description={m.data.lifetime.description} action={<Badge tone={lifetimeHealth?.status === 'ready' ? 'positive' : lifetimeHealth?.status === 'future-schema' || lifetimeHealth?.status === 'error' ? 'warning' : 'neutral'}>{lifetimeHealth ? m.data.lifetime.health[lifetimeHealth.status === 'future-schema' ? 'futureSchema' : lifetimeHealth.status === 'read-only' ? 'readOnly' : lifetimeHealth.status] : m.status.notChecked}</Badge>} />
             <div className="lifetime-summary"><div><small>{m.data.lifetime.total}</small><strong>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format((lifetime?.totalDistanceMm || 0) / 1_000_000)} {m.data.lifetime.kilometers}</strong></div><div><small>{m.data.lifetime.trackedSince}</small><strong>{lifetime?.trackedSince ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(lifetime.trackedSince)) : '—'}</strong></div></div>
-            {lifetime?.vehicles.length ? <div className="lifetime-vehicles">{lifetime.vehicles.map((vehicle) => <div key={vehicle.id}><span><strong>{vehicle.name}</strong><small>{vehicle.className} · {formatMessage(m.data.lifetime.sessions, { count: vehicle.sessions })} · {formatMessage(m.data.lifetime.lastDriven, { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(vehicle.lastSeenAt)) })}</small></span><b>{new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(vehicle.distanceMm / 1_000_000)} {m.data.lifetime.kilometers}</b></div>)}</div> : <p className="diagnostics-intro">{lifetime?.status === 'error' ? lifetime.message : m.data.lifetime.noDistance}</p>}
+            {lifetime?.vehicles.length ? <div className="lifetime-garage-link"><span><strong>{m.data.lifetime.garageTitle}</strong><small>{m.data.lifetime.garageHint}</small></span><Button variant="secondary" size="sm" onClick={onOpenGarage}>{m.data.lifetime.openGarage}</Button></div> : <p className="diagnostics-intro">{lifetime?.status === 'error' ? lifetime.message : m.data.lifetime.noDistance}</p>}
             {lifetimeHealth?.status === 'future-schema' && <p className="diagnostics-intro">{m.data.lifetime.futureSchema}</p>}
             {lifetimeHealth?.status === 'error' && <p className="diagnostics-intro">{m.data.lifetime.recovery}{lifetimeHealth.message ? ` ${lifetimeHealth.message}` : ''}</p>}
             <dl className="lifetime-ledger-details">

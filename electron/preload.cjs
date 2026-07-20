@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('apexDesktop', {
   getWhatsNewState: () => ipcRenderer.invoke('apex:get-whats-new-state'),
   acknowledgeWhatsNew: (version) => ipcRenderer.invoke('apex:acknowledge-whats-new', version),
   getLifetimeStats: () => ipcRenderer.invoke('apex:get-lifetime-stats'),
+  getGarageStats: () => ipcRenderer.invoke('apex:get-garage-stats'),
   getLifetimeStatsHealth: () => ipcRenderer.invoke('apex:get-lifetime-stats-health'),
   backupLifetimeStats: () => ipcRenderer.invoke('apex:backup-lifetime-stats'),
   getAnalysisSessions: () => ipcRenderer.invoke('apex:get-analysis-sessions'),
