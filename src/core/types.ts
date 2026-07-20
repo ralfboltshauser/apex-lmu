@@ -12,7 +12,7 @@ export type SetupId = string
 export type IsoDateTime = string
 
 export type VehicleClass = 'HYPERCAR' | 'LMP2' | 'LMGT3' | 'UNKNOWN'
-export type SessionKind = 'practice' | 'qualifying' | 'race' | 'test-day'
+export type SessionKind = 'practice' | 'qualifying' | 'race' | 'test-day' | 'unknown'
 export type SessionPhase =
   | 'garage'
   | 'formation'

@@ -16,7 +16,7 @@ function frame(sequence: number, lap: number, fuel: number, source: TelemetryFra
       lastLapTimeMs: 100_000,
       powertrain: { ...simulated.player.powertrain, fuelLiters: fuel },
     },
-    sample: { ...simulated.sample, isInPitLane: false },
+    sample: { ...simulated.sample, isInPitLane: false, controlOwner: 'local-player' as const },
   }
 }
 
@@ -66,5 +66,44 @@ describe('durable fuel profile boundary', () => {
     expect(setItem).toHaveBeenCalledTimes(1)
     expect(JSON.parse(setItem.mock.calls[0]![1] as string)).toEqual({ fuel: [3.4], laps: [100] })
     expect(values.size).toBe(1)
+  })
+
+  it.each(['ai', 'remote', 'unknown'] as const)('does not access durable storage for %s-controlled frames', (controlOwner) => {
+    const source = frame(1, 1, 60)
+    const observed = advanceDurableFuelCalibration(emptyFuelTracker(), {
+      ...source,
+      sample: { ...source.sample, controlOwner },
+    })
+
+    expect(observed.currentFuelLiters).toBe(60)
+    expect(observed.calibrationProfileLoaded).toBe(false)
+    expect(accessLocalStorage).not.toHaveBeenCalled()
+    expect(getItem).not.toHaveBeenCalled()
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('loads the existing profile only when local control becomes eligible', () => {
+    values.set('apex:fuel-profile:Circuit%20de%20la%20Sarthe%00499P', JSON.stringify({ fuel: [3.6], laps: [205] }))
+    const ai = frame(1, 1, 60)
+    let durable = advanceDurableFuelCalibration(emptyFuelTracker(), {
+      ...ai,
+      sample: { ...ai.sample, controlOwner: 'ai' },
+    })
+    expect(getItem).not.toHaveBeenCalled()
+
+    durable = advanceDurableFuelCalibration(durable, frame(2, 1, 59))
+    expect(getItem).toHaveBeenCalledTimes(1)
+    expect(durable.fuelSamplesLiters).toEqual([3.6])
+    expect(durable.lapTimeSamplesSeconds).toEqual([205])
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('ignores self-test and session-only frames without touching storage', () => {
+    const selfTest = { ...frame(1, 1, 60), source: 'self-test' as const }
+    const sessionOnly = { ...frame(2, 1, 0), sourceState: 'session-only' as const }
+
+    expect(advanceDurableFuelCalibration(emptyFuelTracker(), selfTest)).toBe(emptyFuelTracker())
+    expect(advanceDurableFuelCalibration(emptyFuelTracker(), sessionOnly)).toBe(emptyFuelTracker())
+    expect(accessLocalStorage).not.toHaveBeenCalled()
   })
 })

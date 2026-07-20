@@ -5,9 +5,9 @@ import { takeSimulationFrames } from './simulation'
 function frame(sequence: number, lap: number, fuel: number, inPits = false) {
   const source = takeSimulationFrames(1, { sessionId: 'fuel-test', startSessionElapsedMs: sequence * 100_000 })[0]!
   return {
-    ...source, sequence,
+    ...source, sequence, source: 'lmu-shared-memory' as const, sourceState: 'vehicle-telemetry' as const,
     player: { ...source.player, currentLapNumber: lap, completedLaps: lap - 1, lastLapTimeMs: 100_000, powertrain: { ...source.player.powertrain, fuelLiters: fuel } },
-    sample: { ...source.sample, isInPitLane: inPits },
+    sample: { ...source.sample, isInPitLane: inPits, controlOwner: 'local-player' as const },
   }
 }
 
@@ -44,5 +44,28 @@ describe('live fuel tracker', () => {
     }
 
     expect(updateFuelTracker(live, replay)).toBe(live)
+  })
+
+  it.each(['ai', 'remote'] as const)('observes %s fuel without learning from its laps', (controlOwner) => {
+    let state = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 60))
+    state = updateFuelTracker(state, { ...frame(2, 1, 58), sample: { ...frame(2, 1, 58).sample, controlOwner } })
+    state = updateFuelTracker(state, { ...frame(3, 2, 56.6), sample: { ...frame(3, 2, 56.6).sample, controlOwner } })
+
+    expect(state.currentFuelLiters).toBe(56.6)
+    expect(state.fuelSamplesLiters).toEqual([])
+    expect(state.lapTimeSamplesSeconds).toEqual([])
+  })
+
+  it('rejects a mixed-control lap after control returns to the local player', () => {
+    let state = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 60))
+    const aiFrame = frame(2, 1, 58)
+    state = updateFuelTracker(state, { ...aiFrame, sample: { ...aiFrame.sample, controlOwner: 'ai' } })
+    state = updateFuelTracker(state, frame(3, 1, 57))
+    state = updateFuelTracker(state, frame(4, 2, 56.6))
+
+    expect(state.fuelSamplesLiters).toEqual([])
+    expect(state.lapTimeSamplesSeconds).toEqual([])
+    expect(state.calibrationExclusion).toBe('non-local-control')
+    expect(state.currentLapCalibrationEligible).toBe(true)
   })
 })

@@ -7,6 +7,12 @@ and failure mode.
 Detailed, dependency-ordered implementation plans for every currently open
 GitHub issue live in [the open-issue roadmap](roadmap/issues/README.md).
 
+The four current in-app feedback requests are decomposed into independently
+shippable `0.4.2`–`0.4.5` releases in the
+[feedback release roadmap](roadmap/feedback-releases/README.md). Each milestone
+contains its own implementation, persistence, test, packaging, publication and
+installed-release proof gates.
+
 ## Alpha exit gates
 
 - Diff the bridge structs against the shared-memory header shipped with the

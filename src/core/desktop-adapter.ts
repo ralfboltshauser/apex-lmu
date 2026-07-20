@@ -299,7 +299,8 @@ export function mapBridgeFrame(raw: RawBridgeFrame, startedAt: string): Telemetr
   return {
     sequence: raw.sequence, source: raw.source,
     capturedAt: raw.capturedAt,
-    session: { id: sessionId, kind: 'race', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt: sessionStartedAt, scheduledDurationMs: raw.session.endSeconds !== null && raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: null },
+    // The current official mapping has no authoritative session-kind field.
+    session: { id: sessionId, kind: 'unknown', eventName: raw.session.track, serverName: '', track: { id: raw.session.track.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: raw.session.track, layout: raw.session.layout ?? '', countryCode: '', lengthM: trackLength, cornerCount: 0, pitLaneLossEstimateMs: 0 }, startedAt: sessionStartedAt, scheduledDurationMs: raw.session.endSeconds !== null && raw.session.endSeconds > 0 ? raw.session.endSeconds * 1000 : null, scheduledLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, isMultiplayer: null },
     sessionState: { phase: phase(raw), flag: raw.session.yellowState > 0 ? 'yellow' : 'green', elapsedMs: raw.session.elapsedSeconds * 1000, remainingMs: raw.session.endSeconds !== null && raw.session.endSeconds > 0 ? Math.max(0, raw.session.endSeconds - raw.session.elapsedSeconds) * 1000 : null, currentLap: player.currentLapNumber, totalLaps: raw.session.maximumLaps > 0 ? raw.session.maximumLaps : null, sessionBestLapMs: null, incidentCount: 0 },
     weather, player, opponents, sample, events: [], sourceState: raw.playerTelemetryAvailable === false ? 'session-only' : 'vehicle-telemetry',
   }

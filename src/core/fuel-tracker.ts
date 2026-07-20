@@ -20,19 +20,39 @@ export interface FuelTrackerState extends LiveFuelEstimate {
   readonly lapStartFuelLiters: number
   readonly lastFuelLiters: number
   readonly lapInvalid: boolean
+  readonly currentLapCalibrationEligible: boolean
+  readonly calibrationExclusion: FuelCalibrationExclusion | null
+  readonly calibrationProfileLoaded: boolean
 }
+
+export type FuelCalibrationExclusion =
+  | 'non-live-source'
+  | 'session-only'
+  | 'non-local-control'
 
 const EMPTY: FuelTrackerState = {
   sessionId: '', trackName: '', carName: '', fuelSamplesLiters: [], lapTimeSamplesSeconds: [],
   currentFuelLiters: 0, tankCapacityLiters: 0, completedLaps: 0, currentLapProgress: 0,
   totalLaps: null, durationSeconds: null, elapsedSeconds: 0, currentLapNumber: 0,
   lapStartFuelLiters: 0, lastFuelLiters: 0, lapInvalid: false,
+  currentLapCalibrationEligible: false, calibrationExclusion: null, calibrationProfileLoaded: false,
 }
 
 export function emptyFuelTracker(): FuelTrackerState { return EMPTY }
 
+export function fuelCalibrationExclusion(frame: TelemetryFrame): FuelCalibrationExclusion | null {
+  if (frame.source !== 'lmu-shared-memory') return 'non-live-source'
+  if (frame.sourceState === 'session-only') return 'session-only'
+  if (frame.sample.controlOwner !== 'local-player') return 'non-local-control'
+  return null
+}
+
 export function isDurableFuelCalibrationFrame(frame: TelemetryFrame): boolean {
-  return frame.source !== 'recording-replay'
+  return fuelCalibrationExclusion(frame) === null
+}
+
+function isObservableLiveFuelFrame(frame: TelemetryFrame): boolean {
+  return frame.source === 'lmu-shared-memory' && frame.sourceState !== 'session-only'
 }
 
 function base(frame: TelemetryFrame, fallbackProgress: number) {
@@ -48,23 +68,41 @@ function base(frame: TelemetryFrame, fallbackProgress: number) {
 }
 
 export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFrame): FuelTrackerState {
-  if (!isDurableFuelCalibrationFrame(frame) || frame.sourceState === 'session-only') return previous
+  if (!isObservableLiveFuelFrame(frame)) return previous
   const fallbackProgress = previous.sessionId === frame.session.id ? previous.currentLapProgress : 0
   const current = base(frame, fallbackProgress)
+  const frameEligible = isDurableFuelCalibrationFrame(frame)
   if (previous.sessionId !== frame.session.id || previous.currentLapNumber <= 0 || frame.player.currentLapNumber < previous.currentLapNumber) {
-    return { ...EMPTY, ...current, currentLapNumber: frame.player.currentLapNumber, lapStartFuelLiters: current.currentFuelLiters, lastFuelLiters: current.currentFuelLiters }
+    return {
+      ...EMPTY, ...current,
+      currentLapNumber: frame.player.currentLapNumber,
+      lapStartFuelLiters: current.currentFuelLiters,
+      lastFuelLiters: current.currentFuelLiters,
+      currentLapCalibrationEligible: frameEligible,
+      calibrationExclusion: fuelCalibrationExclusion(frame),
+    }
   }
 
   const refuelled = current.currentFuelLiters > previous.lastFuelLiters + 0.25
   const touchedPits = frame.sample.isInPitLane || previous.lapInvalid || refuelled
   if (frame.player.currentLapNumber === previous.currentLapNumber) {
-    return { ...previous, ...current, lastFuelLiters: current.currentFuelLiters, lapInvalid: touchedPits }
+    return {
+      ...previous, ...current,
+      lastFuelLiters: current.currentFuelLiters,
+      lapInvalid: touchedPits,
+      currentLapCalibrationEligible: previous.currentLapCalibrationEligible && frameEligible,
+      calibrationExclusion: previous.calibrationExclusion ?? fuelCalibrationExclusion(frame),
+    }
   }
 
   const used = previous.lapStartFuelLiters - current.currentFuelLiters
-  const validFuel = !touchedPits && used > 0.05 && used <= Math.max(previous.tankCapacityLiters, 1)
+  const completedLapEligible = previous.currentLapCalibrationEligible && frameEligible
+  const validFuel = completedLapEligible && !touchedPits && used > 0.05 && used <= Math.max(previous.tankCapacityLiters, 1)
   const lastLapSeconds = frame.player.lastLapTimeMs === null ? null : frame.player.lastLapTimeMs / 1000
-  const validLapTime = !touchedPits && lastLapSeconds !== null && lastLapSeconds >= 10 && lastLapSeconds <= 3600
+  const validLapTime = completedLapEligible && !touchedPits && lastLapSeconds !== null && lastLapSeconds >= 10 && lastLapSeconds <= 3600
+  const completedLapExclusion = completedLapEligible
+    ? null
+    : previous.calibrationExclusion ?? fuelCalibrationExclusion(frame)
   return {
     ...previous, ...current,
     fuelSamplesLiters: validFuel ? [...previous.fuelSamplesLiters, Math.round(used * 10_000) / 10_000].slice(-20) : previous.fuelSamplesLiters,
@@ -73,5 +111,7 @@ export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFr
     lapStartFuelLiters: current.currentFuelLiters,
     lastFuelLiters: current.currentFuelLiters,
     lapInvalid: frame.sample.isInPitLane,
+    currentLapCalibrationEligible: frameEligible,
+    calibrationExclusion: completedLapExclusion,
   }
 }

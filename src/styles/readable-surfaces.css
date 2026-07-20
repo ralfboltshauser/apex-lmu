@@ -1,0 +1,215 @@
+/*
+ * Readability contract for race-engineering surfaces. Keep meaningful text on
+ * the shared semantic scale; tiny text is reserved for redundant SVG marks.
+ */
+.eyebrow,
+.metric__label,
+.metric__detail { font-size: var(--type-caption); line-height: 1.35; }
+
+.data-provenance-banner,
+.button,
+.card-header__copy p,
+.tooltip-hint > span,
+.page-heading p { font-size: var(--type-body); }
+
+.button--sm,
+.badge,
+.segmented button,
+.select-control select,
+.text-button,
+.inline-link { font-size: var(--type-field-label); }
+
+.card-header__copy h2 { font-size: var(--type-card-title); line-height: 1.25; }
+.badge { min-height: 1.5rem; padding-inline: .5rem; }
+.segmented button { min-height: 2rem; }
+.select-control { min-height: 2.375rem; }
+.select-control select { height: 2.25rem; }
+.metric__value > span { font-size: var(--type-caption); }
+
+/* Shared shell */
+.app-shell { grid-template-columns: 14.5rem minmax(0, 1fr); }
+.brand span,
+.nav-section-label,
+.nav-item kbd,
+.privacy-note span,
+.breadcrumb,
+.connection-pill span { font-size: var(--type-caption); }
+.nav-item,
+.privacy-note strong,
+.sidebar-support,
+.connection-pill strong { font-size: var(--type-field-label); }
+.nav-item { min-height: 2.5rem; height: auto; }
+.privacy-note span { line-height: 1.45; }
+.toast { width: min(22rem, calc(100vw - 1.5rem)); min-height: 4.5rem; }
+.toast strong { font-size: var(--type-field-label); }
+.toast small { overflow: visible; font-size: var(--type-caption); line-height: 1.35; text-overflow: clip; white-space: normal; }
+
+/* Live */
+.live-titlebar__identity p,
+.live-titlebar__status > span,
+.live-instrument-strip span,
+.live-instrument-strip small,
+.map-legend,
+.measured-brake-zones > p,
+.measured-brake-zones li span,
+.traffic-prediction span span,
+.fuel-card__primary span,
+.strategy-recommendation span,
+.standings-table__head,
+.standings-driver small,
+.tyre-card__top,
+.tyre-card__body small,
+.tyre-card__body em,
+.tyre-card__brake,
+.car-state-footer span,
+.event-feed__time,
+.event-feed small,
+.live-empty-view__checks,
+.live-waiting-steps { font-size: var(--type-caption); line-height: 1.35; }
+
+.measured-brake-zones > strong,
+.measured-brake-zones li b,
+.traffic-prediction strong,
+.strategy-recommendation strong,
+.standings-table__row,
+.standings-driver b,
+.standings-driver strong,
+.tyre,
+.event-feed strong { font-size: var(--type-field-label); }
+
+.live-titlebar__identity h1 { font-size: 1.125rem; }
+.live-instrument-strip strong { font-size: var(--type-primary-data); }
+.live-instrument-strip strong i,
+.fuel-card__primary strong i { font-size: var(--type-caption); }
+.pedal-bars strong { font-size: var(--type-field-label) !important; }
+.standings-table__head { min-height: 2rem; height: auto; }
+.standings-table__row { min-height: 2.75rem; }
+.event-feed > div { min-height: 3.75rem; }
+
+/* Strategy inputs, evidence, candidates and result explanation */
+.field-label > span,
+.number-input > span,
+.number-input em,
+.number-input__error,
+.strategy-source-note,
+.strategy-verdict p,
+.strategy-verdict__metrics span,
+.scenario-card__time span,
+.scenario-card__stats,
+.scenario-card__delta,
+.strategy-empty-alternative,
+.plan-summary span,
+.strategy-timeline__track .stop b,
+.strategy-timeline__axis,
+.strategy-timeline__stints small,
+.pit-table > div,
+.pit-table__head,
+.strategy-explanation b,
+.brief-numbers span,
+.brief-numbers small,
+.brief-callout,
+.unsupported-grid em,
+.unsupported-card > p { font-size: var(--type-caption) !important; line-height: 1.4; }
+
+.field-label > button,
+.number-input input,
+.strategy-verdict__metrics b,
+.scenario-card__top strong,
+.scenario-card__stats b,
+.strategy-timeline__stints strong,
+.unsupported-grid b { font-size: var(--type-field-label); }
+.field-label > button,
+.number-input > div { min-height: 2.375rem; height: auto; }
+.number-input input { height: 2.25rem; }
+.strategy-verdict h2 { font-size: var(--type-card-title); }
+.strategy-verdict__metrics span { min-width: 0; }
+.scenario-card { min-height: 10rem; }
+
+/* Fuel calculator */
+.fuel-mode-bar > span,
+.fuel-auto-card__stats small,
+.lifetime-summary small,
+.lifetime-vehicles small,
+.lifetime-ledger-details dt,
+.lifetime-ledger-details dd,
+.fuel-model-facts span,
+.fuel-hero-result > div:nth-child(2) > span,
+.fuel-hero-result small,
+.fuel-result-grid span,
+.fuel-result-grid small,
+.fuel-stint-bars > div > span,
+.fuel-confidence small,
+.fuel-confidence p,
+.fuel-assumptions span,
+.fuel-assumptions b { font-size: var(--type-caption); line-height: 1.4; }
+
+.fuel-auto-card p,
+.fuel-auto-card__stats strong,
+.lifetime-vehicles strong,
+.lifetime-vehicles b,
+.fuel-model-facts strong,
+.fuel-stint-bars strong,
+.fuel-confidence b { font-size: var(--type-body); }
+.fuel-auto-card h2 { font-size: var(--type-card-title); }
+.fuel-auto-card__stats { flex-wrap: wrap; }
+.fuel-result-grid > .card { min-height: 7.25rem; }
+.fuel-assumptions span { grid-template-columns: 1.0625rem minmax(0, .8fr) minmax(0, 1.2fr); }
+
+/* The 200% zoom layouts use the same type scale and reflow instead. */
+@media (max-width: 56.25rem) {
+  .app-shell { grid-template-columns: 4rem minmax(0, 1fr); }
+  .sidebar { padding-inline: .6875rem; }
+  .brand { justify-content: center; padding: 0; }
+  .brand > div:nth-child(2),
+  .brand > .badge,
+  .nav-section-label,
+  .nav-item > span:not(.nav-item__live):not(.nav-item__count),
+  .nav-item kbd,
+  .privacy-note > div:last-child,
+  .sidebar-support span,
+  .sidebar-support svg:last-child,
+  .topbar__actions .button > span { display: none; }
+  .nav-item,
+  .sidebar-support { justify-content: center; padding-inline: 0; }
+  .nav-item > span.nav-item__count { position: absolute; right: .125rem; }
+  .privacy-note { justify-content: center; padding: .5rem; }
+  .topbar { padding-inline: .75rem; }
+  .topbar__actions { gap: .375rem; }
+  .topbar__actions .button { width: 2.25rem; padding: 0; }
+  .strategy-layout,
+  .live-layout { grid-template-columns: minmax(0, 1fr); }
+  .live-layout > .card,
+  .live-map-card,
+  .fuel-card,
+  .standings-card,
+  .car-state-card,
+  .live-events-card { grid-column: 1; }
+}
+
+@media (max-width: 43.75rem) {
+  .view { padding-inline: .875rem; }
+  .breadcrumb > span,
+  .breadcrumb > svg,
+  .connection-pill > div span { display: none; }
+  .connection-pill { width: 2.25rem; justify-content: center; padding: 0; }
+  .connection-pill > div { display: none; }
+  .live-titlebar { align-items: flex-start; flex-direction: column; }
+  .live-instrument-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .live-speed-block { grid-column: 1 / -1; }
+  .live-instrument-strip > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .event-feed { grid-template-columns: minmax(0, 1fr); }
+  .event-feed > div + div { border-top: 1px solid var(--line); border-left: 0; padding-left: 0; }
+  .fuel-inputs { grid-template-columns: minmax(0, 1fr); }
+  .fuel-auto-card { grid-template-columns: 2.75rem minmax(0, 1fr); }
+  .fuel-auto-card__stats { grid-column: 2; border-left: 0; padding-left: 0; }
+  .fuel-result-grid { grid-template-columns: minmax(0, 1fr); }
+  .fuel-hero-result { grid-template-columns: 3.125rem minmax(0, 1fr); }
+  .fuel-hero-result > .fuel-confidence { grid-column: 2; }
+  .fuel-assumptions { grid-template-columns: minmax(0, 1fr); }
+  .strategy-verdict { grid-template-columns: 2.375rem minmax(0, 1fr); }
+  .strategy-verdict > .badge,
+  .strategy-verdict__metrics { grid-column: 2; }
+  .strategy-verdict__metrics,
+  .field-group--two,
+  .brief-numbers { grid-template-columns: minmax(0, 1fr); }
+}

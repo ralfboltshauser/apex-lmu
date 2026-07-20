@@ -31,13 +31,19 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --mono: 'JetBrains Mono Variable', 'SFMono-Regular', Consolas, monospace;
+  --type-caption: .6875rem;
+  --type-field-label: .75rem;
+  --type-body: .8125rem;
+  --type-card-title: 1rem;
+  --type-tabular: .8125rem;
+  --type-primary-data: 1.5rem;
   background: var(--bg);
   color: var(--text);
 }
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-width: 100%; min-height: 100%; margin: 0; }
-body { min-width: 1080px; background: var(--bg); overflow-x: hidden; }
+body { min-width: 0; background: var(--bg); overflow-x: hidden; }
 button, input, select { font: inherit; }
 button { color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }

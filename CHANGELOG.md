@@ -2,6 +2,36 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.4.2 — 2026-07-20
+
+### English — Truthful, readable race-engineering surfaces
+
+Live, Fuel and Strategy now use a readable responsive type scale, while unavailable session kind and ineligible fuel evidence remain explicit instead of becoming invented race context or personal calibration.
+
+- **Read the pit wall at every supported scale** — Meaningful labels, descriptions, fields, badges, tables and notifications now share a semantic type scale across the shell, Live, Fuel and Strategy. Content reflows without horizontal page overflow through 200% scaling, including long German copy and compact 1280×720 windows.
+- **Show Session when LMU does not expose the kind** — The official mapping does not currently provide an authoritative practice, qualifying, test-day or race field. Measured Live therefore shows Session instead of silently labelling every decoded session as Race; generated demo data remains clearly identified and may still use its declared demo race context.
+- **Learn fuel only from the local player's complete lap** — Current fuel can remain visible while AI or remote control is active, but AI, remote, mixed-control, scoring-only, self-test and replay evidence cannot enter the durable fuel profile. Existing local profiles keep their keys and remain private on this PC.
+- **Verify the real unavailable and replay states** — The release matrix covers Live, Fuel and Strategy in English and German at 100%, 125%, 150% and 200%, plus scoring-only and fuel-learning states. Strict replay of the private 1.741 GB recording reconstructed 422,467 frames and 52 lap crossings while admitting zero replay frames or crossings to durable fuel calibration.
+
+**Known limitations**
+
+- **Session kind remains unavailable** — Apex does not infer session kind from duration, lap count, opponents, phase or other circumstantial values. It will show Session until a supported authoritative LMU field is decoded and validated.
+- **Adaptive strategy and movable cards come later** — This release supplies the truthful evidence and responsive typography foundation. It does not yet add the adaptive live fuel plan, Virtual Energy or tyre strategy, or movable and resizable Live dashboard cards.
+
+### Deutsch — Wahrheitsgetreue, lesbare Renningenieur-Ansichten
+
+Live, Kraftstoff und Strategie verwenden jetzt eine lesbare responsive Schriftskala. Ein nicht verfügbarer Sessiontyp und ungeeignete Kraftstoffbelege bleiben ausdrücklich unbekannt, statt zu erfundenem Rennkontext oder persönlicher Kalibrierung zu werden.
+
+- **Lies den Kommandostand bei jeder unterstützten Skalierung** — Bedeutungsvolle Beschriftungen, Erklärungen, Felder, Badges, Tabellen und Benachrichtigungen verwenden jetzt eine gemeinsame semantische Schriftskala in Navigation, Live, Kraftstoff und Strategie. Inhalte ordnen sich bis 200 % ohne horizontalen Seitenüberlauf neu an – auch mit langen deutschen Texten und kompakten Fenstern mit 1280×720 Pixeln.
+- **Zeige Sitzung, wenn LMU den Typ nicht bereitstellt** — Die offizielle Datenabbildung liefert derzeit kein verbindliches Feld für Training, Qualifying, Testtag oder Rennen. Gemessene Live-Daten zeigen deshalb Sitzung, statt jede decodierte Session unbemerkt als Rennen zu bezeichnen; erzeugte Demodaten bleiben klar gekennzeichnet und dürfen weiterhin ihren ausdrücklich festgelegten Demo-Rennkontext verwenden.
+- **Lerne Kraftstoff nur aus einer vollständigen Runde des lokalen Spielers** — Der aktuelle Kraftstoff kann bei KI- oder Fernsteuerung sichtbar bleiben. Belege aus KI-, Fern-, gemischter Steuerung, reinen Wertungsdaten, Selbsttest und Wiedergabe können jedoch nicht in das dauerhafte Kraftstoffprofil gelangen. Bestehende lokale Profile behalten ihre Schlüssel und bleiben privat auf diesem PC.
+- **Prüfe die echten Nicht-verfügbar- und Wiedergabezustände** — Die Release-Matrix deckt Live, Kraftstoff und Strategie auf Englisch und Deutsch bei 100 %, 125 %, 150 % und 200 % sowie reine Wertungs- und Kraftstoff-Lernzustände ab. Die strikte Wiedergabe der privaten 1,741-GB-Aufzeichnung rekonstruierte 422.467 Frames und 52 Rundenübergänge; kein Wiedergabe-Frame und kein Übergang wurde für die dauerhafte Kraftstoffkalibrierung zugelassen.
+
+**Bekannte Einschränkungen**
+
+- **Der Sessiontyp bleibt nicht verfügbar** — Apex leitet den Sessiontyp weder aus Dauer, Rundenzahl, Gegnern, Phase noch aus anderen Indizien ab. Bis ein unterstütztes verbindliches LMU-Feld decodiert und geprüft ist, zeigt Apex Sitzung.
+- **Adaptive Strategie und verschiebbare Karten folgen später** — Dieses Release liefert die wahrheitsgetreue Daten- und responsive Typografiegrundlage. Der adaptive Live-Kraftstoffplan, Virtual-Energy- oder Reifenstrategie sowie verschiebbare und größenveränderbare Live-Karten sind noch nicht enthalten.
+
 ## 0.4.1 — 2026-07-18
 
 ### English — Evidence-linked deterministic driver debrief

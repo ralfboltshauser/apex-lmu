@@ -36,15 +36,22 @@ export function advanceDurableFuelCalibration(
   frame: TelemetryFrame,
   storage?: FuelProfileStorage,
 ): FuelTrackerState {
-  if (!isDurableFuelCalibrationFrame(frame)) return previous
-  const profileStorage = storage ?? window.localStorage
-
   let next = updateFuelTracker(previous, frame)
-  if (next.sessionId && next.sessionId !== previous.sessionId) {
+  if (next === previous || !isDurableFuelCalibrationFrame(frame)) return next
+
+  const profileStorage = storage ?? window.localStorage
+  let loadedProfile = false
+  if (next.sessionId && !next.calibrationProfileLoaded) {
     const saved = loadFuelProfile(profileStorage, next.trackName, next.carName)
-    next = { ...next, fuelSamplesLiters: saved.fuel, lapTimeSamplesSeconds: saved.laps }
+    next = {
+      ...next,
+      fuelSamplesLiters: saved.fuel,
+      lapTimeSamplesSeconds: saved.laps,
+      calibrationProfileLoaded: true,
+    }
+    loadedProfile = true
   }
-  if ((next.fuelSamplesLiters.length !== previous.fuelSamplesLiters.length || next.lapTimeSamplesSeconds.length !== previous.lapTimeSamplesSeconds.length) && next.sessionId) {
+  if (!loadedProfile && (next.fuelSamplesLiters.length !== previous.fuelSamplesLiters.length || next.lapTimeSamplesSeconds.length !== previous.lapTimeSamplesSeconds.length) && next.sessionId) {
     saveFuelProfile(profileStorage, next.trackName, next.carName, next.fuelSamplesLiters, next.lapTimeSamplesSeconds)
   }
   return next

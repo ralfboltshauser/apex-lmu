@@ -96,6 +96,7 @@ export function Shell({
                 key={item.id}
                 type="button"
                 className={`nav-item ${view === item.id ? 'is-active' : ''}`}
+                aria-label={m.navigation[item.id]}
                 aria-current={view === item.id ? 'page' : undefined}
                 onClick={() => onViewChange(item.id)}
               >
@@ -108,16 +109,16 @@ export function Shell({
           })}
 
           <div className="nav-section-label nav-section-label--secondary">{m.system}</div>
-          <button type="button" className={`nav-item ${view === 'feedback' ? 'is-active' : ''}`} aria-current={view === 'feedback' ? 'page' : undefined} onClick={() => onViewChange('feedback')}>
+          <button type="button" className={`nav-item ${view === 'feedback' ? 'is-active' : ''}`} aria-label={feedbackCopy.navigation} aria-current={view === 'feedback' ? 'page' : undefined} onClick={() => onViewChange('feedback')}>
             <MessagesSquare size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>{feedbackCopy.navigation}</span>
             {(feedback.state.unread > 0 || feedback.state.needsAnswer > 0) && <span className="nav-item__count">{Math.max(feedback.state.unread, feedback.state.needsAnswer)}</span>}
           </button>
-          <button type="button" className="nav-item" onClick={() => openSettings('connection')}>
+          <button type="button" className="nav-item" aria-label={m.navigation.settings} onClick={() => openSettings('connection')}>
             <Settings size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>{m.navigation.settings}</span>
           </button>
-          <button type="button" className="nav-item" onClick={() => openSettings('about')}>
+          <button type="button" className="nav-item" aria-label={m.aboutPrivacy} onClick={() => openSettings('about')}>
             <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />
             <span>{m.aboutPrivacy}</span>
           </button>
@@ -131,7 +132,7 @@ export function Shell({
               <span>{m.localPromise}</span>
             </div>
           </div>
-          <button type="button" className="sidebar-support" onClick={() => openSettings('diagnostics')}>
+          <button type="button" className="sidebar-support" aria-label={m.diagnostics} onClick={() => openSettings('diagnostics')}>
             <LifeBuoy size={15} />
             <span>{m.diagnostics}</span>
             <ChevronRight size={14} />
@@ -149,8 +150,8 @@ export function Shell({
           <div className="topbar__actions">
             <LanguageToggle />
             <Button variant="secondary" size="sm" icon={<MessageSquarePlus size={15} />} title={feedbackCopy.shortcut} onClick={feedback.startSelection}>{feedbackCopy.giveFeedback}</Button>
-            <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} onClick={openGuide}>{m.learnView}</Button>
-            <div className={`connection-pill ${connected ? 'is-live' : ''}`}>
+            <Button variant="secondary" size="sm" icon={<HelpCircle size={15} />} aria-label={m.learnView} onClick={openGuide}>{m.learnView}</Button>
+            <div className={`connection-pill ${connected ? 'is-live' : ''}`} role="status" aria-label={connected ? (demoRunning ? m.demoConnected : m.lmuConnected) : m.lmuOffline}>
               <span className="connection-pill__pulse" />
               <div>
                 <strong>{connected ? (demoRunning ? m.demoConnected : m.lmuConnected) : m.lmuOffline}</strong>
@@ -161,6 +162,7 @@ export function Shell({
               variant={demoRunning ? 'secondary' : 'primary'}
               size="sm"
               icon={demoRunning ? <CircleDot size={15} /> : <Sparkles size={15} />}
+              aria-label={demoRunning ? m.stopDemo : m.runDemo}
               onClick={onToggleDemo}
             >
               {demoRunning ? m.stopDemo : m.runDemo}

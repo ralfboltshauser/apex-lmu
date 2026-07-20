@@ -181,6 +181,7 @@ export default function App() {
   const viewRef = useRef<ViewId>('home')
   const connectionCopyRef = useRef({ offline: m.connection.offline, waiting: m.connection.waiting })
   const lastUpdateNotice = useRef('')
+  const nextToastId = useRef(0)
   const [realConnected, setRealConnected] = useState(false)
   const [liveConnectionMessage, setLiveConnectionMessage] = useState(m.connection.starting)
   const [liveFrame, setLiveFrame] = useState<TelemetryFrame | null>(null)
@@ -192,7 +193,7 @@ export default function App() {
   connectionCopyRef.current = { offline: m.connection.offline, waiting: m.connection.waiting }
 
   const addToast = (title: string, body: string) => {
-    const id = Date.now()
+    const id = ++nextToastId.current
     setToasts((current) => [...current.slice(-2), { id, title, body }])
     window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4200)
   }
@@ -224,10 +225,8 @@ export default function App() {
   }
 
   const toggleDemo = () => {
-    setDemoRunning((current) => {
-      addToast(current ? m.demo.stopped : m.demo.connected, current ? m.demo.waiting : m.demo.streaming)
-      return !current
-    })
+    addToast(demoRunning ? m.demo.stopped : m.demo.connected, demoRunning ? m.demo.waiting : m.demo.streaming)
+    setDemoRunning(!demoRunning)
   }
 
   const importTelemetry = async () => {

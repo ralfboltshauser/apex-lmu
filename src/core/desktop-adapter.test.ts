@@ -45,6 +45,7 @@ describe('desktop LMU bridge mapping', () => {
     expect(frame.opponents[1].gapToPlayerMs).toBeNull()
     expect(frame.opponents[1].intervalAheadMs).toBeNull()
     expect(frame.sample.sequence).toBe(42)
+    expect(frame.session.kind).toBe('unknown')
     expect(frame.session.id).toBe('analysis-session-authoritative')
     expect(frame.session.isMultiplayer).toBeNull()
     expect(frame.session.startedAt).toBe('2026-07-11T19:30:00.000Z')
