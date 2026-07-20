@@ -5,7 +5,7 @@ status: "planned"
 baseline_version: "0.4.1"
 baseline_date: "2026-07-20"
 feedback: ["APX-000003", "APX-000004", "APX-000005", "APX-000006"]
-release_count: 4
+release_count: 5
 ---
 
 # Apex feedback release milestones
@@ -27,6 +27,7 @@ before implementation. Do not reuse an already published version.
 | `0.4.3` | [Local Garage and canonical car history](02-v0.4.3-local-garage.md) | Completes APX-000006 | No schema migration in v1; new read model and IPC only | Incorrectly merging distinct vehicles |
 | `0.4.4` | [Adaptive live fuel plan](03-v0.4.4-adaptive-live-fuel-plan.md) | Completes the supportable fuel-only scope of APX-000005 | None; existing local fuel profiles remain compatible | A plausible but wrong pit recommendation |
 | `0.4.5` | [Customizable Live dashboard](04-v0.4.5-customizable-live-dashboard.md) | Completes APX-000003 | Versioned local UI preference only | Visual order diverging from keyboard/read order |
+| `0.4.6` | [Garage crash containment](05-v0.4.6-garage-crash-containment.md) | Direct user incident follow-up to APX-000006 | None | A private ledger shape remains incompatible |
 
 ```mermaid
 flowchart LR

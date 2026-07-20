@@ -57,4 +57,43 @@ describe('GarageView', () => {
     expect(openSettings).toHaveBeenCalledOnce()
     await act(async () => root.unmount())
   })
+
+  it('contains an incompatible Garage response instead of crashing the view', async () => {
+    const reportError = vi.fn(async () => ({ ok: true }))
+    window.apexDesktop = {
+      getGarageStats: vi.fn(async () => ({ ...ready, models: [{ ...ready.models[0], tracks: null }] })),
+      reportError,
+    } as unknown as ApexDesktopApi
+    const container = document.createElement('div'); document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<I18nProvider><GarageView onOpenSettings={() => {}} /></I18nProvider>))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(container.textContent).toContain('Garage history needs attention')
+    expect(container.textContent).not.toContain('Porsche 963')
+    expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ context: 'garage-stats' }))
+    await act(async () => root.unmount())
+  })
+
+  it('contains an unexpected Garage render failure and keeps recovery controls usable', async () => {
+    const reportError = vi.fn(async () => ({ ok: true }))
+    let reads = 0
+    const model = { ...ready.models[0] }
+    Object.defineProperty(model, 'distanceMm', { enumerable: true, get: () => {
+      reads += 1
+      if (reads > 1) throw new Error('simulated Garage renderer failure')
+      return ready.models[0].distanceMm
+    } })
+    window.apexDesktop = { getGarageStats: vi.fn(async () => ({ ...ready, models: [model] })), reportError } as unknown as ApexDesktopApi
+    const openSettings = vi.fn()
+    const container = document.createElement('div'); document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<I18nProvider><GarageView onOpenSettings={openSettings} /></I18nProvider>))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(container.textContent).toContain('Garage history needs attention')
+    const button = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Data & storage'))!
+    await act(async () => button.click())
+    expect(openSettings).toHaveBeenCalledOnce()
+    expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ context: 'garage-render' }))
+    await act(async () => root.unmount())
+  })
 })

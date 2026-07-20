@@ -2,6 +2,32 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.4.6 — 2026-07-20
+
+### English — A Garage that fails safely
+
+Garage now validates its complete local-history response before rendering and contains unexpected render failures, so a bad result becomes a recoverable state instead of taking down the view.
+
+- **Validate the whole Garage result** — The renderer checks status, schema and catalog versions, totals, every model, every track and their dates and counts before committing the response to React state. An unexpected shape is rejected as one unit; no partial car list is rendered.
+- **Keep Apex usable when Garage cannot load** — A failed or incompatible Garage read now clears pending history, while a view-level boundary contains any later render failure. Both paths record a local diagnostic and show recovery with a direct path to Data & storage. The lifetime SQLite file is preserved and no schema migration is introduced.
+- **Exercise real SQLite, IPC and rendering** — The Windows desktop replay test now starts with seeded measured car and track history, opens Garage through the real preload IPC path, verifies its expanded model and track, and proves replay, import and app restart do not change the exact lifetime distance.
+
+**Known limitations**
+
+- **The affected PC remains the final compatibility test** — Raw .apexrec recordings reproduce LMU decoder data but intentionally do not contain the private lifetime SQLite ledger. This release contains incompatible Garage data and render failures; confirming the original ledger now renders its cars still requires opening Garage once on the affected PC.
+
+### Deutsch — Eine Garage, die sicher fehlschlägt
+
+Die Garage prüft jetzt ihre vollständige Antwort aus dem lokalen Verlauf vor dem Rendern und begrenzt unerwartete Renderfehler. Ein fehlerhaftes Ergebnis wird dadurch zu einem wiederherstellbaren Zustand, statt die Ansicht zum Absturz zu bringen.
+
+- **Prüfe das vollständige Garage-Ergebnis** — Der Renderer prüft Status, Schema- und Katalogversionen, Summen sowie jedes Modell, jede Strecke und deren Datums- und Zählwerte, bevor die Antwort in den React-Zustand gelangt. Eine unerwartete Struktur wird als Ganzes abgelehnt; es erscheint keine unvollständige Fahrzeugliste.
+- **Halte Apex nutzbar, wenn die Garage nicht lädt** — Ein fehlgeschlagener oder inkompatibler Garage-Lesevorgang verwirft jetzt den ausstehenden Verlauf; eine Grenze auf Ansichtsebene fängt jeden späteren Renderfehler ab. Beide Wege schreiben eine lokale Diagnose und zeigen die Wiederherstellung mit direktem Weg zu Daten & Speicher. Die SQLite-Datei des Gesamtverlaufs bleibt erhalten; es gibt keine Schemamigration.
+- **Prüfe echtes SQLite, IPC und Rendering** — Der Windows-Desktop-Wiedergabetest startet jetzt mit einem vorbereiteten gemessenen Auto- und Streckenverlauf, öffnet die Garage über den echten Preload-IPC-Pfad, prüft das aufgeklappte Modell und die Strecke und belegt, dass Wiedergabe, Import und App-Neustart die exakte Gesamtdistanz nicht verändern.
+
+**Bekannte Einschränkungen**
+
+- **Der betroffene PC bleibt der letzte Kompatibilitätstest** — Rohe .apexrec-Aufzeichnungen reproduzieren LMU-Decoder-Daten, enthalten aber absichtlich nicht den privaten SQLite-Gesamtverlauf. Dieses Release begrenzt inkompatible Garage-Daten und Renderfehler; ob der ursprüngliche Verlauf seine Autos jetzt anzeigt, muss einmal durch Öffnen der Garage auf dem betroffenen PC bestätigt werden.
+
 ## 0.4.5 — 2026-07-20
 
 ### English — A Live dashboard arranged around your race

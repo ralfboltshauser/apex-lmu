@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { CarFront, ChevronDown, Database, MapPin, Route, ShieldCheck, TriangleAlert, Warehouse } from 'lucide-react'
 import { Badge, Button, Card } from '../components/ui'
 import { formatMessage, useI18n, useMessages } from '../i18n'
@@ -14,7 +14,68 @@ function date(value: string | null, language: string) {
   return Number.isFinite(parsed.valueOf()) ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(parsed) : '—'
 }
 
-export function GarageView({ onOpenSettings }: { onOpenSettings: () => void }) {
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function count(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+}
+
+function timestamp(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+function garageStats(value: unknown): value is ApexGarageStats {
+  if (!record(value)
+    || !['ready', 'future-schema', 'error', 'closed'].includes(String(value.status))
+    || !count(value.schemaVersion)
+    || !count(value.catalogVersion)
+    || !timestamp(value.trackedSince)
+    || !finite(value.totalDistanceMm)
+    || !count(value.totalDrives)
+    || !count(value.omittedModels)
+    || !Array.isArray(value.models)) return false
+  return value.models.every((model) => record(model)
+    && typeof model.id === 'string'
+    && typeof model.recognized === 'boolean'
+    && typeof model.name === 'string'
+    && (model.manufacturer === null || typeof model.manufacturer === 'string')
+    && typeof model.className === 'string'
+    && finite(model.distanceMm)
+    && finite(model.unattributedDistanceMm)
+    && count(model.drives)
+    && timestamp(model.firstDrivenAt)
+    && timestamp(model.lastDrivenAt)
+    && count(model.variantCount)
+    && count(model.trackCount)
+    && count(model.omittedTracks)
+    && Array.isArray(model.tracks)
+    && model.tracks.every((track) => record(track)
+      && typeof track.name === 'string'
+      && finite(track.distanceMm)
+      && count(track.drives)
+      && timestamp(track.firstDrivenAt)
+      && timestamp(track.lastDrivenAt)))
+}
+
+class GarageBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() { return { failed: true } }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    void window.apexDesktop?.reportError({ message: error.message, stack: `${error.stack ?? ''}\n${info.componentStack ?? ''}`, context: 'garage-render' })
+  }
+
+  render() { return this.state.failed ? this.props.fallback : this.props.children }
+}
+
+function GarageContent({ onOpenSettings }: { onOpenSettings: () => void }) {
   const m = useMessages(garageMessages)
   const { language } = useI18n()
   const [stats, setStats] = useState<ApexGarageStats | null>(null)
@@ -25,13 +86,16 @@ export function GarageView({ onOpenSettings }: { onOpenSettings: () => void }) {
     let cancelled = false
     if (!window.apexDesktop?.getGarageStats) return
     void window.apexDesktop.getGarageStats()
-      .then((next) => {
+      .then((response) => {
         if (cancelled) return
+        if (!garageStats(response)) throw new Error('Garage history response did not match the supported contract')
+        const next = response
         setStats(next)
         setExpanded((current) => current ?? next.models[0]?.id ?? null)
       })
       .catch((error) => {
         if (cancelled) return
+        setStats(null)
         setLoadError(true)
         void window.apexDesktop?.reportError({ message: error instanceof Error ? error.message : String(error), context: 'garage-stats' })
       })
@@ -92,4 +156,10 @@ export function GarageView({ onOpenSettings }: { onOpenSettings: () => void }) {
       <footer className="garage-footer"><ShieldCheck size={18} /><span><strong>{m.footer.title}</strong><small>{m.footer.copy}</small></span><Button variant="secondary" size="sm" onClick={onOpenSettings}>{m.footer.settings}</Button></footer>
     </div>
   )
+}
+
+export function GarageView({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const m = useMessages(garageMessages)
+  const fallback = <div className="view view--garage"><Card className="garage-state garage-state--warning"><TriangleAlert size={28} /><div><h2>{m.state.errorTitle}</h2><p>{m.state.errorCopy}</p><Button variant="secondary" size="sm" onClick={onOpenSettings}>{m.footer.settings}</Button></div></Card></div>
+  return <GarageBoundary fallback={fallback}><GarageContent onOpenSettings={onOpenSettings} /></GarageBoundary>
 }

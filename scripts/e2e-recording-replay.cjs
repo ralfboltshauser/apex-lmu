@@ -6,12 +6,15 @@ const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const { _electron: electron } = require('playwright-core')
 const { PROCESSING_VERSION } = require('../electron/recording-import-service.cjs')
+const { StatsDatabase } = require('../electron/stats-database.cjs')
+const { version: appVersion } = require('../package.json')
 
 const root = path.join(__dirname, '..')
 const manifestPath = path.join(root, 'data', 'recordings', 'apex-lmu-session-2026-07-12-19-23-14TESTAUFNAMERALF.expected.json')
 const manifest = require(manifestPath)
 const fixturePath = path.join(path.dirname(manifestPath), manifest.recording.file)
 const execFileAsync = promisify(execFile)
+const garageDistanceMm = 13_629_000
 
 function fail(message) { throw new Error(`Windows desktop replay E2E: ${message}`) }
 function exact(actual, expected, label) { if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`) }
@@ -96,6 +99,16 @@ async function waitForImportTerminal(page, timeoutMs = 180000) {
 
 async function fixtureHash() { return crypto.createHash('sha256').update(await fs.readFile(fixturePath)).digest('hex') }
 
+async function seedGarageLedger(userDataPath) {
+  let id = 0
+  const service = await StatsDatabase.open({ userDataPath, appVersion, makeId: () => `garage-e2e-${++id}`, now: () => new Date('2026-07-20T00:00:00.000Z') })
+  const database = service.database
+  database.prepare('INSERT INTO vehicle_models(id,source_key,raw_name,raw_class,first_seen_at,last_seen_at) VALUES(?,?,?,?,?,?)').run('garage-e2e-vehicle', 'garage-e2e-source-key', 'Penske Porsche 963 2024 #6', 'Hypercar', '2026-07-20T00:00:00.000Z', '2026-07-20T01:00:00.000Z')
+  database.prepare('INSERT INTO drive_runs(id,source_run_id,session_key,game_version,track,vehicle_id,started_at,ended_at,accepted_intervals,last_sequence) VALUES(?,?,?,?,?,?,?,?,?,?)').run('garage-e2e-run', 'garage-e2e-source', 'garage-e2e-session', 130, 'Circuit de la Sarthe', 'garage-e2e-vehicle', '2026-07-20T00:00:00.000Z', '2026-07-20T01:00:00.000Z', 1, 2)
+  database.prepare('INSERT INTO distance_chunks(id,vehicle_id,drive_run_id,source_run_id,sequence_start,sequence_end,distance_mm,accepted_intervals,rejected_intervals,algorithm_version,committed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run('garage-e2e-chunk', 'garage-e2e-vehicle', 'garage-e2e-run', 'garage-e2e-source', 1, 2, garageDistanceMm, 1, 0, 'garage-e2e-proof', '2026-07-20T01:00:00.000Z')
+  service.close()
+}
+
 async function assertWindowAbove(aboveHandle, belowHandle, raiseFirst = false) {
   if (!/^\d+$/.test(aboveHandle) || !/^\d+$/.test(belowHandle)) fail('invalid native window handle')
   const script = `
@@ -152,6 +165,7 @@ async function main() {
   const errors = []
   let application
   try {
+    await seedGarageLedger(temporary)
     const packagedExecutable = process.env.APEX_E2E_EXECUTABLE ? path.resolve(root, process.env.APEX_E2E_EXECUTABLE) : null
     if (packagedExecutable) await fs.access(packagedExecutable)
     const launchOptions = {
@@ -173,7 +187,13 @@ async function main() {
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
     const lifetimeBefore = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
-    exact(lifetimeBefore.totalDistanceMm, 0, 'lifetime distance before replay')
+    exact(lifetimeBefore.totalDistanceMm, garageDistanceMm, 'lifetime distance before replay')
+    await page.locator('button.nav-item').filter({ hasText: 'Garage' }).click()
+    await checkpoint('seeded Garage did not render', page.getByRole('heading', { name: 'Your Garage', exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('seeded Garage car did not render', page.getByText('Porsche 963', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    await checkpoint('seeded Garage track did not render', page.getByText('Circuit de la Sarthe', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await page.locator('.garage-model__toggle').getAttribute('aria-expanded'), 'true', 'seeded Garage expansion')
+    exact(await page.locator('.garage-track').count(), 1, 'seeded Garage track count')
     await page.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
     await assertLiveDashboardLayout(page)
     await page.evaluate((expectedRunId) => {
@@ -286,7 +306,7 @@ async function main() {
     atLeast(summary.throttle, manifest.expected.minimumControlMaximums.throttle, 'throttle'); atLeast(summary.brake, manifest.expected.minimumControlMaximums.brake, 'brake'); atLeast(summary.steering, manifest.expected.minimumControlMaximums.absoluteSteering, 'steering'); for (const lap of summary.lastLaps) between(lap, manifest.expected.lastLapSeconds, 'last lap'); atLeast(summary.lastLaps.length, manifest.expected.minimumDistinctLastLaps, 'last laps'); exact(summary.pits, manifest.expected.pitSequence, 'pit sequence'); between(summary.fuel[0], manifest.expected.fuelLiters, 'fuel min'); between(summary.fuel[1], manifest.expected.fuelLiters, 'fuel max'); atLeast(summary.decreaseFrames, manifest.expected.minimumFuelDecreaseFrames, 'fuel decreases'); atLeast(summary.maximumIncrease, manifest.expected.minimumRefuelIncreaseLiters, 'refuel')
     for (const [key, value] of Object.entries(manifest.expected.minimumWheelMaximums)) atLeast(summary.wheelMaximums[key], value, key)
     const lifetimeAfter = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
-    exact(lifetimeAfter.totalDistanceMm, 0, 'lifetime distance after replay')
+    exact(lifetimeAfter.totalDistanceMm, garageDistanceMm, 'lifetime distance after replay')
     const transientSessions = await page.evaluate(() => window.apexDesktop.getAnalysisSessions())
     exact(transientSessions.filter((session) => session.source === 'recording-replay').length, 1, 'transient replay session count')
     exact(transientSessions.filter((session) => session.source === 'imported-recording').length, 0, 'premature imported session count')
@@ -331,7 +351,7 @@ async function main() {
     exact(await page.locator('select[aria-label="Measured session"]').inputValue(), importState.sessionIds[0], 'selected imported session')
     await checkpoint('published imported route did not render', page.getByRole('heading', { name: 'Locally learned centre path', exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
     exact(await page.getByText('The centre path is still learning; the selected driven line remains exact.', { exact: true }).count(), 0, 'imported route learning warning count')
-    exact((await page.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after private import')
+    exact((await page.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, garageDistanceMm, 'lifetime distance after private import')
 
     await page.locator('button.nav-item').filter({ hasText: 'Settings' }).click()
     await page.getByText('Settings', { exact: true }).first().waitFor({ state: 'visible', timeout: 5000 })
@@ -380,9 +400,9 @@ async function main() {
     exact(duplicateState.duplicate, true, 'duplicate import flag')
     exact(duplicateState.frames, 0, 'duplicate decoded frame count')
     exact((await restartedPage.evaluate(() => window.apexDesktop.getAnalysisSessions())).length, 1, 'idempotent durable session count')
-    exact((await restartedPage.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after restart and duplicate')
+    exact((await restartedPage.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, garageDistanceMm, 'lifetime distance after restart and duplicate')
     if (errors.length) fail(errors.join('; '))
-    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, importedSessions: importState.sessions, importedLaps: importState.laps, ui: ['track', 'car', 'live-layout-pointer-keyboard', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'private-race-memory', 'session-debrief', 'durable-restart', 'duplicate-no-op', 'settings-responsive'] }))
+    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, importedSessions: importState.sessions, importedLaps: importState.laps, ui: ['garage-seeded-history', 'track', 'car', 'live-layout-pointer-keyboard', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'private-race-memory', 'session-debrief', 'durable-restart', 'duplicate-no-op', 'settings-responsive'] }))
   } finally {
     await application?.close().catch(() => {})
     await fs.rm(temporary, { recursive: true, force: true })
