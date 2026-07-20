@@ -14,19 +14,29 @@ function frame(sequence: number, lap: number, fuel: number, inPits = false) {
 describe('live fuel tracker', () => {
   it('captures consumption and lap time at a clean lap crossing', () => {
     let state = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 60))
+    expect(state.modelRevision).toBe(1)
     state = updateFuelTracker(state, frame(2, 1, 58))
+    expect(state.modelRevision).toBe(1)
     state = updateFuelTracker(state, frame(3, 2, 56.6))
     expect(state.fuelSamplesLiters).toEqual([3.4])
     expect(state.lapTimeSamplesSeconds).toEqual([100])
+    expect(state.modelRevision).toBe(2)
+    expect(state.modelEvent).toBe('clean-lap')
+    expect(state.lastAcceptedLap).toBe(1)
+    expect(state.sessionFuelSampleCount).toBe(1)
   })
 
   it('rejects pit/refuel laps and starts measuring the next lap afresh', () => {
     let state = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 50))
     state = updateFuelTracker(state, frame(2, 1, 70, true))
+    expect(state.modelRevision).toBe(2)
+    expect(state.modelEvent).toBe('refuel')
     state = updateFuelTracker(state, frame(3, 2, 68))
     expect(state.fuelSamplesLiters).toEqual([])
+    expect(state.modelRevision).toBe(2)
     state = updateFuelTracker(state, frame(4, 3, 64.5))
     expect(state.fuelSamplesLiters).toEqual([3.5])
+    expect(state.modelRevision).toBe(3)
   })
 
   it('ignores session-only pre-race frames', () => {
@@ -67,5 +77,15 @@ describe('live fuel tracker', () => {
     expect(state.lapTimeSamplesSeconds).toEqual([])
     expect(state.calibrationExclusion).toBe('non-local-control')
     expect(state.currentLapCalibrationEligible).toBe(true)
+    expect(state.modelRevision).toBe(1)
+  })
+
+  it('updates current fuel without revising a stale non-local model', () => {
+    let state = updateFuelTracker(emptyFuelTracker(), frame(1, 1, 60))
+    const aiFrame = frame(2, 1, 57)
+    state = updateFuelTracker(state, { ...aiFrame, sample: { ...aiFrame.sample, controlOwner: 'ai' } })
+    expect(state.currentFuelLiters).toBe(57)
+    expect(state.modelRevision).toBe(1)
+    expect(state.calibrationExclusion).toBe('non-local-control')
   })
 })

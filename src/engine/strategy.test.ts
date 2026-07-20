@@ -103,6 +103,71 @@ describe('strategy generation', () => {
     expect(result.recommended!.projectedRaceTimeSeconds - 124.1).toBeLessThan(4 * 60 * 60);
   });
 
+  it('keeps in-progress pit calls on future line crossings', () => {
+    const result = generateStrategyCandidates({
+      ...baseInput,
+      remainingLapEquivalents: 19.75,
+      currentRaceLap: 10,
+      currentFuelLitres: 18,
+      tyres: undefined,
+    });
+
+    expect(result.recommended).toBeDefined();
+    for (const candidate of result.candidates) {
+      let cumulative = 0;
+      for (const stint of candidate.stints.slice(0, -1)) {
+        cumulative += stint.lapEquivalents;
+        expect(cumulative % 1).toBeCloseTo(0.75, 8);
+      }
+      expect(candidate.stints.reduce((total, stint) => total + stint.lapEquivalents, 0)).toBeCloseTo(19.75, 8);
+      expect(candidate.pitStops.map((stop) => stop.estimatedRaceLap))
+        .toEqual(candidate.pitStops.map((stop) => 10 + Math.ceil(stop.afterLapEquivalentsFromNow)));
+    }
+  });
+
+  it('couples current-lap progress and finish rules into timed distance', () => {
+    const input = {
+      durationSeconds: 450,
+      currentLapProgress: 0.25,
+      currentRaceLap: 12,
+      currentFuelLitres: 24,
+      tankCapacityLitres: 40,
+      fuel: { mean: 3, conservative: 3.1 },
+      fuelReserveLitres: 1,
+      averageLapTimeSeconds: 100,
+      pitLaneLossSeconds: 25,
+      refuelLitresPerSecond: 2,
+    };
+    const standard = generateTimedStrategyCandidates(input);
+    const extra = generateTimedStrategyCandidates({ ...input, finishRule: 'line-after-zero-plus-one' });
+
+    expect(standard.finishRule).toBe('line-after-zero');
+    expect(standard.projectedLapCount % 1).toBeCloseTo(0.75, 8);
+    expect(extra.finishRule).toBe('line-after-zero-plus-one');
+    expect(extra.projectedLapCount).toBeGreaterThanOrEqual(standard.projectedLapCount);
+    expect(extra.projectedLapCount % 1).toBeCloseTo(0.75, 8);
+  });
+
+  it('recomputes timed distance when pit loss crosses a line boundary', () => {
+    const input = {
+      durationSeconds: 1_000,
+      currentLapProgress: 0.4,
+      currentFuelLitres: 11,
+      tankCapacityLitres: 20,
+      fuel: { mean: 3, conservative: 3 },
+      fuelReserveLitres: 1,
+      averageLapTimeSeconds: 100,
+      pitLaneLossSeconds: 5,
+      refuelLitresPerSecond: 10,
+    };
+    const shortPit = generateTimedStrategyCandidates(input);
+    const longPit = generateTimedStrategyCandidates({ ...input, pitLaneLossSeconds: 80 });
+
+    expect(shortPit.recommended).toBeDefined();
+    expect(longPit.recommended).toBeDefined();
+    expect(longPit.projectedLapCount).toBeLessThan(shortPit.projectedLapCount);
+  });
+
   it('orders timed alternatives deterministically and preserves candidate invariants', () => {
     const input = {
       durationSeconds: 90 * 60,

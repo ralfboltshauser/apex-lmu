@@ -13,6 +13,12 @@ export interface LiveFuelEstimate {
   readonly totalLaps: number | null
   readonly durationSeconds: number | null
   readonly elapsedSeconds: number
+  readonly modelRevision: number
+  readonly modelEvent: FuelPlanModelEvent | null
+  readonly lastAcceptedLap: number | null
+  readonly sessionFuelSampleCount: number
+  readonly sessionLapTimeSampleCount: number
+  readonly calibrationExclusion: FuelCalibrationExclusion | null
 }
 
 export interface FuelTrackerState extends LiveFuelEstimate {
@@ -21,9 +27,10 @@ export interface FuelTrackerState extends LiveFuelEstimate {
   readonly lastFuelLiters: number
   readonly lapInvalid: boolean
   readonly currentLapCalibrationEligible: boolean
-  readonly calibrationExclusion: FuelCalibrationExclusion | null
   readonly calibrationProfileLoaded: boolean
 }
+
+export type FuelPlanModelEvent = 'session-reset' | 'clean-lap' | 'refuel' | 'distance-change'
 
 export type FuelCalibrationExclusion =
   | 'non-live-source'
@@ -36,6 +43,8 @@ const EMPTY: FuelTrackerState = {
   totalLaps: null, durationSeconds: null, elapsedSeconds: 0, currentLapNumber: 0,
   lapStartFuelLiters: 0, lastFuelLiters: 0, lapInvalid: false,
   currentLapCalibrationEligible: false, calibrationExclusion: null, calibrationProfileLoaded: false,
+  modelRevision: 0, modelEvent: null, lastAcceptedLap: null,
+  sessionFuelSampleCount: 0, sessionLapTimeSampleCount: 0,
 }
 
 export function emptyFuelTracker(): FuelTrackerState { return EMPTY }
@@ -80,18 +89,24 @@ export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFr
       lastFuelLiters: current.currentFuelLiters,
       currentLapCalibrationEligible: frameEligible,
       calibrationExclusion: fuelCalibrationExclusion(frame),
+      modelRevision: previous.sessionId === frame.session.id ? previous.modelRevision + 1 : 1,
+      modelEvent: 'session-reset',
     }
   }
 
   const refuelled = current.currentFuelLiters > previous.lastFuelLiters + 0.25
+  const distanceChanged = current.totalLaps !== previous.totalLaps || current.durationSeconds !== previous.durationSeconds
   const touchedPits = frame.sample.isInPitLane || previous.lapInvalid || refuelled
   if (frame.player.currentLapNumber === previous.currentLapNumber) {
+    const modelChanged = refuelled || distanceChanged
     return {
       ...previous, ...current,
       lastFuelLiters: current.currentFuelLiters,
       lapInvalid: touchedPits,
       currentLapCalibrationEligible: previous.currentLapCalibrationEligible && frameEligible,
       calibrationExclusion: previous.calibrationExclusion ?? fuelCalibrationExclusion(frame),
+      modelRevision: previous.modelRevision + (modelChanged ? 1 : 0),
+      modelEvent: refuelled ? 'refuel' : distanceChanged ? 'distance-change' : previous.modelEvent,
     }
   }
 
@@ -103,6 +118,8 @@ export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFr
   const completedLapExclusion = completedLapEligible
     ? null
     : previous.calibrationExclusion ?? fuelCalibrationExclusion(frame)
+  const acceptedLap = validFuel && validLapTime
+  const modelChanged = acceptedLap || refuelled || distanceChanged
   return {
     ...previous, ...current,
     fuelSamplesLiters: validFuel ? [...previous.fuelSamplesLiters, Math.round(used * 10_000) / 10_000].slice(-20) : previous.fuelSamplesLiters,
@@ -113,5 +130,10 @@ export function updateFuelTracker(previous: FuelTrackerState, frame: TelemetryFr
     lapInvalid: frame.sample.isInPitLane,
     currentLapCalibrationEligible: frameEligible,
     calibrationExclusion: completedLapExclusion,
+    modelRevision: previous.modelRevision + (modelChanged ? 1 : 0),
+    modelEvent: refuelled ? 'refuel' : distanceChanged ? 'distance-change' : acceptedLap ? 'clean-lap' : previous.modelEvent,
+    lastAcceptedLap: acceptedLap ? previous.currentLapNumber : previous.lastAcceptedLap,
+    sessionFuelSampleCount: previous.sessionFuelSampleCount + (validFuel ? 1 : 0),
+    sessionLapTimeSampleCount: previous.sessionLapTimeSampleCount + (validLapTime ? 1 : 0),
   }
 }

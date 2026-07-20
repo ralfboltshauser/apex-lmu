@@ -16,5 +16,6 @@ if (overlayMode) {
   const { default: App } = await import('./App')
   await import('./styles/readable-surfaces.css')
   await import('./styles/garage.css')
+  await import('./styles/strategy-live.css')
   root.render(<React.StrictMode><I18nProvider><App /></I18nProvider></React.StrictMode>)
 }

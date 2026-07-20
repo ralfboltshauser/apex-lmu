@@ -93,13 +93,17 @@ export interface StrategyResult {
 
 export interface TimedStrategyInput extends Omit<StrategyInput, 'remainingLapEquivalents'> {
   readonly durationSeconds: number;
+  /** Progress through the already-started lap at the planning instant. */
+  readonly currentLapProgress?: number;
+  /** Some event rules require one complete additional lap after zero. */
+  readonly finishRule?: 'line-after-zero' | 'line-after-zero-plus-one';
   /** Number of materially distinct stop-count candidates to retain. */
   readonly maximumAlternatives?: number;
 }
 
 export interface TimedStrategyResult extends StrategyResult {
   readonly projectedLapCount: number;
-  readonly finishRule: 'line-after-zero';
+  readonly finishRule: 'line-after-zero' | 'line-after-zero-plus-one';
 }
 
 function riskLabel(score: number): StrategyRisk {
@@ -110,41 +114,30 @@ function riskLabel(score: number): StrategyRisk {
 }
 
 /**
- * Water-fills stint lengths while respecting the shorter first-stint range.
- * This avoids rejecting a valid strategy merely because equal stints are not valid.
- */
-function balancedStints(total: number, maxima: readonly number[]): number[] | undefined {
-  if (sum(maxima) + 1e-7 < total) return undefined;
-  const result = maxima.map(() => 0);
-  const active = new Set(maxima.map((_, index) => index));
-  let remaining = total;
-
-  while (active.size > 0) {
-    const target = remaining / active.size;
-    const constrained = [...active].filter((index) => maxima[index] < target - 1e-9);
-    if (constrained.length === 0) {
-      for (const index of active) result[index] = target;
-      remaining = 0;
-      break;
-    }
-    for (const index of constrained) {
-      result[index] = maxima[index];
-      remaining -= maxima[index];
-      active.delete(index);
-    }
-  }
-
-  if (remaining > 1e-6) return undefined;
-  return result;
-}
-
-/**
  * Pit calls happen at line crossings, so a race-start plan with a whole-lap
  * distance must also use whole-lap stints. Fractional distances remain valid
  * for an in-progress race where the current lap is already partly complete.
  */
 function balancedRaceStints(total: number, maxima: readonly number[]): number[] | undefined {
-  if (!Number.isInteger(total)) return balancedStints(total, maxima);
+  if (!Number.isInteger(total)) {
+    const currentLapRemainder = total - Math.floor(total);
+    if (maxima[0] + 1e-9 < currentLapRemainder) return undefined;
+    const capacities = maxima.map((maximum, index) => Math.floor(maximum - (index === 0 ? currentLapRemainder : 0) + 1e-9));
+    const result = maxima.map((_, index) => index === 0 ? currentLapRemainder : 0);
+    const wholeLaps = Math.floor(total);
+    if (sum(capacities) < wholeLaps) return undefined;
+    for (let lap = 0; lap < wholeLaps; lap += 1) {
+      let selected = -1;
+      for (let index = 0; index < result.length; index += 1) {
+        const usedWholeLaps = result[index] - (index === 0 ? currentLapRemainder : 0);
+        if (usedWholeLaps >= capacities[index]) continue;
+        if (selected === -1 || result[index] < result[selected]) selected = index;
+      }
+      if (selected === -1) return undefined;
+      result[selected] += 1;
+    }
+    return result.every((distance) => distance > 1e-9) ? result : undefined;
+  }
   const capacities = maxima.map((maximum) => Math.floor(maximum + 1e-9));
   if (sum(capacities) < total) return undefined;
 
@@ -446,8 +439,13 @@ export function generateStrategyCandidates(input: StrategyInput): StrategyResult
   const fullMaximum = Math.min(fuelFullMaximum, tyreMaximum ?? Number.POSITIVE_INFINITY);
   const candidates: StrategyCandidate[] = [];
   const rejected: RejectedStrategy[] = [];
+  const maximumLineCrossingStops = Math.max(0, Math.ceil(input.remainingLapEquivalents - 1e-9) - 1);
 
   for (let stops = Math.max(0, minimumStops); stops <= maximumStops; stops += 1) {
+    if (stops > maximumLineCrossingStops) {
+      rejected.push({ stopCount: stops, reason: 'There are not enough remaining line crossings for that stop count.' });
+      continue;
+    }
     const maxima = [firstMaximum, ...Array.from({ length: stops }, () => fullMaximum)];
     const stintDistances = balancedRaceStints(input.remainingLapEquivalents, maxima);
     if (!stintDistances) {
@@ -489,8 +487,19 @@ export function generateTimedStrategyCandidates(input: TimedStrategyInput): Time
   if (!Number.isInteger(maximumAlternatives) || maximumAlternatives < 1) {
     throw new RangeError('maximumAlternatives must be a positive integer');
   }
+  const progress = input.currentLapProgress ?? 0;
+  if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
+    throw new RangeError('currentLapProgress must be in the range 0..1');
+  }
+  const finishRule = input.finishRule ?? 'line-after-zero';
+  const forcedExtraCrossings = finishRule === 'line-after-zero-plus-one' ? 1 : 0;
+  const currentLapRemainder = progress >= 1 - 1e-9 ? 1 : 1 - progress;
+  const secondsToCurrentLine = currentLapRemainder * input.averageLapTimeSeconds;
+  const crossingsAfterCurrent = input.durationSeconds <= secondsToCurrentLine + 1e-7
+    ? 0
+    : Math.ceil((input.durationSeconds - secondsToCurrentLine) / input.averageLapTimeSeconds - 1e-9);
+  const noStopLapCount = currentLapRemainder + crossingsAfterCurrent + forcedExtraCrossings;
 
-  const noStopLapCount = Math.max(1, Math.ceil(input.durationSeconds / input.averageLapTimeSeconds));
   const noStopResult = generateStrategyCandidates({
     ...input,
     remainingLapEquivalents: noStopLapCount,
@@ -505,13 +514,13 @@ export function generateTimedStrategyCandidates(input: TimedStrategyInput): Time
       candidates: [],
       rejected: noStopResult.rejected,
       projectedLapCount: noStopLapCount,
-      finishRule: 'line-after-zero',
+      finishRule,
     };
   }
   const byStopCount = new Map<number, StrategyCandidate>();
   const rejected: RejectedStrategy[] = [];
 
-  for (let lapCount = noStopLapCount; lapCount >= 1; lapCount -= 1) {
+  for (let lapCount = noStopLapCount; lapCount >= currentLapRemainder - 1e-7; lapCount -= 1) {
     const result = generateStrategyCandidates({
       ...input,
       remainingLapEquivalents: lapCount,
@@ -519,10 +528,16 @@ export function generateTimedStrategyCandidates(input: TimedStrategyInput): Time
     });
     rejected.push(...result.rejected);
     for (const candidate of result.candidates) {
-      const finalCrossing = candidate.projectedRaceTimeSeconds;
-      const previousCrossing = finalCrossing - input.averageLapTimeSeconds;
-      if (finalCrossing + 1e-7 < input.durationSeconds) continue;
-      if (previousCrossing >= input.durationSeconds - 1e-7) continue;
+      const totalDistance = sum(candidate.stints.map((stint) => stint.lapEquivalents));
+      const crossingTimes: number[] = [];
+      for (let crossingDistance = currentLapRemainder; crossingDistance <= totalDistance + 1e-7; crossingDistance += 1) {
+        const priorPitTime = sum(candidate.pitStops
+          .filter((stop) => stop.afterLapEquivalentsFromNow < crossingDistance - 1e-7)
+          .map((stop) => stop.totalPitCostSeconds));
+        crossingTimes.push(crossingDistance * input.averageLapTimeSeconds + priorPitTime);
+      }
+      const firstAfterZero = crossingTimes.findIndex((seconds) => seconds + 1e-7 >= input.durationSeconds);
+      if (firstAfterZero < 0 || firstAfterZero + forcedExtraCrossings !== crossingTimes.length - 1) continue;
       const current = byStopCount.get(candidate.stopCount);
       if (!current || candidate.rankingCostSeconds < current.rankingCostSeconds) {
         byStopCount.set(candidate.stopCount, candidate);
@@ -550,6 +565,6 @@ export function generateTimedStrategyCandidates(input: TimedStrategyInput): Time
     recommended,
     rejected,
     projectedLapCount: recommended?.stints.reduce((total, stint) => total + stint.lapEquivalents, 0) ?? noStopLapCount,
-    finishRule: 'line-after-zero',
+    finishRule,
   };
 }

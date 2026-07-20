@@ -2,6 +2,38 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.4.4",
+      "releasedAt": "2026-07-20",
+      "en": {
+        "title": "An explicit adaptive live fuel plan",
+        "summary": "Strategy can now adopt the current official live session for a fuel-only plan, use measured clean-lap evidence and current race progress, and replan only when accepted evidence or visible manual assumptions change.",
+        "highlights": [
+          { "id": "explicit-live-fuel-plan", "title": "Adopt measured live facts without inventing a race", "body": "Manual and Live session modes remain separate. Live mode uses current fuel, tank capacity, completed distance, scheduled laps or time, and eligible clean fuel and pace samples. Missing evidence stays unavailable, and session type remains explicitly unknown because LMU's official mapping does not expose it authoritatively." },
+          { "id": "adaptive-stop-plan", "title": "Move the modeled stop when evidence crosses a boundary", "body": "A shared deterministic fuel model now builds fixed-lap and timed-session candidates from the current in-race position. Current fuel can refresh continuously, while the candidate plan changes only for an accepted clean lap, refuel, distance change, session reset or validated manual assumption; a causal card names the accepted change." },
+          { "id": "coupled-timed-strategy", "title": "Keep pit stops coupled to timed race distance", "body": "Timed planning includes current-lap progress and models each pit cost at an actual line crossing, so a stop can correctly change which finish crossing remains reachable. Every candidate card, timeline, pit row, target and driver brief is rendered from the same immutable result." },
+          { "id": "live-plan-proof", "title": "Verify replay isolation and responsive states", "body": "Deterministic boundary and randomized invariant tests cover fractional progress, refuels and feasible multi-stop plans. English and German fixed, timed, unavailable, paused and keyboard-focus states were rendered and visually inspected through 200% scaling. Strict replay of the private 1.741 GB recording normalized all 422,467 frames while producing zero live-model revisions or samples." }
+        ],
+        "knownLimitations": [
+          { "id": "fuel-only-model", "title": "This is a fuel-only plan", "body": "Virtual Energy, tyre inventory and degradation, weather crossover, opponent traffic and rejoin position, driver rules and swap timing are not modeled. Manual pit-lane loss and refuel rate are assumptions, and Apex does not configure the LMU pit menu or command a stop." },
+          { "id": "explicit-not-automatic", "title": "Live mode is explicit, not automatic race detection", "body": "Apex cannot authoritatively identify practice, qualifying or race from the supported mapping and will not infer it from circumstantial values. The user must explicitly select Live session mode, and a plan remains unavailable until the required measured evidence exists." }
+        ]
+      },
+      "de": {
+        "title": "Ein ausdrücklicher adaptiver Live-Kraftstoffplan",
+        "summary": "Die Strategie kann jetzt die aktuelle offizielle Live-Session für einen reinen Kraftstoffplan übernehmen, gemessene Belege aus sauberen Runden und den aktuellen Rennfortschritt verwenden und nur bei akzeptierten Belegen oder sichtbaren manuellen Annahmen neu planen.",
+        "highlights": [
+          { "id": "explicit-live-fuel-plan", "title": "Übernimm gemessene Live-Fakten, ohne ein Rennen zu erfinden", "body": "Manueller Modus und Live-Session bleiben getrennt. Der Live-Modus nutzt aktuellen Kraftstoff, Tankkapazität, absolvierte Distanz, geplante Runden oder Zeit sowie geeignete saubere Kraftstoff- und Tempomesswerte. Fehlende Belege bleiben nicht verfügbar, und der Sessiontyp bleibt ausdrücklich unbekannt, weil ihn die offizielle LMU-Abbildung nicht verbindlich bereitstellt." },
+          { "id": "adaptive-stop-plan", "title": "Verschiebe den modellierten Stopp, wenn Belege eine Grenze überschreiten", "body": "Ein gemeinsames deterministisches Kraftstoffmodell erstellt jetzt Kandidaten für feste Runden und Zeitrennen aus der aktuellen Position. Der aktuelle Kraftstoff kann laufend aktualisiert werden; der Kandidatenplan ändert sich nur nach einer akzeptierten sauberen Runde, Betankung, Distanzänderung, Sessionrücksetzung oder geprüften manuellen Annahme. Eine Ursachenkarte nennt die akzeptierte Änderung." },
+          { "id": "coupled-timed-strategy", "title": "Kopple Boxenstopps an die Distanz im Zeitrennen", "body": "Die Zeitplanung berücksichtigt den Fortschritt der aktuellen Runde und modelliert jeden Boxenzeitverlust an einer tatsächlichen Zieldurchfahrt. So kann ein Stopp korrekt ändern, welche Zieldurchfahrt noch erreichbar ist. Kandidatenkarte, Zeitlinie, Boxenzeile, Ziele und Fahrerbriefing stammen jeweils aus demselben unveränderlichen Ergebnis." },
+          { "id": "live-plan-proof", "title": "Prüfe Wiedergabe-Isolation und responsive Zustände", "body": "Deterministische Grenz- und randomisierte Invariantentests decken Teilrundenfortschritt, Betankungen und machbare Mehrstopppläne ab. Englische und deutsche Zustände für feste Runden, Zeitrennen, nicht verfügbare Daten, pausiertes Lernen und Tastaturfokus wurden bis 200 % gerendert und visuell geprüft. Die strikte Wiedergabe der privaten 1,741-GB-Aufzeichnung normalisierte alle 422.467 Frames und erzeugte null Revisionen oder Messwerte im Live-Modell." }
+        ],
+        "knownLimitations": [
+          { "id": "fuel-only-model", "title": "Dies ist ein reiner Kraftstoffplan", "body": "Virtuelle Energie, Reifenbestand und -abbau, Wetter-Crossover, Gegnerverkehr und Rückkehrposition sowie Fahrerregeln und Wechselzeit werden nicht modelliert. Manuelle Boxengassenzeit und Betankungsrate sind Annahmen; Apex konfiguriert weder das LMU-Boxenmenü noch befiehlt es einen Stopp." },
+          { "id": "explicit-not-automatic", "title": "Der Live-Modus ist ausdrücklich, keine automatische Rennerkennung", "body": "Apex kann Training, Qualifying oder Rennen mit der unterstützten Abbildung nicht verbindlich erkennen und leitet den Typ nicht aus Indizien ab. Der Benutzer muss den Modus Live-Session ausdrücklich wählen; ein Plan bleibt nicht verfügbar, bis die erforderlichen gemessenen Belege vorliegen." }
+        ]
+      }
+    },
+    {
       "version": "0.4.3",
       "releasedAt": "2026-07-20",
       "en": {

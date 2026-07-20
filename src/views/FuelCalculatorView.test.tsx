@@ -16,6 +16,8 @@ describe('fuel learning state', () => {
       fuelSamplesLiters: [], lapTimeSamplesSeconds: [], currentFuelLiters: 52.4,
       tankCapacityLiters: 90, completedLaps: 2, currentLapProgress: .5,
       totalLaps: null, durationSeconds: 7200, elapsedSeconds: 900,
+      modelRevision: 1, modelEvent: 'session-reset' as const, lastAcceptedLap: null,
+      sessionFuelSampleCount: 0, sessionLapTimeSampleCount: 0, calibrationExclusion: null,
     }
     const container = document.createElement('div'); document.body.append(container)
     const root = createRoot(container)

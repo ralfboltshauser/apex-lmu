@@ -52,6 +52,8 @@ describe('numeric view integration', () => {
     const live = {
       sessionId: 'session', trackName: 'Private Track', carName: 'Private Car', fuelSamplesLiters: [3.4], lapTimeSamplesSeconds: [120],
       currentFuelLiters: 40, tankCapacityLiters: 90, completedLaps: 2, currentLapProgress: 0.25, totalLaps: 30, durationSeconds: null, elapsedSeconds: 300,
+      modelRevision: 2, modelEvent: 'clean-lap' as const, lastAcceptedLap: 2,
+      sessionFuelSampleCount: 1, sessionLapTimeSampleCount: 1, calibrationExclusion: null,
     }
     const container = document.createElement('div'); document.body.append(container)
     const root = createRoot(container)

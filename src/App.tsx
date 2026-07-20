@@ -376,7 +376,9 @@ export default function App() {
         if (!demoRunningRef.current && (viewRef.current === 'home' || viewRef.current === 'live' || viewRef.current === 'fuel')) { setLiveFrame(frame); setTick(frame.sequence) }
       })
       unsubscribeStatus = adapter.subscribeStatus((status) => {
-        setRealConnected(status.state === 'connected' && status.framesReceived > 0)
+        const connected = status.state === 'connected' && status.framesReceived > 0
+        setRealConnected(connected)
+        if (!connected) setLiveFuel(null)
         const connectionCopy = connectionCopyRef.current
         setLiveConnectionMessage(status.error || status.detail || (status.state === 'connecting' ? connectionCopy.waiting : connectionCopy.offline))
       })
@@ -413,10 +415,10 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'live': return <LiveView source={source} tick={tick} frame={liveFrame} measuredTrack={measuredTrack} connectionMessage={liveConnectionMessage} onStartDemo={() => setDemoRunning(true)} onTroubleshoot={() => { window.localStorage.setItem('apex:settings-section', 'diagnostics'); setView('settings'); window.queueMicrotask(() => window.dispatchEvent(new CustomEvent('apex:settings-section', { detail: 'diagnostics' }))) }} />
-      case 'fuel': return <FuelCalculatorView live={liveFuel} />
+      case 'fuel': return <FuelCalculatorView live={liveFuel} onOpenStrategy={() => { window.localStorage.setItem('apex:strategy-mode', 'live'); setView('strategy') }} />
       case 'analyze': return <AnalyzeView measuredTrack={measuredTrack} analysisSessions={analysisSessions} />
       case 'garage': return <GarageView onOpenSettings={() => { window.localStorage.setItem('apex:settings-section', 'data'); setView('settings') }} />
-      case 'strategy': return <StrategyView />
+      case 'strategy': return <StrategyView live={liveFuel} />
       case 'setups': return <SetupsView onImport={importSetup} />
       case 'overlays': return <OverlaysView onOpenOverlay={openOverlay} />
       case 'feedback': return <FeedbackView />
