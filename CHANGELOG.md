@@ -2,6 +2,36 @@
 
 This file is generated from `release-notes/catalog.json`. Do not edit it directly.
 
+## 0.4.5 — 2026-07-20
+
+### English — A Live dashboard arranged around your race
+
+Live cards can now be reordered, shown compact or wide, hidden and restored in an explicit edit mode, with one private layout that survives restart and adapts responsively.
+
+- **Arrange every shipped Live card** — Edit layout exposes a bounded two-column grid for Track map, Fuel, Standings, Car state and Events. Pointer dragging and complete keyboard actions change the same underlying array, so DOM, visual and assistive-technology order stay aligned.
+- **Resize or hide without losing control** — Cards support compact and wide spans, non-critical cards can be hidden and a visible tray restores them. Reset returns the complete shipped layout, while narrow windows and 200% scaling collapse to one usable column without rewriting the saved preference.
+- **Share presentation without crossing provenance** — Measured and generated Live views use the same module descriptors and saved order, but each card keeps its own measured or demo renderer. Connection, source and provenance remain outside the customizable grid and cannot be hidden.
+- **Keep customization small, local and verifiable** — A strict version-1 local preference ignores future module IDs, appends new shipped defaults and safely recovers from malformed data without logging its payload. Unit, real Chromium pointer, restart and visual checks cover English and German layouts through 200%; the Windows source and packaged replay tests exercise the same path.
+
+**Known limitations**
+
+- **This is a responsive grid, not a free canvas** — Apex deliberately does not store arbitrary coordinates, overlapping cards, pixel dimensions, per-card styling or user-authored widgets. The transparent race overlay remains a separate configuration surface.
+- **The layout stays on this device** — The preference is not synced or exported and does not enter the lifetime SQLite database. An older version simply ignores the dedicated key, while corrupt layout data restores the shipped default without changing other settings.
+
+### Deutsch — Ein Live-Dashboard passend zu deinem Rennen
+
+Live-Karten lassen sich jetzt in einem ausdrücklichen Bearbeitungsmodus anordnen, kompakt oder breit darstellen, ausblenden und wiederherstellen. Ein privates Layout überlebt den Neustart und passt sich responsiv an.
+
+- **Ordne jede ausgelieferte Live-Karte an** — Layout bearbeiten öffnet ein begrenztes zweispaltiges Raster für Streckenkarte, Kraftstoff, Wertung, Fahrzeugzustand und Ereignisse. Ziehen mit dem Zeiger und vollständige Tastaturaktionen verändern dasselbe zugrunde liegende Array, sodass DOM-, sichtbare und Hilfstechnologie-Reihenfolge übereinstimmen.
+- **Skaliere oder verbirg Karten, ohne Kontrolle zu verlieren** — Karten unterstützen kompakte und breite Darstellung, nicht kritische Karten lassen sich ausblenden und eine sichtbare Ablage stellt sie wieder her. Zurücksetzen bringt das vollständige ausgelieferte Layout zurück; schmale Fenster und 200 % Skalierung wechseln in eine nutzbare Spalte, ohne die gespeicherte Auswahl umzuschreiben.
+- **Teile die Darstellung, ohne die Herkunft zu vermischen** — Gemessene und erzeugte Live-Ansichten verwenden dieselben Modulbeschreibungen und dieselbe gespeicherte Reihenfolge, doch jede Karte behält ihren eigenen Mess- oder Demo-Renderer. Verbindung, Quelle und Herkunft bleiben außerhalb des anpassbaren Rasters und können nicht ausgeblendet werden.
+- **Halte Anpassung klein, lokal und prüfbar** — Eine strikte lokale Version-1-Einstellung ignoriert zukünftige Modul-IDs, ergänzt neue ausgelieferte Standards und erholt sich sicher von fehlerhaften Daten, ohne deren Inhalt zu protokollieren. Unit-, echte Chromium-Zeiger-, Neustart- und visuelle Prüfungen decken englische und deutsche Layouts bis 200 % ab; Windows-Quell- und Paket-Wiedergabetests verwenden denselben Pfad.
+
+**Bekannte Einschränkungen**
+
+- **Dies ist ein responsives Raster, keine freie Leinwand** — Apex speichert bewusst keine beliebigen Koordinaten, überlappenden Karten, Pixelmaße, individuellen Kartenstile oder selbst erstellten Widgets. Das transparente Renn-Overlay bleibt eine getrennte Konfigurationsoberfläche.
+- **Das Layout bleibt auf diesem Gerät** — Die Einstellung wird weder synchronisiert noch exportiert und gelangt nicht in die SQLite-Datenbank des Gesamtverlaufs. Eine ältere Version ignoriert lediglich den eigenen Schlüssel; fehlerhafte Layoutdaten stellen den ausgelieferten Standard wieder her, ohne andere Einstellungen zu verändern.
+
 ## 0.4.4 — 2026-07-20
 
 ### English — An explicit adaptive live fuel plan

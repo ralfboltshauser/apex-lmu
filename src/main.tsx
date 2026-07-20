@@ -17,5 +17,6 @@ if (overlayMode) {
   await import('./styles/readable-surfaces.css')
   await import('./styles/garage.css')
   await import('./styles/strategy-live.css')
+  await import('./styles/live-layout.css')
   root.render(<React.StrictMode><I18nProvider><App /></I18nProvider></React.StrictMode>)
 }

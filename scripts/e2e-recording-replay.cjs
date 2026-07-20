@@ -21,6 +21,68 @@ async function checkpoint(label, promise) {
   try { return await promise } catch (error) { fail(`${label}: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
+async function assertLiveDashboardLayout(page) {
+  const moduleOrder = () => page.locator('[data-live-module]').evaluateAll((modules) => modules.map((module) => module.getAttribute('data-live-module')))
+  const fuelProfileKey = 'apex:fuel-profile:e2e-layout-isolation'
+  const fuelProfileValue = JSON.stringify({ fuel: [3.41, 3.38], laps: [220.1, 219.8] })
+  await page.evaluate(({ key, value }) => { localStorage.setItem(key, value); localStorage.setItem('apex:discovered:live', 'true') }, { key: fuelProfileKey, value: fuelProfileValue })
+  const overlayBefore = await page.evaluate(() => window.apexDesktop.getOverlayConfig())
+  await page.getByRole('button', { name: 'Run live demo', exact: true }).click()
+  await checkpoint('generated Live dashboard did not appear', page.getByText('Generated demo', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+  exact(await moduleOrder(), ['track-map', 'fuel', 'standings', 'car-state', 'events'], 'default Live module order')
+  await page.getByRole('button', { name: 'Edit layout', exact: true }).click()
+
+  const source = await page.locator('[aria-label="Drag Track map to reorder"]').boundingBox()
+  const target = await page.locator('[data-live-module="fuel"]').boundingBox()
+  if (!source || !target) fail('pointer reorder bounds were unavailable')
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 })
+  exact(await page.evaluate(() => localStorage.getItem('apex:live-layout:v1')), null, 'incomplete pointer action persistence')
+  await page.mouse.up()
+  exact(await moduleOrder(), ['fuel', 'track-map', 'standings', 'car-state', 'events'], 'pointer Live module order')
+
+  await page.getByRole('button', { name: 'Move Events before', exact: true }).click()
+  exact(await moduleOrder(), ['fuel', 'track-map', 'standings', 'events', 'car-state'], 'keyboard Live module order')
+  exact(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Drag Events to reorder', 'keyboard reorder focus')
+  await page.getByRole('button', { name: 'Make Fuel wide', exact: true }).click()
+  await page.getByRole('button', { name: 'Hide Events', exact: true }).click()
+  exact(await moduleOrder(), ['fuel', 'track-map', 'standings', 'car-state'], 'hidden Live module order')
+  await page.getByRole('button', { name: 'Restore Events', exact: true }).click()
+  exact(await moduleOrder(), ['fuel', 'track-map', 'standings', 'events', 'car-state'], 'restored Live module order')
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  const savedLayout = await page.evaluate(() => localStorage.getItem('apex:live-layout:v1'))
+  if (!savedLayout) fail('completed Live layout was not persisted')
+  exact(JSON.parse(savedLayout), { version: 1, modules: [
+    { id: 'fuel', visible: true, span: 'wide' },
+    { id: 'track-map', visible: true, span: 'compact' },
+    { id: 'standings', visible: true, span: 'wide' },
+    { id: 'events', visible: true, span: 'compact' },
+    { id: 'car-state', visible: true, span: 'compact' },
+  ] }, 'persisted Live layout')
+  exact(await page.evaluate((key) => localStorage.getItem(key), fuelProfileKey), fuelProfileValue, 'fuel profile isolation after layout edits')
+  exact(await page.evaluate(() => window.apexDesktop.getOverlayConfig()), overlayBefore, 'overlay config isolation after layout edits')
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
+  await page.getByRole('button', { name: 'Run live demo', exact: true }).click()
+  await checkpoint('restarted Live dashboard did not appear', page.getByText('Generated demo', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+  exact(await moduleOrder(), ['fuel', 'track-map', 'standings', 'events', 'car-state'], 'restarted Live module order')
+  exact(await page.locator('[data-live-module="fuel"]').getAttribute('data-span'), 'wide', 'restarted Live module span')
+  exact(await page.locator('.live-module-controls').count(), 0, 'edit controls outside edit mode')
+
+  await page.evaluate(() => localStorage.setItem('apex:live-layout:v1', '{private-layout-payload'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
+  await page.getByRole('button', { name: 'Run live demo', exact: true }).click()
+  await checkpoint('recovered Live dashboard did not appear', page.getByText('Generated demo', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+  exact(await moduleOrder(), ['track-map', 'fuel', 'standings', 'car-state', 'events'], 'corrupt Live layout recovery')
+  await page.evaluate((layout) => localStorage.setItem('apex:live-layout:v1', layout), savedLayout)
+  exact(await page.evaluate((key) => localStorage.getItem(key), fuelProfileKey), fuelProfileValue, 'fuel profile isolation after layout recovery')
+  exact(await page.evaluate(() => window.apexDesktop.getOverlayConfig()), overlayBefore, 'overlay config isolation after layout recovery')
+  await page.getByRole('button', { name: 'Stop demo', exact: true }).click()
+}
+
 async function waitForImportTerminal(page, timeoutMs = 180000) {
   const deadline = Date.now() + timeoutMs
   let state = null
@@ -113,6 +175,7 @@ async function main() {
     const lifetimeBefore = await page.evaluate(() => window.apexDesktop.getLifetimeStats())
     exact(lifetimeBefore.totalDistanceMm, 0, 'lifetime distance before replay')
     await page.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
+    await assertLiveDashboardLayout(page)
     await page.evaluate((expectedRunId) => {
       const summary = { runId: expectedRunId, statuses: [], frames: 0, scoringOnly: 0, firstVehicle: null, tracks: [], layouts: [], cars: [], classes: [], controlOwners: [], controlOwnerFrames: {}, controlOwnerTransitions: [], previousControlOwner: null, opponents: 0, missingOpponentArrays: 0, air: [Infinity, -Infinity], trackTemp: [Infinity, -Infinity], rain: [Infinity, -Infinity], wetness: [Infinity, -Infinity], throttle: 0, brake: 0, steering: 0, fuel: [Infinity, -Infinity], previousFuel: null, decreaseFrames: 0, maximumIncrease: 0, lastLaps: [], pits: [], wheelMaximums: { pressurePsi: 0, surfaceTempC: 0, carcassTempC: 0, brakeTempC: 0, wearUsedFraction: 0, absoluteRotationRadSec: 0 }, completionFrames: null, recordingStatus: 'idle' }
       const add = (key, value) => { if (!summary[key].includes(value)) summary[key].push(value) }
@@ -286,6 +349,13 @@ async function main() {
       await window.apexDesktop.acknowledgeWhatsNew(state.currentVersion)
     })
     await restartedPage.reload({ waitUntil: 'domcontentloaded' })
+    await restartedPage.locator('button.nav-item').filter({ hasText: 'Live session' }).click()
+    await restartedPage.getByRole('button', { name: 'Run live demo', exact: true }).click()
+    await checkpoint('custom Live dashboard did not survive app-process restart', restartedPage.getByText('Generated demo', { exact: true }).waitFor({ state: 'visible', timeout: 10000 }))
+    exact(await restartedPage.locator('[data-live-module]').evaluateAll((modules) => modules.map((module) => module.getAttribute('data-live-module'))), ['fuel', 'track-map', 'standings', 'events', 'car-state'], 'app-restarted Live module order')
+    exact(await restartedPage.locator('[data-live-module="fuel"]').getAttribute('data-span'), 'wide', 'app-restarted Live module span')
+    exact(await restartedPage.locator('.live-module-controls').count(), 0, 'app-restarted edit controls outside edit mode')
+    await restartedPage.getByRole('button', { name: 'Stop demo', exact: true }).click()
     const durableSessions = await restartedPage.evaluate(() => window.apexDesktop.getAnalysisSessions())
     exact(durableSessions.length, 1, 'durable session count after restart')
     exact(durableSessions[0].source, 'imported-recording', 'durable source after restart')
@@ -312,7 +382,7 @@ async function main() {
     exact((await restartedPage.evaluate(() => window.apexDesktop.getAnalysisSessions())).length, 1, 'idempotent durable session count')
     exact((await restartedPage.evaluate(() => window.apexDesktop.getLifetimeStats())).totalDistanceMm, 0, 'lifetime distance after restart and duplicate')
     if (errors.length) fail(errors.join('; '))
-    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, importedSessions: importState.sessions, importedLaps: importState.laps, ui: ['track', 'car', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'private-race-memory', 'session-debrief', 'durable-restart', 'duplicate-no-op', 'settings-responsive'] }))
+    console.log(JSON.stringify({ ok: true, mode: packagedExecutable ? 'packaged' : 'source', runId, frames: summary.frames, scoringOnlyFrames: summary.scoringOnly, pitSequence: summary.pits, importedSessions: importState.sessions, importedLaps: importState.laps, ui: ['track', 'car', 'live-layout-pointer-keyboard', 'measured-route', 'measured-braking-analysis', 'overlay-window', 'overlay-replay', 'private-race-memory', 'session-debrief', 'durable-restart', 'duplicate-no-op', 'settings-responsive'] }))
   } finally {
     await application?.close().catch(() => {})
     await fs.rm(temporary, { recursive: true, force: true })
